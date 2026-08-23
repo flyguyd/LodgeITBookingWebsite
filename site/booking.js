@@ -821,6 +821,9 @@
       }
     }
   }
+  /* With a logo, the masthead becomes a centred lockup — the mark large over
+     the brand name — and the same image becomes the browser-tab icon
+     (Dave, 2026-08-24). Without one, the star + name row stays as is. */
   function applyLogo() {
     if (!config.logoId) return;
     var img = document.getElementById('siteLogo');
@@ -829,7 +832,11 @@
       img.hidden = false;
       var star = document.getElementById('brandStar');
       if (star) star.hidden = true;
+      var head = document.querySelector('.masthead');
+      if (head) head.classList.add('logo-mode');
     }
+    var fav = document.getElementById('favicon');
+    if (fav) fav.href = MEDIA_BASE + config.logoId;
   }
 
   /* Shareable URLs (Dave, 2026-08-23): the search lands in the query string

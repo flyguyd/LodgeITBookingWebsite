@@ -795,6 +795,7 @@
       }
     }
   }
+  /* The logo doubles as the browser-tab icon (Dave, 2026-08-24). */
   function applyLogo() {
     if (!config.logoId) return;
     var img = document.getElementById('siteLogo');
@@ -804,6 +805,8 @@
       var star = document.getElementById('brandStar');
       if (star) star.hidden = true;
     }
+    var fav = document.getElementById('favicon');
+    if (fav) fav.href = MEDIA_BASE + config.logoId;
   }
 
   /* Shareable URLs (Dave, 2026-08-23): the search lands in the query string

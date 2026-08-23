@@ -305,4 +305,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.23',
+    version: '0.1.23',
+    date: '2026-08-24T04:10:00+02:00',
+    changes: [
+      {
+        headline:
+          'The logo takes its proper place. On the full site the masthead becomes a centred lockup - the mark large (up to 120px) in the centre of the page with the brand name beneath it - while a lodge without a logo keeps the star-and-name row unchanged. The same image now doubles as the browser-tab icon on both builds. And the site pulls media from the engine every MINUTE instead of every ten, so a logo or photo change made in Lodge Ops shows here about as fast as a text change - the ten-minute lag is what made a fresh upload look like the manual sync had not sent it.',
+        detail:
+          'applyLogo (both builds) also points the head\u0027s favicon link at the served /media/<id> - content-addressed, so the tab icon can never go stale - and on the full site adds the masthead\u0027s logo-mode class: brand column centred, Mobile site link pinned to its corner. Media pull default MEDIA_SYNC_MS 600000 -> 60000; each pull is one metadata list call, bytes fetched only for images the site does not already hold, so the faster cadence costs one light call a minute. VERIFIED by real Chromium with a stored logo: the masthead centred the 120px mark with the name below it, the favicon href carried the logo\u0027s media id on desktop and mobile, and a logo-less config left the classic masthead untouched.',
+      },
+    ],
+  },
 ];

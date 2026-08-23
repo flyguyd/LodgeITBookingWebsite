@@ -39,7 +39,10 @@ const SITE_PUBLIC_URL = process.env.SITE_PUBLIC_URL ?? `http://127.0.0.1:${PORT}
 const RATE_LIMIT = Number(process.env.RATE_LIMIT) || 120;
 const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS) || 60_000;
 const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MS) || 60_000;
-const MEDIA_SYNC_MS = Number(process.env.MEDIA_SYNC_MS) || 600_000;
+// One light metadata list per pull; only missing images are fetched. The
+// minute cadence means a logo or photo change in Lodge Ops shows on the
+// site within about a minute, same as the text config (Dave, 2026-08-24).
+const MEDIA_SYNC_MS = Number(process.env.MEDIA_SYNC_MS) || 60_000;
 /* The site's OWN datastore (Dave, 2026-08-23): suite photography synced from
    Lodge Ops through the engine is cached here and guests are served from
    this disk, never from the engine. Excluded from the deploy rsync. */

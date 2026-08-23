@@ -391,3 +391,14 @@ main { z-index: 3; }
 /* Bottom-left of the page: the brand with the copyright under it. */
 .foot-left { display: flex; flex-direction: column; gap: 4px; }
 .foot-copy { font-size: 11px; color: var(--paper-dim); opacity: 0.75; letter-spacing: 0.04em; }
+
+/* With a logo the masthead is a centred lockup: the mark large, the brand
+   name beneath it; the mobile-site link keeps its corner. */
+.masthead.logo-mode { justify-content: center; position: relative; }
+.masthead.logo-mode .brand { flex-direction: column; gap: 12px; text-align: center; }
+.masthead.logo-mode .brand-logo { max-height: 120px; max-width: min(360px, 70vw); }
+.masthead.logo-mode .brand-name { font-size: 16px; letter-spacing: 0.22em; }
+.masthead.logo-mode .masthead-link {
+  position: absolute; right: clamp(24px, 5vw, 64px); top: 50%;
+  transform: translateY(-50%);
+}

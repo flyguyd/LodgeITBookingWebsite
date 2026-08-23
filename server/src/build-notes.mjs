@@ -331,4 +331,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.25',
+    version: '0.1.25',
+    date: '2026-08-24T05:05:00+02:00',
+    changes: [
+      {
+        headline:
+          'The build-swap links are gone: no Mobile site in the full build\u0027s masthead or footer, no View the full site on the mobile build. Guests land on the right build automatically - a phone is 302d to the mobile build by its user agent - and that routing is untouched; only the visible escape hatches went. The ?full=1 override still works for anyone who genuinely needs the desktop build on a phone.',
+        detail:
+          'Markup-only on both builds plus retiring the masthead-link styles; the copyright line keeps the footers. VERIFIED by real Chromium: zero anchor tags on either page beyond content, the lockup and copyright intact, a phone user agent still 302d to /m/ with its query preserved, and ?full=1 still answering the desktop build directly.',
+      },
+    ],
+  },
 ];

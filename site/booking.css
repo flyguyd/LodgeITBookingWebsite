@@ -92,12 +92,12 @@ main { z-index: 3; }
   font-family: var(--serif); font-size: 19px; letter-spacing: 0.14em;
   text-transform: uppercase;
 }
-.masthead-link, .foot a {
+.foot a {
   color: var(--paper-dim); font-size: 12.5px; letter-spacing: 0.08em;
   text-decoration: none; border-bottom: 1px solid transparent;
   transition: color 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
 }
-.masthead-link:hover, .foot a:hover { color: var(--gold); border-color: var(--gold); }
+.foot a:hover { color: var(--gold); border-color: var(--gold); }
 
 /* ----------------------------------------------------------------- hero */
 .hero {
@@ -399,10 +399,6 @@ main { z-index: 3; }
 .masthead.logo-mode .brand { flex-direction: column; text-align: center; }
 .masthead.logo-mode .brand-logo { max-height: 120px; max-width: min(360px, 70vw); }
 .masthead.logo-mode .brand-name { display: none; }
-.masthead.logo-mode .masthead-link {
-  position: absolute; right: clamp(24px, 5vw, 64px); top: 50%;
-  transform: translateY(-50%);
-}
 body.has-logo .masthead { padding: 16px clamp(24px, 5vw, 64px) 0; }
 body.has-logo .hero { padding-top: clamp(14px, 3vh, 36px); }
 /* Short screens: a smaller mark buys the fold back. */

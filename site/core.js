@@ -188,7 +188,9 @@ window.BKCore = (function () {
     var total = t - nightly + charge;
     var saved = t - total;
     if (!(saved > 0)) return null;
-    return { total: total, saved: saved };
+    // nightly + charge ride along so the day-by-day breakdown can show the
+    // 5th night at its real reduced figure instead of an even split.
+    return { total: total, saved: saved, nightly: nightly, charge: charge };
   }
 
   /**
@@ -219,12 +221,27 @@ window.BKCore = (function () {
         nightly.push(v);
       }
     }
+    /* A 5th-night-promo stay is NOT split evenly: nights carry the real
+       nightly rate and the 5th its reduced charge, rescaled together so
+       they sum exactly to the displayed total (a later VAT split scales
+       every night by the same factor). */
+    var promo = room.promoFree5 &&
+      isFinite(Number(room.promoNightly)) && isFinite(Number(room.promoCharge5));
+    var k = 1;
+    if (promo) {
+      var pre = (nights - 1) * Number(room.promoNightly) + Number(room.promoCharge5);
+      k = pre > 0 ? total / pre : 1;
+    }
     var rows = [];
     for (var i = 0; i < nights; i++) {
+      var base = promo
+        ? (i === 4 ? Number(room.promoCharge5) : Number(room.promoNightly)) * k
+        : (nightly ? nightly[i] : total / nights);
       rows.push({
         date: addDays(from, i),
-        base: nightly ? nightly[i] : total / nights,
+        base: base,
         extras: extras / nights,
+        free5: promo && i === 4,
       });
     }
     return { rows: rows, baseTotal: total, extrasTotal: extras, grand: total + extras };

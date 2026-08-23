@@ -215,7 +215,12 @@
             /* Under the itemised display the stay's levy is its own line, so
                the 5th night must not charge it a second time. */
             var adj = C.fifthNightAdjust(room, r.json.nights, lodge, party, !itemised);
-            if (adj) { room.totalPrice = adj.total; room.promoFree5 = true; }
+            if (adj) {
+              room.totalPrice = adj.total;
+              room.promoFree5 = true;
+              room.promoNightly = adj.nightly;
+              room.promoCharge5 = adj.charge;
+            }
           });
         }
         /* Real Cloudbeds does not itemise taxes on this endpoint. Under the
@@ -325,6 +330,12 @@
       r.className = 'bk-row';
       var d = document.createElement('span');
       d.textContent = C.fmtDate(row.date);
+      if (row.free5) {
+        var f = document.createElement('em');
+        f.className = 'bk-free';
+        f.textContent = '5th night free';
+        d.appendChild(f);
+      }
       var v = document.createElement('span');
       v.textContent = C.money(row.base, room.currency) + ' + ' + C.money(row.extras, room.currency);
       r.appendChild(d);

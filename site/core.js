@@ -122,6 +122,54 @@ window.BKCore = (function () {
     return parts.length ? 'Extra guests per night: ' + parts.join(' · ') : null;
   }
 
+  /* ---- the 5th-night promotion (Dave, 2026-08-23) ----
+     Stays of 5+ nights: the 5th night's ACCOMMODATION is free, but the guest
+     still pays that night's conservation levy in full, the board share of
+     the nightly rate (76.4% — the meals/activities the lodge still provides)
+     and VAT. DOCUMENTED ASSUMPTION: VAT is applied to the charged board
+     portion (levy stays un-VATed, accommodation is not charged at all);
+     if VAT should instead be computed on the FULL nightly rate, change
+     `board * (1 + vatPct / 100)` to
+     `board + (vatPct / 100) * nightly` — one line. Exactly one night is
+     adjusted per stay, whatever its length. */
+  var FIFTH_NIGHT_BOARD_SHARE = 0.764;
+
+  /** One night's conservation levy for one room and this party. Per-stay
+   *  bases add nothing for an extra night, honestly. */
+  function levyForNight(lodge, party) {
+    if (!lodge) return 0;
+    var amt = Number(lodge.conservationLevy);
+    if (!isFinite(amt) || amt <= 0) return 0;
+    var persons = Math.max(1,
+      ((party && Number(party.adults)) || 0) + ((party && Number(party.children)) || 0));
+    switch (lodge.conservationBasis) {
+      case 'per_room_per_night': return amt;
+      case 'per_person_per_night': return amt * persons;
+      case 'per_person_per_room_per_night': return amt * persons;
+      default: return 0;
+    }
+  }
+
+  /**
+   * The 5th-night adjustment for one room's stay total, or null when it does
+   * not apply (under 5 nights, unpriced room, or the "free" night would not
+   * actually save anything — a promo that costs more is never shown).
+   * Returns { total, saved }.
+   */
+  function fifthNightAdjust(room, nights, lodge, party) {
+    if (!(nights >= 5)) return null;
+    var t = room.totalPrice != null ? Number(room.totalPrice) : null;
+    if (t == null || !isFinite(t) || !(t > 0)) return null;
+    var nightly = t / nights;
+    var vatPct = lodge && isFinite(Number(lodge.vatPct)) ? Number(lodge.vatPct) : 0;
+    var board = FIFTH_NIGHT_BOARD_SHARE * nightly;
+    var charge = levyForNight(lodge, party) + board * (1 + vatPct / 100);
+    var total = t - nightly + charge;
+    var saved = t - total;
+    if (!(saved > 0)) return null;
+    return { total: total, saved: saved };
+  }
+
   /** Deterministic 0..359 hue from a room id, for the generative fallback
    *  treatment when a room has no photo. Same room, same colour, always. */
   function hueFor(id) {
@@ -195,6 +243,7 @@ window.BKCore = (function () {
     levyLine: levyLine,
     vatLine: vatLine,
     extraGuestsLine: extraGuestsLine,
+    fifthNightAdjust: fifthNightAdjust,
     startSession: startSession,
     track: track,
     searchAvailability: searchAvailability,
@@ -215,4 +264,5 @@ window.__bk = {
   levyLine: window.BKCore.levyLine,
   vatLine: window.BKCore.vatLine,
   extraGuestsLine: window.BKCore.extraGuestsLine,
+  fifthNightAdjust: window.BKCore.fifthNightAdjust,
 };

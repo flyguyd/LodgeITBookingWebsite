@@ -255,6 +255,7 @@ main, .masthead, .foot, .summary { position: relative; z-index: 2; }
   font-size: 11.5px; color: var(--paper-dim); letter-spacing: 0.04em;
   border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 999px; padding: 5px 12px;
 }
+.room-tag.room-promo { color: var(--gold); border-color: rgba(201, 168, 106, 0.55); }
 /* Replicated Guest Suites settings: amenity chips + extra-guest costs. */
 .room-amenities { display: flex; flex-wrap: wrap; gap: 6px; }
 .room-am {
@@ -263,6 +264,15 @@ main, .masthead, .foot, .summary { position: relative; z-index: 2; }
 }
 .room-extra { margin: 0; font-size: 12px; color: var(--paper-dim); font-style: italic; }
 .stay-note { margin: 6px 0 0; font-size: 12.5px; color: var(--paper-dim); font-style: italic; }
+
+/* The chat widget (embed.js) mounts as #oa-web-chat, fixed bottom-right with
+   inline styles — hence !important. Lift it clear of the floating summary
+   where the two would meet (the summary is centered, so only narrower
+   viewports collide). */
+#oa-web-chat { transition: bottom 0.3s ease; }
+@media (max-width: 1100px) {
+  #summary:not([hidden]) ~ #oa-web-chat { bottom: 132px !important; }
+}
 .room-cta {
   margin-top: 6px; align-self: flex-start;
   border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 999px;

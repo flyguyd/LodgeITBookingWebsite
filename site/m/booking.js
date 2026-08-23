@@ -67,14 +67,19 @@
     var o = document.createElement('option');
     o.value = String(ni);
     o.textContent = String(ni);
-    if (ni === 3) o.selected = true;
+    if (ni === 4) o.selected = true;
     els.nights.appendChild(o);
   }
   var more = document.createElement('option');
   more.value = 'more';
   more.textContent = 'More…';
   els.nights.appendChild(more);
-  var lastNights = '3';
+  /* The 5th-night promotion is visible right in the list; the closed
+     trigger shows the short form so the field never overflows. */
+  var opt5 = els.nights.querySelector('option[value="5"]');
+  opt5.textContent = '5 — 5th night’s accommodation free';
+  opt5.dataset.short = '5';
+  var lastNights = '4';
   els.nights.addEventListener('change', function () {
     if (els.nights.value === 'more') {
       els.nights.hidden = true;
@@ -104,7 +109,11 @@
     window.BKCal.attach(els.arrive, {
       fetchRates: C.fetchRateCalendar,
       minIso: C.isoToday(0),
+      maxIso: C.isoToday(365 * 3),
     });
+    /* The native select popup cannot be styled — dress Nights in the site's
+       glass language. The select stays as the value holder. */
+    window.BKCal.glassSelect(els.nights);
   }
 
   /* Suites list in the order set on Guest Suites settings (replicated as
@@ -165,6 +174,15 @@
         }
         current.results = r.json.results || [];
         current.nights = r.json.nights;
+        /* 5+ nights: the 5th night's accommodation is free — each room's
+           stay total is re-priced through the shared rule before display. */
+        if (r.json.nights >= 5) {
+          current.results.forEach(function (room) {
+            var adj = C.fifthNightAdjust(room, r.json.nights, lodge,
+              { adults: els.adults.textContent, children: els.children.textContent });
+            if (adj) { room.totalPrice = adj.total; room.promoFree5 = true; }
+          });
+        }
         C.track('availability_viewed', { count: current.results.length });
         /* Fully-booked suites appear only when Lodge Ops says so
            (site_config.showUnavailable); the empty state judges what is
@@ -303,6 +321,11 @@
 
     var meta = document.createElement('div');
     meta.className = 'room-meta';
+    if (room.promoFree5) {
+      var promo = tag('5th night’s accommodation free');
+      promo.className += ' room-promo';
+      meta.appendChild(promo);
+    }
     var sleeps = (sc && sc.maxTotalGuests) || room.maxGuests;
     if (sleeps) meta.appendChild(tag('Sleeps ' + sleeps));
     if (sc && sc.pool) meta.appendChild(tag(sc.pool));

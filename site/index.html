@@ -137,5 +137,13 @@
   <script src="core.js"></script>
   <script src="calendar.js"></script>
   <script src="booking.js"></script>
+
+  <!-- The website chat client — the same reception-desk widget
+       7starlodges.com and the proposal pages carry, served by the Lodge Ops
+       API with settings baked in. Absolute path on purpose: on the live host
+       nginx routes /api/ to Lodge Ops, the same origin as this page under
+       /book/. async + fault-free: where that API is absent the script 404s
+       silently and the site simply runs without chat. -->
+  <script src="/api/web/embed.js" async></script>
 </body>
 </html>

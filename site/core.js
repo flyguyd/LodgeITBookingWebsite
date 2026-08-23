@@ -123,16 +123,15 @@ window.BKCore = (function () {
   }
 
   /* ---- the 5th-night promotion (Dave, 2026-08-23) ----
-     Stays of 5+ nights: the 5th night's ACCOMMODATION is free, but the guest
-     still pays that night's conservation levy in full, the board share of
-     the nightly rate (76.4% — the meals/activities the lodge still provides)
-     and VAT. DOCUMENTED ASSUMPTION: VAT is applied to the charged board
-     portion (levy stays un-VATed, accommodation is not charged at all);
-     if VAT should instead be computed on the FULL nightly rate, change
-     `board * (1 + vatPct / 100)` to
+     Stays of 5+ nights: the 5th night is discounted 72.3% — the guest pays
+     27.7% of the nightly rate (the board the lodge still provides), plus
+     that night's conservation levy in full where the levy is not already
+     itemised as its own line, plus VAT. DOCUMENTED ASSUMPTION: VAT is
+     applied to the charged portion; if VAT should instead be computed on
+     the FULL nightly rate, change `board * (1 + vatPct / 100)` to
      `board + (vatPct / 100) * nightly` — one line. Exactly one night is
      adjusted per stay, whatever its length. */
-  var FIFTH_NIGHT_BOARD_SHARE = 0.764;
+  var FIFTH_NIGHT_BOARD_SHARE = 0.277;
 
   /** One night's conservation levy for one room and this party. Per-stay
    *  bases add nothing for an extra night, honestly. */

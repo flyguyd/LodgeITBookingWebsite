@@ -67,11 +67,12 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
 }
 .date-field:active { background: rgba(255,255,255,0.12); }
 .date-field > span { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--paper-dim); }
-.date-field input {
+.date-field input, .date-field select {
   appearance: none; -webkit-appearance: none; background: transparent; border: 0;
   outline: none; color: var(--paper); font: 500 16px/1.4 var(--sans); padding: 0;
   color-scheme: dark; min-height: 26px; width: 100%; min-width: 0;
 }
+.date-field select option { color: #111; }
 .date-arrow { align-self: center; color: var(--paper-dim); }
 
 .steppers { display: flex; gap: 8px; margin-top: 10px; }

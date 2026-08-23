@@ -8,8 +8,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var form = $('searchForm');
   var els = {
-    arrive: $('fArrive'), depart: $('fDepart'), adults: $('fAdults'),
-    children: $('fChildren'), rooms: $('fRooms'), btn: $('searchBtn'),
+    arrive: $('fArrive'), nights: $('fNights'), nightsCustom: $('fNightsCustom'),
+    adults: $('fAdults'), children: $('fChildren'), rooms: $('fRooms'), btn: $('searchBtn'),
     note: $('formNote'), loading: $('stateLoading'),
     maintenance: $('stateMaintenance'), unavailable: $('stateUnavailable'),
     empty: $('stateEmpty'), results: $('results'), resultsHead: $('resultsHead'),
@@ -70,21 +70,82 @@
   fillSelect(els.children, 0, 12, 0);
   fillSelect(els.rooms, 1, 6, 1);
   els.arrive.value = C.isoToday(14);
-  els.depart.value = C.isoToday(17);
   els.arrive.min = C.isoToday(0);
-  els.depart.min = C.isoToday(1);
+
+  /* Nights: 2-14 in the dropdown, 'More…' swaps it for a free text box
+     (Dave, 2026-08-23). Departure = arrival + nights. */
+  fillSelect(els.nights, 2, 14, 3);
+  var more = document.createElement('option');
+  more.value = 'more';
+  more.textContent = 'More…';
+  els.nights.appendChild(more);
+  var lastNights = '3';
+  els.nights.addEventListener('change', function () {
+    if (els.nights.value === 'more') {
+      els.nights.hidden = true;
+      els.nightsCustom.hidden = false;
+      els.nightsCustom.focus();
+    } else {
+      lastNights = els.nights.value;
+    }
+  });
+  /* Leaving the box empty steps back to the dropdown — no dead end. */
+  els.nightsCustom.addEventListener('blur', function () {
+    if (els.nightsCustom.value === '') {
+      els.nightsCustom.hidden = true;
+      els.nights.hidden = false;
+      els.nights.value = lastNights;
+    }
+  });
+  function currentNights() {
+    var raw = els.nightsCustom.hidden ? els.nights.value : els.nightsCustom.value;
+    var n = parseInt(raw, 10);
+    return isFinite(n) ? n : 0;
+  }
+
+  /* The rate calendar replaces the native picker on Arrive: each day shows
+     the cheapest available suite for that night. */
+  if (window.BKCal) {
+    window.BKCal.attach(els.arrive, {
+      fetchRates: C.fetchRateCalendar,
+      minIso: C.isoToday(0),
+    });
+  }
+
+  /* Suites list in the order set on Guest Suites settings (replicated as
+     suites[id].sortOrder); anything unknown keeps its place at the end. */
+  function suiteOrdered(list) {
+    return list.slice().sort(function (a, b) {
+      var sa = suites[String(a.roomTypeId)];
+      var sb = suites[String(b.roomTypeId)];
+      var oa = sa && sa.sortOrder != null ? sa.sortOrder : 1e9;
+      var ob = sb && sb.sortOrder != null ? sb.sortOrder : 1e9;
+      return oa - ob;
+    });
+  }
 
   // ---- search ----
   form.addEventListener('submit', function (ev) {
     ev.preventDefault();
     var from = els.arrive.value;
-    var to = els.depart.value;
+    var n = currentNights();
     els.note.hidden = true;
-    if (!from || !to || C.nightsBetween(from, to) < 1) {
-      els.note.textContent = 'Departure must be after arrival.';
+    if (!from) {
+      els.note.textContent = 'Choose an arrival date.';
       els.note.hidden = false;
       return;
     }
+    if (!(n >= 2)) {
+      els.note.textContent = 'How many nights? Two or more.';
+      els.note.hidden = false;
+      return;
+    }
+    if (n > 30) {
+      els.note.textContent = 'Stays longer than 30 nights: contact the lodge directly.';
+      els.note.hidden = false;
+      return;
+    }
+    var to = C.addDays(from, n);
     current.from = from;
     current.to = to;
     current.picks = {};
@@ -118,7 +179,7 @@
           return room.available > 0 || config.showUnavailable === true;
         });
         if (!visible.length) { show('empty'); return; }
-        renderResults({ from: r.json.from, to: r.json.to, nights: r.json.nights, results: visible });
+        renderResults({ from: r.json.from, to: r.json.to, nights: r.json.nights, results: suiteOrdered(visible) });
         show('results');
         els.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
       })

@@ -87,6 +87,7 @@ export function safeSitePath(siteRoot, urlPath) {
 export const FORWARD_ROUTES = {
   'GET /api/public/status': { method: 'GET', path: '/api/booking/status' },
   'GET /api/public/availability': { method: 'GET', path: '/api/booking/availability' },
+  'GET /api/public/rate-calendar': { method: 'GET', path: '/api/booking/rate-calendar' },
   'POST /api/public/sessions': { method: 'POST', path: '/api/booking/sessions' },
   'POST /api/public/events': { method: 'POST', path: '/api/booking/events' },
 };

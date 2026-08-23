@@ -36,6 +36,13 @@ window.BKCore = (function () {
     return d.toISOString().slice(0, 10);
   }
 
+  /** ISO date n days after an ISO date — UTC arithmetic, no DST surprises.
+   *  Backs the nights selector: departure = arrival + nights. */
+  function addDays(iso, n) {
+    var d = new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000);
+    return d.toISOString().slice(0, 10);
+  }
+
   /** Attribution that must survive the journey (spec §17). */
   function captureSource(search, referrer, landing) {
     var out = {};
@@ -167,11 +174,21 @@ window.BKCore = (function () {
     return fetch(API + '/status').then(function (r) { return r.json(); });
   }
 
+  /** Per-day cheapest-rate calendar for the date picker. Resolves to
+   *  { days: { iso: { minRate, available } }, currency } or null — the
+   *  picker renders without rates rather than failing. */
+  function fetchRateCalendar(from, to) {
+    return fetch(API + '/rate-calendar?from=' + from + '&to=' + to)
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
+  }
+
   return {
     nightsBetween: nightsBetween,
     money: money,
     fmtDate: fmtDate,
     isoToday: isoToday,
+    addDays: addDays,
     captureSource: captureSource,
     hueFor: hueFor,
     priceParts: priceParts,
@@ -182,6 +199,7 @@ window.BKCore = (function () {
     track: track,
     searchAvailability: searchAvailability,
     fetchStatus: fetchStatus,
+    fetchRateCalendar: fetchRateCalendar,
   };
 })();
 
@@ -190,6 +208,7 @@ window.__bk = {
   nightsBetween: window.BKCore.nightsBetween,
   money: window.BKCore.money,
   fmtDate: window.BKCore.fmtDate,
+  addDays: window.BKCore.addDays,
   captureSource: window.BKCore.captureSource,
   hueFor: window.BKCore.hueFor,
   priceParts: window.BKCore.priceParts,

@@ -6,6 +6,7 @@
   <title>7 Star Lodges — Reserve your stay</title>
   <meta name="description" content="Private luxury lodges on the water's edge. Check live availability and reserve your suite." />
   <link rel="stylesheet" href="booking.css" />
+  <link rel="stylesheet" href="calendar.css" />
 </head>
 <body>
   <!-- The living backdrop: slow aurora light behind everything, film grain
@@ -48,8 +49,9 @@
         </label>
         <span class="bar-sep" aria-hidden="true"></span>
         <label class="bar-field">
-          <span>Depart</span>
-          <input id="fDepart" type="date" required />
+          <span>Nights</span>
+          <select id="fNights"></select>
+          <input id="fNightsCustom" type="number" min="2" max="30" inputmode="numeric" placeholder="nights" hidden />
         </label>
         <span class="bar-sep" aria-hidden="true"></span>
         <label class="bar-field slim">
@@ -133,6 +135,7 @@
   </footer>
 
   <script src="core.js"></script>
+  <script src="calendar.js"></script>
   <script src="booking.js"></script>
 </body>
 </html>

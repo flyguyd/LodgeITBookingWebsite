@@ -292,4 +292,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.22',
+    version: '0.1.22',
+    date: '2026-08-24T02:05:00+02:00',
+    changes: [
+      {
+        headline:
+          'The full-site hero fits the screen again. With both headline lines at the display size, a two-line-each headline swallowed the whole viewport and pushed the booking bar below the fold. The SECOND headline line now renders at roughly 60% of the first - the supporting thought under the statement - and the hero subtitle paragraph widened from 46 to 68 characters per line so it breathes in three lines instead of six narrow ones. Desktop build only; the mobile hero was already scaled to its screen.',
+        detail:
+          'booking.css: .hero-title .hero-line gets its own clamp(28px, 4.4vw, 60px) with line-height 1.18 and a 12px seam under line one, where it previously inherited the full clamp(44px, 7.5vw, 104px); .hero-sub max-width 46ch -> 68ch. VERIFIED by real Chromium at 1900px with the live site\u0027s actual wording: line one 104px, line two 60px, subtitle 681px wide, and the whole hero plus the booking bar inside one 995px viewport. Also confirmed while in there: the replicated logo DOES render top-left on this build (it replaces the gold star the moment config.json carries a logoId) - the live site not showing one is the pending deploy, not a code gap: the logo shipped in 0.1.11 and the site still serving 0.1.6 predates it.',
+      },
+    ],
+  },
 ];

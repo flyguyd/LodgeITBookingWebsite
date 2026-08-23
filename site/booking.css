@@ -113,9 +113,17 @@ main { z-index: 3; }
   font-size: clamp(44px, 7.5vw, 104px); line-height: 1.04; letter-spacing: 0.01em;
 }
 .hero-title span { display: block; }
+/* The second headline line reads as the supporting thought, not a repeat of
+   the display size — two full-size lines swallowed the screen (Dave,
+   2026-08-24). */
+.hero-title .hero-line {
+  font-size: clamp(28px, 4.4vw, 60px);
+  line-height: 1.18;
+  margin-top: 12px;
+}
 .hero-title em { font-style: italic; color: var(--gold); }
 .hero-sub {
-  margin: 26px auto 0; max-width: 46ch; color: var(--paper-dim);
+  margin: 26px auto 0; max-width: 68ch; color: var(--paper-dim);
   font-size: clamp(15px, 1.4vw, 18px); line-height: 1.7;
 }
 

@@ -108,13 +108,31 @@
     return isFinite(n) ? n : 0;
   }
 
+  /* A checkout click on the calendar sets the whole Nights control:
+     2-14 lands on the dropdown, longer stays on the free text box. */
+  function setNights(n) {
+    if (n >= 2 && n <= 14) {
+      els.nightsCustom.hidden = true;
+      els.nightsCustom.value = '';
+      els.nights.hidden = false;
+      els.nights.value = String(n);
+      els.nights.dispatchEvent(new Event('change', { bubbles: true }));
+    } else {
+      els.nights.hidden = true;
+      els.nightsCustom.hidden = false;
+      els.nightsCustom.value = String(n);
+    }
+  }
+
   /* The rate calendar replaces the native picker on Arrive: each day shows
-     the cheapest available suite for that night. */
+     the cheapest available suite for that night. First click = check-in
+     (stays open), a later-day click = checkout. */
   if (window.BKCal) {
     window.BKCal.attach(els.arrive, {
       fetchRates: C.fetchRateCalendar,
       minIso: C.isoToday(0),
       maxIso: C.isoToday(365 * 3),
+      onRange: function (fromIso, nights) { setNights(nights); },
     });
     /* The native select popup cannot be styled — dress Nights in the site's
        glass language. The select stays as the value holder. */

@@ -50,6 +50,13 @@ window.BKCal = (function () {
        navigation stops at the window's edges. */
     var maxIso = opts.maxIso || '';
     var monthCache = {}; // 'YYYY-MM' -> {days,currency} (or in-flight promise)
+    /* Range selection (Dave, 2026-08-23): the first click picks check-in and
+       the calendar STAYS OPEN; a click on a later day picks checkout — the
+       nights are computed and handed to opts.onRange. A click at or before
+       check-in (including the next-day tap — the stay floor is 2 nights)
+       restarts the range instead. */
+    var rangeStart = null;
+    var cellIndex = {}; // iso -> cell button, across the visible months
 
     // The native picker steps aside; the field stays the source of truth
     // (ISO in .value) so the form code never changes.
@@ -74,6 +81,12 @@ window.BKCal = (function () {
       if (monthCache[key]) return monthCache[key];
       var first = iso(y, m, 1);
       var next = m === 11 ? iso(y + 1, 0, 1) : iso(y, m + 1, 1);
+      // Past days are never asked for — their cells are disabled anyway.
+      if (minIso && next <= minIso) {
+        monthCache[key] = { days: {}, currency: null };
+        return monthCache[key];
+      }
+      if (minIso && first < minIso) first = minIso;
       var p = fetchRates(first, next).then(function (r) {
         monthCache[key] = (r && r.days) ? { days: r.days, currency: r.currency } : { days: {}, currency: null };
         return monthCache[key];
@@ -113,6 +126,7 @@ window.BKCal = (function () {
         cell.type = 'button';
         cell.className = 'cal-day';
         if (dayIso === input.value) cell.className += ' picked';
+        cell.dataset.iso = dayIso;
         var num = document.createElement('span');
         num.className = 'cal-num';
         num.textContent = String(d);
@@ -154,6 +168,7 @@ window.BKCal = (function () {
     function render(y, m) {
       view = { y: y, m: m };
       pop.textContent = '';
+      cellIndex = {};
       var count = monthCount();
       pop.classList.toggle('cal-double', count === 2);
 
@@ -178,6 +193,7 @@ window.BKCal = (function () {
         var yy = y + Math.floor(mm / 12);
         mm = ((mm % 12) + 12) % 12;
         var built = buildMonth(yy, mm);
+        for (var k in built.cells) cellIndex[k] = built.cells[k];
         months.appendChild(built.block);
         fillRates(built);
       }
@@ -205,17 +221,51 @@ window.BKCal = (function () {
       return b;
     }
 
+    function setPicked(dayIso) {
+      Object.keys(cellIndex).forEach(function (k) {
+        cellIndex[k].classList.remove('picked');
+        cellIndex[k].classList.remove('in-range');
+      });
+      if (cellIndex[dayIso]) cellIndex[dayIso].classList.add('picked');
+    }
+
     function pickHandler(dayIso) {
       return function (ev) {
         ev.stopPropagation();
+        if (rangeStart) {
+          var nights = Math.round(
+            (Date.parse(dayIso + 'T00:00:00Z') - Date.parse(rangeStart + 'T00:00:00Z')) /
+              86400000);
+          if (nights >= 2) {
+            var from = rangeStart;
+            close();
+            if (opts.onRange) opts.onRange(from, nights);
+            return;
+          }
+        }
+        rangeStart = dayIso;
         input.value = dayIso;
-        close();
+        setPicked(dayIso);
         if (opts.onPick) opts.onPick(dayIso);
       };
     }
 
+    /* While a check-in is pending, hovering a later day previews the stay. */
+    pop.addEventListener('mouseover', function (ev) {
+      if (!rangeStart) return;
+      var btn = ev.target && ev.target.closest ? ev.target.closest('.cal-day') : null;
+      var hov = btn && !btn.disabled ? btn.dataset.iso : null;
+      Object.keys(cellIndex).forEach(function (k) {
+        cellIndex[k].classList.toggle(
+          'in-range',
+          !!hov && hov > rangeStart && k > rangeStart && k < hov,
+        );
+      });
+    });
+
     function open() {
       if (!pop.hidden) return;
+      rangeStart = null;
       var base = input.value && /^\d{4}-\d{2}-\d{2}$/.test(input.value)
         ? input.value
         : (minIso || new Date().toISOString().slice(0, 10));
@@ -226,7 +276,7 @@ window.BKCal = (function () {
         pop.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
     }
-    function close() { pop.hidden = true; view = null; }
+    function close() { pop.hidden = true; view = null; rangeStart = null; }
 
     input.addEventListener('click', function (ev) { ev.preventDefault(); open(); });
     input.addEventListener('focus', open);

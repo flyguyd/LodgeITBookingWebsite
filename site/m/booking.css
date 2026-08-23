@@ -47,7 +47,9 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
 }
 
 .hero { text-align: center; padding: 40px 6px 22px; }
-.site-logo { max-height: 52px; max-width: 220px; margin: 0 auto 10px; display: block; }
+/* The replicated Lodge Ops logo sits top-LEFT (Dave, 2026-08-23), like the
+   full build's masthead; the hero text below stays centred. */
+.site-logo { max-height: 52px; max-width: 220px; margin: 0 0 12px; display: block; }
 .kicker { margin: 0 0 10px; font-size: 11px; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold); }
 .hero-title {
   margin: 0; font-family: var(--serif); font-weight: 400;
@@ -58,7 +60,12 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
 @keyframes rise { from { opacity: 0; transform: translateY(22px); } }
 
 /* ------------------------------------------------------------- the panel */
-.panel { padding: 18px 16px 16px; animation: rise 0.8s var(--ease-out) 0.12s backwards; }
+/* z-index 30: same stacking-context trap as the full build's bar — the
+   calendar inside the glass panel must paint above the state cards below. */
+.panel {
+  padding: 18px 16px 16px; animation: rise 0.8s var(--ease-out) 0.12s backwards;
+  position: relative; z-index: 30;
+}
 .dates { display: flex; align-items: stretch; gap: 8px; }
 .date-field {
   flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px;

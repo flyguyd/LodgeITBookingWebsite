@@ -123,11 +123,21 @@ main, .masthead, .foot, .summary { position: relative; z-index: 2; }
 @keyframes rise { to { opacity: 1; transform: none; } }
 
 /* --------------------------------------------------- the booking bar */
-.bar-wrap { max-width: 1060px; margin: 26px auto 0; padding: 0 clamp(24px, 5vw, 64px); }
+/* z-index 30: the form's backdrop-filter makes it a stacking context, so the
+   calendar inside can never out-stack a LATER sibling (the state cards) on
+   its own — the whole bar must sit above the content below it. */
+.bar-wrap {
+  max-width: 1060px; margin: 26px auto 0; padding: 0 clamp(24px, 5vw, 64px);
+  position: relative; z-index: 30;
+}
 .bar {
   display: flex; align-items: stretch; gap: 4px;
-  padding: 12px; flex-wrap: wrap;
+  padding: 12px; flex-wrap: nowrap;
   transition: border-color 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out);
+}
+.bar .cta { flex: 0 0 auto; align-self: center; }
+@media (max-width: 860px) {
+  .bar { flex-wrap: wrap; }
 }
 .bar:focus-within {
   border-color: rgba(216, 180, 106, 0.55);
@@ -136,12 +146,12 @@ main, .masthead, .foot, .summary { position: relative; z-index: 2; }
     0 0 0 4px rgba(216, 180, 106, 0.12);
 }
 .bar-field {
-  flex: 1 1 150px; display: flex; flex-direction: column; gap: 3px;
-  padding: 8px 16px; border-radius: 14px; cursor: pointer;
+  flex: 1 1 130px; min-width: 0; display: flex; flex-direction: column; gap: 3px;
+  padding: 8px 14px; border-radius: 14px; cursor: pointer;
   transition: background 0.18s var(--ease-out);
 }
 .bar-field:hover { background: rgba(255, 255, 255, 0.06); }
-.bar-field.slim { flex: 0 1 110px; }
+.bar-field.slim { flex: 0 1 96px; }
 .bar-field > span {
   font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase;
   color: var(--paper-dim);

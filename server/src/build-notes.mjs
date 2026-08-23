@@ -253,4 +253,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.19',
+    version: '0.1.19',
+    date: '2026-08-23T23:55:00+02:00',
+    changes: [
+      {
+        headline:
+          'The levy and VAT amounts are now worked out from the replicated Lodge Ops settings under BOTH price displays. The itemised display already did (0.1.13); the inclusive display, which trusted the provider to say what a rate contains, silently omitted the conservation levy from the guest\u0027s total because Cloudbeds knows nothing of it. Now the inclusive headline is the rate (VAT inside, per the lodge\u0027s declared percentage) PLUS the whole stay\u0027s conservation levy with VAT on it, noted honestly as VAT & levy included. The two displays finally agree on the grand total - itemised base plus extras equals the inclusive headline, to the rand.',
+        detail:
+          'The extras pass runs for every search, not only the itemised display: VAT is derived out of the rate only when itemised, the stay levy (from the replicated amount, basis and party) is added either way, and the 5th-night promotion never charges the levy inside the promo night any more since the stay levy is always collected in full - previously the inclusive display charged night five\u0027s levy in the promo while omitting the other nights\u0027 entirely. The included-note wording follows the same honesty rules as the itemised one (VAT & levy included when worked out from the settings; taxes, fees & levy included when the provider itemised its own extras too). The basket total rides the same shared pricing, so it folds the levy in automatically. VERIFIED by real Chromium against the replicated fixture (R175 per person per night levy, 15% VAT, 2 adults, R2,500.10 nightly): itemised numbers unchanged to the rand (R10,870 + R3,241 at 4 nights; R9,389 + R3,421 with the 5-night promo), inclusive now R14,111 and R12,809 - exactly the itemised base plus extras - on desktop and mobile, with the live display setting restored after the run.',
+      },
+    ],
+  },
 ];

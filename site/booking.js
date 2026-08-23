@@ -146,6 +146,9 @@
      suites[id].sortOrder); anything unknown keeps its place at the end. */
   function suiteOrdered(list) {
     return list.slice().sort(function (a, b) {
+      var avA = a.available > 0 ? 0 : 1;
+      var avB = b.available > 0 ? 0 : 1;
+      if (avA !== avB) return avA - avB; // sold-out suites after the bookable
       var sa = suites[String(a.roomTypeId)];
       var sb = suites[String(b.roomTypeId)];
       var oa = sa && sa.sortOrder != null ? sa.sortOrder : 1e9;
@@ -209,6 +212,37 @@
             var adj = C.fifthNightAdjust(room, r.json.nights, lodge,
               { adults: els.adults.value, children: els.children.value });
             if (adj) { room.totalPrice = adj.total; room.promoFree5 = true; }
+          });
+        }
+        /* Real Cloudbeds does not itemise taxes on this endpoint. Under the
+           itemised setting, derive the VAT portion from the lodge's declared
+           vatPct (rates are VAT-inclusive) so guests still see base + VAT.
+           Provider itemisation, when present, always wins. */
+        if (config.rateDisplay === 'separate' && lodge && Number(lodge.vatPct) > 0) {
+          current.results.forEach(function (room) {
+            var t = Number(room.totalPrice);
+            var hasOwn = (room.taxesTotal != null && isFinite(Number(room.taxesTotal))) ||
+              (room.feesTotal != null && isFinite(Number(room.feesTotal)));
+            if (!hasOwn && isFinite(t) && t > 0) {
+              var vat = t * Number(lodge.vatPct) / (100 + Number(lodge.vatPct));
+              room.totalPrice = t - vat;
+              room.taxesTotal = vat;
+              room.vatDerived = true;
+            }
+          });
+        }
+        /* The provider omits fully booked room types entirely — when Lodge
+           Ops says to show them, the replicated suite list fills the gaps. */
+        if (config.showUnavailable === true) {
+          var present = {};
+          current.results.forEach(function (room) { present[String(room.roomTypeId)] = true; });
+          Object.keys(suites).forEach(function (id) {
+            if (present[id] || id.charAt(0) === '_') return;
+            if (!suites[id] || !suites[id].name) return;
+            current.results.push({
+              roomTypeId: id, name: suites[id].name, available: 0,
+              totalPrice: null, currency: null, photos: [],
+            });
           });
         }
         C.track('availability_viewed', { count: current.results.length });
@@ -310,6 +344,51 @@
     });
   }
 
+
+  /* The card click opens the full story — gallery, description, amenities,
+     pricing — and the Add action lives inside (Dave, 2026-08-23). */
+  function openLightbox(room, nights) {
+    if (!window.BKLight) { togglePick(room); return; }
+    var sc = suites[String(room.roomTypeId)] || null;
+    var pp = C.priceParts(room, config);
+    var soldOut = !(room.available > 0);
+    var chips = [];
+    if (room.promoFree5) chips.push({ text: '5th night\u2019s accommodation free', gold: true });
+    var sleeps = (sc && sc.maxTotalGuests) || room.maxGuests;
+    if (sleeps) chips.push({ text: 'Sleeps ' + sleeps });
+    if (sc && sc.pool) chips.push({ text: sc.pool });
+    if (sc && sc.style) chips.push({ text: sc.style });
+    ((sc && sc.amenities) || []).forEach(function (a) { chips.push({ text: a }); });
+    var price = null;
+    if (pp.headline != null) {
+      price = {
+        headline: C.money(pp.headline, room.currency),
+        perNight: C.money(pp.headline / nights, room.currency) + ' a night',
+        note: pp.note
+          ? (pp.note.kind === 'plus'
+            ? '+ ' + C.money(pp.note.extras, room.currency) + (room.vatDerived ? ' VAT' : ' taxes & fees')
+            : 'taxes & fees included')
+          : null,
+      };
+    }
+    window.BKLight.open({
+      title: room.name,
+      photos: photosFor(room),
+      artHue: C.hueFor(room.roomTypeId),
+      soldOut: soldOut,
+      soldOutText: 'Unavailable for your dates',
+      picked: !!current.picks[room.roomTypeId],
+      price: price,
+      description: String((sc && sc.description) || room.description || '').replace(/<[^>]*>/g, ''),
+      chips: chips,
+      extraLine: C.extraGuestsLine(sc, room.currency),
+      onToggle: soldOut ? null : function () {
+        togglePick(room);
+        return !!current.picks[room.roomTypeId];
+      },
+    });
+  }
+
   function renderRoom(room, nights, index) {
     var card = document.createElement('article');
     card.className = 'glass room';
@@ -339,7 +418,7 @@
       card.classList.add('soldout');
       var so = document.createElement('span');
       so.className = 'room-scarce';
-      so.textContent = 'Fully booked for these dates';
+      so.textContent = 'Unavailable for your dates';
       photo.appendChild(so);
     }
     if (room.available > 0 && room.available <= 2) {
@@ -375,7 +454,7 @@
         var noteEl = document.createElement('span');
         noteEl.className = 'room-taxnote';
         noteEl.textContent = pp.note.kind === 'plus'
-          ? '+ ' + C.money(pp.note.extras, room.currency) + ' taxes & fees'
+          ? '+ ' + C.money(pp.note.extras, room.currency) + (room.vatDerived ? ' VAT' : ' taxes & fees')
           : 'taxes & fees included';
         price.appendChild(noteEl);
         if (pp.note.kind === 'plus') attachBreakdown(price, noteEl, room, nights);
@@ -459,18 +538,17 @@
     }
     card.__refresh = refresh;
 
+    function details() { openLightbox(room, nights); }
+    card.addEventListener('click', details);
+    card.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); details(); }
+    });
     if (soldOut) {
       btn.remove();
       qtyRow.remove();
-      card.removeAttribute('role');
-      card.tabIndex = -1;
       return card;
     }
-    function toggle() { togglePick(room); }
-    card.addEventListener('click', toggle);
-    card.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); }
-    });
+    btn.addEventListener('click', function (ev) { ev.stopPropagation(); togglePick(room); });
     minus.addEventListener('click', function (ev) { ev.stopPropagation(); bumpQty(room, -1); });
     plus.addEventListener('click', function (ev) { ev.stopPropagation(); bumpQty(room, 1); });
     return card;

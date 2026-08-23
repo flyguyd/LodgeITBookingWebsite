@@ -275,21 +275,23 @@ window.BKCal = (function () {
       for (var i = 0; i < tags.length; i++) tags[i].parentNode.removeChild(tags[i]);
     }
 
-    /* The moment check-in is picked, a 5-night stay is suggested: the next
-       nights shade in and the 5th night carries its promotion marker
-       (Dave, 2026-08-23). Hovering another checkout previews that stay
-       instead; mousing away falls back to the suggestion. */
+    /* The moment check-in is picked, a 5-night stay is suggested and the 5th
+       night carries its promotion marker (Dave, 2026-08-23). The counting
+       convention is his: each shaded day AFTER check-in is one night, so a
+       5-night stay shades five days and the marker sits on the fifth —
+       clicking that very cell books exactly 5 nights. Hovering another
+       checkout previews that stay; mousing away restores the suggestion. */
     function shadeStay(endIso) {
       if (!rangeStart) return;
       var end = endIso && endIso > rangeStart ? endIso : addDaysIso(rangeStart, 5);
       Object.keys(cellIndex).forEach(function (k) {
-        cellIndex[k].classList.toggle('in-range', k > rangeStart && k < end);
+        cellIndex[k].classList.toggle('in-range', k > rangeStart && k <= end);
       });
     }
 
     function suggestFive() {
       shadeStay(null);
-      var fifth = cellIndex[addDaysIso(rangeStart, 4)];
+      var fifth = cellIndex[addDaysIso(rangeStart, 5)];
       if (fifth && !fifth.disabled && !fifth.querySelector('.cal-free5')) {
         var b = document.createElement('span');
         b.className = 'cal-free5';

@@ -18,6 +18,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createRateLimiter,
+  createStatsRecorder,
   forwardTargetFor,
   mimeFor,
   safeSitePath,
@@ -42,6 +43,18 @@ const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MS) || 60_000;
 const STARTED_AT = Date.now();
 const allow = createRateLimiter(RATE_LIMIT, RATE_WINDOW_MS);
 let lastEngineOk = null;
+
+// Performance counters, reported to the engine with every heartbeat and
+// passed through to the Lodge Ops Performance page. In-memory; a restart
+// resets them and sinceSec says so.
+const stats = createStatsRecorder();
+let eventLoopLagMs = null;
+setInterval(() => {
+  const t0 = Date.now();
+  setTimeout(() => {
+    eventLoopLagMs = Math.max(0, Date.now() - t0);
+  }, 0).unref?.();
+}, 5000).unref();
 
 function json(res, status, body) {
   const raw = JSON.stringify(body);
@@ -103,6 +116,7 @@ const server = createServer(async (req, res) => {
 
   // ---- health (open, minimal) ----
   if (method === 'GET' && url.split('?')[0] === '/health') {
+    stats.recordHealth();
     json(res, 200, {
       ok: true,
       version: VERSION,
@@ -116,10 +130,12 @@ const server = createServer(async (req, res) => {
   const target = forwardTargetFor(method, url);
   if (url.startsWith('/api/')) {
     if (!target) {
+      stats.apiNotFound();
       json(res, 404, { code: 'NOT_FOUND', message: 'No such endpoint.' });
       return;
     }
     if (!allow(ip)) {
+      stats.apiRateLimited();
       json(res, 429, { code: 'RATE_LIMITED', message: 'Too many requests — slow down.' });
       return;
     }
@@ -128,11 +144,19 @@ const server = createServer(async (req, res) => {
       try {
         rawBody = await readBody(req);
       } catch {
+        stats.apiTooLarge();
         json(res, 413, { code: 'TOO_LARGE', message: 'Request too large.' });
         return;
       }
     }
+    const started = Date.now();
     const r = await engineCall(target.method, target.path, rawBody);
+    stats.forward(
+      `${method} ${url.split('?')[0]}`,
+      r.status,
+      Date.now() - started,
+      r.status === 0,
+    );
     if (r.status === 0) {
       json(res, 503, {
         code: 'BOOKING_UNAVAILABLE',
@@ -155,27 +179,37 @@ const server = createServer(async (req, res) => {
   }
   const filePath = safeSitePath(SITE_ROOT, url);
   if (!filePath) {
+    stats.recordStaticMiss();
     json(res, 404, { code: 'NOT_FOUND', message: 'No such page.' });
     return;
   }
   try {
     const data = await readFile(filePath);
+    stats.recordStatic(data.length);
     res.writeHead(200, {
       'Content-Type': mimeFor(filePath),
       'Cache-Control': 'public, max-age=300',
     });
     res.end(method === 'HEAD' ? undefined : data);
   } catch {
+    stats.recordStaticMiss();
     json(res, 404, { code: 'NOT_FOUND', message: 'No such page.' });
   }
 });
 
 // ---- heartbeat: report ourselves to the engine so Lodge Ops sees us ----
 async function heartbeat() {
+  const mem = process.memoryUsage();
   const body = JSON.stringify({
     version: VERSION,
     uptimeSec: Math.round((Date.now() - STARTED_AT) / 1000),
     siteUrl: SITE_PUBLIC_URL,
+    stats: {
+      ...stats.snapshot(),
+      rssBytes: mem.rss,
+      heapUsedBytes: mem.heapUsed,
+      eventLoopLagMs,
+    },
   });
   const r = await engineCall('PUT', '/api/engine/site-heartbeat', body);
   if (r.status !== 200) {

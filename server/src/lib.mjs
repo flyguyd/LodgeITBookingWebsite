@@ -99,3 +99,141 @@ export function forwardTargetFor(method, urlPath) {
   const query = qIdx >= 0 ? urlPath.slice(qIdx) : '';
   return { method: route.method, path: route.path + query };
 }
+
+/**
+ * Performance counters for the site service, reported to the engine with the
+ * heartbeat and passed through to the Lodge Ops Performance page. Pure factory
+ * (injectable clock) so harnesses can drive it deterministically. Everything
+ * is in memory and describes this process since start.
+ */
+export function createStatsRecorder(nowFn = Date.now) {
+  const RING = 300;
+  const WINDOW = 60; // per-second buckets for the one-minute rates
+  const startedAt = nowFn();
+
+  const makeRate = () => ({ counts: new Array(WINDOW).fill(0), stamps: new Array(WINDOW).fill(0) });
+  const bumpRate = (r) => {
+    const sec = Math.floor(nowFn() / 1000);
+    const idx = sec % WINDOW;
+    if (r.stamps[idx] !== sec) {
+      r.stamps[idx] = sec;
+      r.counts[idx] = 0;
+    }
+    r.counts[idx] += 1;
+  };
+  const readRate = (r) => {
+    const sec = Math.floor(nowFn() / 1000);
+    let n = 0;
+    for (let i = 0; i < WINDOW; i++) if (sec - r.stamps[i] < WINDOW) n += r.counts[i];
+    return n;
+  };
+
+  const state = {
+    static: { hits: 0, bytes: 0, misses: 0, rate: makeRate() },
+    health: { hits: 0 },
+    api: {
+      requests: 0,
+      rateLimited429: 0,
+      tooLarge413: 0,
+      notAllowlisted404: 0,
+      engineDown: 0,
+      rate: makeRate(),
+      byRoute: new Map(), // key -> {count, ok, err, durations[], durSum, durMax}
+    },
+  };
+
+  const routeBucket = (key) => {
+    let b = state.api.byRoute.get(key);
+    if (!b) {
+      b = { count: 0, ok: 0, err: 0, durations: [], ringIdx: 0, durSum: 0, durMax: 0 };
+      state.api.byRoute.set(key, b);
+    }
+    return b;
+  };
+
+  return {
+    recordStatic(bytes) {
+      state.static.hits += 1;
+      state.static.bytes += bytes;
+      bumpRate(state.static.rate);
+    },
+    recordStaticMiss() {
+      state.static.misses += 1;
+    },
+    recordHealth() {
+      state.health.hits += 1;
+    },
+    apiNotFound() {
+      state.api.requests += 1;
+      state.api.notAllowlisted404 += 1;
+      bumpRate(state.api.rate);
+    },
+    apiRateLimited() {
+      state.api.requests += 1;
+      state.api.rateLimited429 += 1;
+      bumpRate(state.api.rate);
+    },
+    apiTooLarge() {
+      state.api.requests += 1;
+      state.api.tooLarge413 += 1;
+      bumpRate(state.api.rate);
+    },
+    /** One forwarded guest call. status 0 = the engine did not answer. */
+    forward(routeKey, status, durationMs, engineDown) {
+      state.api.requests += 1;
+      bumpRate(state.api.rate);
+      if (engineDown) state.api.engineDown += 1;
+      const b = routeBucket(routeKey);
+      b.count += 1;
+      if (status >= 200 && status < 400) b.ok += 1;
+      else b.err += 1;
+      if (b.durations.length < RING) b.durations.push(durationMs);
+      else {
+        b.durations[b.ringIdx] = durationMs;
+        b.ringIdx = (b.ringIdx + 1) % RING;
+      }
+      b.durSum += durationMs;
+      if (durationMs > b.durMax) b.durMax = durationMs;
+    },
+    snapshot() {
+      const byRoute = {};
+      for (const [key, b] of [...state.api.byRoute.entries()].sort((a, z) => a[0].localeCompare(z[0]))) {
+        let p50 = null;
+        let p95 = null;
+        if (b.durations.length) {
+          const sorted = [...b.durations].sort((a, z) => a - z);
+          p50 = sorted[Math.floor(sorted.length * 0.5)];
+          p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
+        }
+        byRoute[key] = {
+          count: b.count,
+          ok: b.ok,
+          err: b.err,
+          avgMs: b.count ? Math.round((b.durSum / b.count) * 10) / 10 : null,
+          p50Ms: p50,
+          p95Ms: p95,
+          maxMs: b.count ? b.durMax : null,
+        };
+      }
+      return {
+        sinceSec: Math.round((nowFn() - startedAt) / 1000),
+        static: {
+          hits: state.static.hits,
+          bytes: state.static.bytes,
+          misses: state.static.misses,
+          perMin: readRate(state.static.rate),
+        },
+        health: { hits: state.health.hits },
+        api: {
+          requests: state.api.requests,
+          perMin: readRate(state.api.rate),
+          rateLimited429: state.api.rateLimited429,
+          tooLarge413: state.api.tooLarge413,
+          notAllowlisted404: state.api.notAllowlisted404,
+          engineDown: state.api.engineDown,
+          byRoute,
+        },
+      };
+    },
+  };
+}

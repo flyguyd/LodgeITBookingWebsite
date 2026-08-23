@@ -255,6 +255,53 @@
     });
   }
 
+
+  /* The itemised note's hover card: each night's base + share of taxes &
+     fees, and the stay total. Hover on desktop, tap on touch — the tap
+     never toggles the room pick. */
+  function attachBreakdown(price, noteEl, room, nights) {
+    var bd = C.stayBreakdown(room, current.from, nights);
+    if (!bd) return;
+    var tip = document.createElement('div');
+    tip.className = 'bk-breakdown';
+    tip.hidden = true;
+    bd.rows.forEach(function (row) {
+      var r = document.createElement('div');
+      r.className = 'bk-row';
+      var d = document.createElement('span');
+      d.textContent = C.fmtDate(row.date);
+      var v = document.createElement('span');
+      v.textContent = C.money(row.base, room.currency) + ' + ' + C.money(row.extras, room.currency);
+      r.appendChild(d);
+      r.appendChild(v);
+      tip.appendChild(r);
+    });
+    var t = document.createElement('div');
+    t.className = 'bk-row bk-total';
+    var tl = document.createElement('span');
+    tl.textContent = 'Total';
+    var tv = document.createElement('span');
+    tv.textContent = C.money(bd.grand, room.currency);
+    t.appendChild(tl);
+    t.appendChild(tv);
+    tip.appendChild(t);
+    price.style.position = 'relative';
+    price.appendChild(tip);
+    noteEl.className += ' has-tip';
+    noteEl.addEventListener('mouseenter', function () { tip.hidden = false; });
+    noteEl.addEventListener('mouseleave', function () { tip.hidden = true; });
+    noteEl.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      tip.hidden = false;
+    });
+    /* A tap can land on the tip itself the instant it opens under the
+       finger — it must never bubble into the card's pick toggle. */
+    tip.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    document.addEventListener('click', function (ev) {
+      if (!tip.hidden && !price.contains(ev.target)) tip.hidden = true;
+    });
+  }
+
   function renderRoom(room, nights, index) {
     var card = document.createElement('article');
     card.className = 'glass room';
@@ -325,6 +372,7 @@
           ? '+ ' + C.money(pp.note.extras, room.currency) + ' taxes & fees'
           : 'taxes & fees included';
         price.appendChild(noteEl);
+        if (pp.note.kind === 'plus') attachBreakdown(price, noteEl, room, nights);
       }
       top.appendChild(price);
     }

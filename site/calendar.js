@@ -240,6 +240,9 @@ window.BKCal = (function () {
       note.className = 'cal-note';
       note.textContent = 'Cheapest available suite, per night';
       pop.appendChild(note);
+
+      // A month move mid-range keeps the suggestion visible where it lands.
+      if (rangeStart) suggestFive();
     }
 
     function navBtn(label, delta) {
@@ -259,11 +262,40 @@ window.BKCal = (function () {
     }
 
     function setPicked(dayIso) {
+      clearFree5();
       Object.keys(cellIndex).forEach(function (k) {
         cellIndex[k].classList.remove('picked');
         cellIndex[k].classList.remove('in-range');
       });
       if (cellIndex[dayIso]) cellIndex[dayIso].classList.add('picked');
+    }
+
+    function clearFree5() {
+      var tags = pop.querySelectorAll('.cal-free5');
+      for (var i = 0; i < tags.length; i++) tags[i].parentNode.removeChild(tags[i]);
+    }
+
+    /* The moment check-in is picked, a 5-night stay is suggested: the next
+       nights shade in and the 5th night carries its promotion marker
+       (Dave, 2026-08-23). Hovering another checkout previews that stay
+       instead; mousing away falls back to the suggestion. */
+    function shadeStay(endIso) {
+      if (!rangeStart) return;
+      var end = endIso && endIso > rangeStart ? endIso : addDaysIso(rangeStart, 5);
+      Object.keys(cellIndex).forEach(function (k) {
+        cellIndex[k].classList.toggle('in-range', k > rangeStart && k < end);
+      });
+    }
+
+    function suggestFive() {
+      shadeStay(null);
+      var fifth = cellIndex[addDaysIso(rangeStart, 4)];
+      if (fifth && !fifth.disabled && !fifth.querySelector('.cal-free5')) {
+        var b = document.createElement('span');
+        b.className = 'cal-free5';
+        b.textContent = '5th night free';
+        fifth.appendChild(b);
+      }
     }
 
     function pickHandler(dayIso) {
@@ -283,21 +315,15 @@ window.BKCal = (function () {
         rangeStart = dayIso;
         input.value = dayIso;
         setPicked(dayIso);
+        suggestFive();
         if (opts.onPick) opts.onPick(dayIso);
       };
     }
 
-    /* While a check-in is pending, hovering a later day previews the stay. */
     pop.addEventListener('mouseover', function (ev) {
       if (!rangeStart) return;
       var btn = ev.target && ev.target.closest ? ev.target.closest('.cal-day') : null;
-      var hov = btn && !btn.disabled ? btn.dataset.iso : null;
-      Object.keys(cellIndex).forEach(function (k) {
-        cellIndex[k].classList.toggle(
-          'in-range',
-          !!hov && hov > rangeStart && k > rangeStart && k < hov,
-        );
-      });
+      shadeStay(btn && !btn.disabled ? btn.dataset.iso : null);
     });
 
     function open() {

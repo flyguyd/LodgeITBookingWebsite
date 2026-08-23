@@ -223,3 +223,18 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
   .hero-title, .panel, .room, .state-card { animation-duration: 0.01s; animation-delay: 0s; }
   * { transition-duration: 0.01s !important; }
 }
+
+/* The itemised note's day-by-day hover card. */
+.room-taxnote.has-tip { cursor: help; text-decoration: underline dotted rgba(201, 168, 106, 0.6); text-underline-offset: 3px; }
+.bk-breakdown {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 20;
+  min-width: 220px; max-height: 260px; overflow-y: auto;
+  padding: 12px 14px; border-radius: 14px; text-align: left; font-style: normal;
+  background: rgba(18, 21, 28, 0.96); border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  scrollbar-width: thin; scrollbar-color: rgba(201, 168, 106, 0.5) transparent;
+}
+.bk-row { display: flex; justify-content: space-between; gap: 16px; font-size: 11.5px; color: var(--paper-dim); padding: 2px 0; }
+.bk-row span:last-child { color: var(--paper); }
+.bk-total { border-top: 1px solid rgba(255, 255, 255, 0.14); margin-top: 6px; padding-top: 6px; }
+.bk-total span { color: var(--gold); font-size: 13px; }

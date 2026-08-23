@@ -170,6 +170,45 @@ window.BKCore = (function () {
     return { total: total, saved: saved };
   }
 
+  /**
+   * Day-by-day breakdown behind the itemised price note (Dave, 2026-08-23):
+   * one row per night — base rate plus that night's share of taxes & fees —
+   * and the stay total. The provider itemises taxes/fees as STAY totals, so
+   * their per-day figures are an even nightly allocation; the per-day BASE
+   * uses the provider's real nightly prices whenever they are sent (falling
+   * back to an even split of the displayed total). Null when the room has no
+   * itemisation — no breakdown is ever invented.
+   */
+  function stayBreakdown(room, from, nights) {
+    var total = room.totalPrice != null ? Number(room.totalPrice) : null;
+    if (total == null || !isFinite(total) || !(nights >= 1) || !from) return null;
+    var taxes = room.taxesTotal != null ? Number(room.taxesTotal) : null;
+    var fees = room.feesTotal != null ? Number(room.feesTotal) : null;
+    var known = (taxes != null && isFinite(taxes)) || (fees != null && isFinite(fees));
+    if (!known) return null;
+    var extras = (taxes != null && isFinite(taxes) ? taxes : 0) +
+      (fees != null && isFinite(fees) ? fees : 0);
+    var nightly = null;
+    var np = room.nightlyPrices;
+    if (np && np.length === nights) {
+      nightly = [];
+      for (var j = 0; j < np.length; j++) {
+        var v = Number(np[j] && np[j].rate != null ? np[j].rate : np[j]);
+        if (!isFinite(v)) { nightly = null; break; }
+        nightly.push(v);
+      }
+    }
+    var rows = [];
+    for (var i = 0; i < nights; i++) {
+      rows.push({
+        date: addDays(from, i),
+        base: nightly ? nightly[i] : total / nights,
+        extras: extras / nights,
+      });
+    }
+    return { rows: rows, baseTotal: total, extrasTotal: extras, grand: total + extras };
+  }
+
   /** Deterministic 0..359 hue from a room id, for the generative fallback
    *  treatment when a room has no photo. Same room, same colour, always. */
   function hueFor(id) {
@@ -244,6 +283,7 @@ window.BKCore = (function () {
     vatLine: vatLine,
     extraGuestsLine: extraGuestsLine,
     fifthNightAdjust: fifthNightAdjust,
+    stayBreakdown: stayBreakdown,
     startSession: startSession,
     track: track,
     searchAvailability: searchAvailability,
@@ -265,4 +305,5 @@ window.__bk = {
   vatLine: window.BKCore.vatLine,
   extraGuestsLine: window.BKCore.extraGuestsLine,
   fifthNightAdjust: window.BKCore.fifthNightAdjust,
+  stayBreakdown: window.BKCore.stayBreakdown,
 };

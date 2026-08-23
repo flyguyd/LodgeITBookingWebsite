@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Book your stay — 7 Star Lodges</title>
+  <meta name="description" content="Book your stay at 7 Star Lodges — live availability, direct rates, no middleman." />
+  <link rel="stylesheet" href="booking.css" />
+</head>
+<body>
+  <main class="bk" id="app">
+    <!-- ============ Hero + search ============ -->
+    <header class="bk-hero">
+      <p class="bk-kicker">7 Star Lodges · Oase</p>
+      <h1>Your place in the wild&nbsp;is waiting.</h1>
+      <p class="bk-lede">
+        Book directly with the lodge — the best available rate, flexible
+        service, and every rand goes to the people looking after you.
+      </p>
+    </header>
+
+    <form class="bk-search" id="searchForm" autocomplete="off">
+      <div class="bk-field">
+        <label for="fArrive">Arrival</label>
+        <input type="date" id="fArrive" required />
+      </div>
+      <div class="bk-field">
+        <label for="fDepart">Departure</label>
+        <input type="date" id="fDepart" required />
+      </div>
+      <div class="bk-field bk-field-s">
+        <label for="fAdults">Adults</label>
+        <select id="fAdults"></select>
+      </div>
+      <div class="bk-field bk-field-s">
+        <label for="fChildren">Children</label>
+        <select id="fChildren"></select>
+      </div>
+      <div class="bk-field bk-field-s">
+        <label for="fRooms">Suites</label>
+        <select id="fRooms"></select>
+      </div>
+      <button type="submit" class="bk-cta" id="searchBtn">Check availability</button>
+    </form>
+    <p class="bk-form-note" id="formNote" hidden></p>
+
+    <!-- ============ States ============ -->
+    <section class="bk-state" id="stateLoading" hidden>
+      <div class="bk-spinner" aria-hidden="true"></div>
+      <p>Checking live availability…</p>
+    </section>
+
+    <section class="bk-state bk-state-calm" id="stateMaintenance" hidden>
+      <h2>Bookings are briefly paused</h2>
+      <p>
+        We are doing a little housekeeping of our own. Please try again in a
+        few minutes, or contact the lodge and we will hold your dates.
+      </p>
+    </section>
+
+    <section class="bk-state bk-state-calm" id="stateUnavailable" hidden>
+      <h2>Let us book this for you</h2>
+      <p>
+        Online booking for these dates is being prepared. Contact the lodge
+        directly and our reservations team will confirm your stay personally.
+      </p>
+    </section>
+
+    <section class="bk-state bk-state-calm" id="stateEmpty" hidden>
+      <h2>Fully booked for those dates</h2>
+      <p>
+        Every suite is taken on at least one of your nights. Try shifting your
+        stay by a day or two — or contact the lodge; plans change and we keep
+        a list.
+      </p>
+    </section>
+
+    <!-- ============ Results ============ -->
+    <section class="bk-results" id="results" hidden>
+      <h2 class="bk-results-head" id="resultsHead"></h2>
+      <div class="bk-rooms" id="roomList"></div>
+    </section>
+
+    <!-- ============ Selection summary ============ -->
+    <aside class="bk-summary" id="summary" hidden>
+      <div class="bk-summary-inner">
+        <div class="bk-summary-text">
+          <span class="bk-summary-room" id="sumRoom"></span>
+          <span class="bk-summary-dates" id="sumDates"></span>
+        </div>
+        <div class="bk-summary-price">
+          <span class="bk-summary-total" id="sumTotal"></span>
+          <span class="bk-summary-nights" id="sumNights"></span>
+        </div>
+        <button type="button" class="bk-cta" id="continueBtn">Continue</button>
+      </div>
+      <p class="bk-summary-note" id="continueNote" hidden>
+        Secure checkout is almost ready. Contact the lodge to confirm this
+        stay today — your selection has been noted.
+      </p>
+    </aside>
+
+    <footer class="bk-foot">
+      <p>
+        Booking directly supports the lodge and its people. Secure payment ·
+        clear cancellation terms · no booking fees.
+      </p>
+    </footer>
+  </main>
+
+  <script src="booking.js"></script>
+</body>
+</html>

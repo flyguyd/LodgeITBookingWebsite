@@ -1,0 +1,8 @@
+{
+  "name": "lodgeit-booking-website",
+  "version": "0.1.0",
+  "description": "LodgeIT Booking Website - the public guest booking site and its serving service for 7 Star Lodges",
+  "author": "7 Star Lodges",
+  "private": true,
+  "license": "UNLICENSED"
+}

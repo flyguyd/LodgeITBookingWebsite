@@ -1,0 +1,277 @@
+/* 7 Star Lodges booking site — mobile-first, framework-free.
+   Palette: bush olive + river sand, the Lodge Ops organic family. */
+
+:root {
+  --ink: #221d14;
+  --ink-dim: #6d6355;
+  --sand: #f4ecdc;
+  --sand-2: #ece1cc;
+  --card: #fffdf7;
+  --line: #d8cdb6;
+  --olive: #53663a;
+  --olive-deep: #3c4c29;
+  --danger: #a6472f;
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(34, 29, 20, 0.06), 0 8px 24px rgba(34, 29, 20, 0.07);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--sand);
+  color: var(--ink);
+  font: 16px/1.55 Georgia, 'Times New Roman', serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.bk {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 28px 18px 60px;
+}
+
+/* ---- hero ---- */
+.bk-kicker {
+  margin: 0 0 6px;
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color: var(--olive);
+}
+.bk-hero h1 {
+  margin: 0 0 10px;
+  font-size: clamp(28px, 6vw, 42px);
+  line-height: 1.12;
+  font-weight: 500;
+  letter-spacing: -0.4px;
+}
+.bk-lede {
+  margin: 0 0 26px;
+  max-width: 56ch;
+  color: var(--ink-dim);
+  font-size: 17px;
+}
+
+/* ---- search ---- */
+.bk-search {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+.bk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bk-field label {
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.bk-field input,
+.bk-field select {
+  font: inherit;
+  font-size: 16px; /* stops iOS zoom on focus */
+  padding: 10px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  min-height: 46px;
+}
+.bk-field input:focus,
+.bk-field select:focus {
+  outline: 2px solid var(--olive);
+  outline-offset: 1px;
+}
+.bk-cta {
+  grid-column: 1 / -1;
+  font-family: system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 14px 22px;
+  border: none;
+  border-radius: 12px;
+  background: var(--olive);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.bk-cta:hover { background: var(--olive-deep); }
+.bk-cta:disabled { opacity: 0.6; cursor: default; }
+.bk-form-note {
+  margin: 10px 2px 0;
+  font-family: system-ui, sans-serif;
+  font-size: 13.5px;
+  color: var(--danger);
+}
+
+/* ---- states ---- */
+.bk-state {
+  margin-top: 34px;
+  text-align: center;
+  color: var(--ink-dim);
+}
+.bk-state-calm {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 30px 22px;
+}
+.bk-state-calm h2 {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-weight: 500;
+}
+.bk-state-calm p { margin: 0 auto; max-width: 52ch; }
+.bk-spinner {
+  width: 28px;
+  height: 28px;
+  margin: 0 auto 12px;
+  border: 3px solid var(--line);
+  border-top-color: var(--olive);
+  border-radius: 50%;
+  animation: bk-spin 0.9s linear infinite;
+}
+@keyframes bk-spin { to { transform: rotate(360deg); } }
+
+/* ---- results ---- */
+.bk-results { margin-top: 34px; }
+.bk-results-head {
+  margin: 0 0 14px;
+  font-size: 20px;
+  font-weight: 500;
+}
+.bk-rooms {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.bk-room {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  transition: border-color 0.15s ease;
+}
+.bk-room.selected { border-color: var(--olive); outline: 1px solid var(--olive); }
+.bk-room-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: baseline;
+}
+.bk-room-name { margin: 0; font-size: 19px; font-weight: 500; }
+.bk-room-price {
+  text-align: right;
+  font-family: system-ui, sans-serif;
+  white-space: nowrap;
+}
+.bk-room-total { font-size: 19px; font-weight: 700; }
+.bk-room-pn {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+}
+.bk-room-desc { margin: 0; color: var(--ink-dim); font-size: 15px; }
+.bk-room-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+}
+.bk-tag {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  background: var(--sand);
+}
+.bk-tag.scarce { border-color: var(--danger); color: var(--danger); }
+.bk-room-actions { display: flex; justify-content: flex-end; }
+.bk-select {
+  font-family: system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 10px 22px;
+  border-radius: 10px;
+  border: 1.5px solid var(--olive);
+  background: transparent;
+  color: var(--olive);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.bk-select:hover, .bk-room.selected .bk-select {
+  background: var(--olive);
+  color: #fff;
+}
+
+/* ---- selection summary (sticky on mobile) ---- */
+.bk-summary {
+  position: sticky;
+  bottom: 12px;
+  margin-top: 22px;
+}
+.bk-summary-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--ink);
+  color: var(--sand);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+}
+.bk-summary-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.bk-summary-room { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bk-summary-dates { font-family: system-ui, sans-serif; font-size: 12.5px; opacity: 0.75; }
+.bk-summary-price { text-align: right; font-family: system-ui, sans-serif; }
+.bk-summary-total { display: block; font-size: 18px; font-weight: 700; }
+.bk-summary-nights { font-size: 12px; opacity: 0.75; }
+.bk-summary .bk-cta { grid-column: auto; flex: 0 0 auto; padding: 12px 18px; }
+.bk-summary-note {
+  margin: 10px 4px 0;
+  font-family: system-ui, sans-serif;
+  font-size: 13.5px;
+  color: var(--ink-dim);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+/* ---- footer ---- */
+.bk-foot {
+  margin-top: 46px;
+  text-align: center;
+  color: var(--ink-dim);
+  font-family: system-ui, sans-serif;
+  font-size: 12.5px;
+}
+
+/* ---- desktop ---- */
+@media (min-width: 700px) {
+  .bk { padding-top: 48px; }
+  .bk-search {
+    grid-template-columns: 1.2fr 1.2fr 0.7fr 0.7fr 0.7fr auto;
+    align-items: end;
+  }
+  .bk-cta { grid-column: auto; }
+}

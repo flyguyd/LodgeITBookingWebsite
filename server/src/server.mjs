@@ -279,7 +279,11 @@ const server = createServer(async (req, res) => {
   if (method === 'GET' && url.split('?')[0] === '/' && !url.includes('full=')) {
     const ua = String(req.headers['user-agent'] ?? '');
     if (/Mobi|iPhone|Windows Phone/i.test(ua)) {
-      res.writeHead(302, { Location: 'm/', 'Cache-Control': 'no-store', Vary: 'User-Agent' });
+      // The query travels with the redirect: a shared desktop URL opened on
+      // a phone must restore the same search on the mobile build.
+      const qIdx = url.indexOf('?');
+      const q = qIdx >= 0 ? url.slice(qIdx) : '';
+      res.writeHead(302, { Location: 'm/' + q, 'Cache-Control': 'no-store', Vary: 'User-Agent' });
       res.end();
       return;
     }

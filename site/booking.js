@@ -176,6 +176,7 @@
       return;
     }
     var to = C.addDays(from, n);
+    updateUrl(from, n);
     current.from = from;
     current.to = to;
     current.picks = {};
@@ -635,6 +636,42 @@
     }
   }
 
+  /* Shareable URLs (Dave, 2026-08-23): the search lands in the query string
+     so a copied link renders the same for the next person. replaceState —
+     no history spam; existing params (full=1, utm_*) survive. */
+  function updateUrl(from, n) {
+    try {
+      var p = new URLSearchParams(location.search);
+      p.set('arrive', from);
+      p.set('nights', String(n));
+      p.set('adults', els.adults.value);
+      p.set('children', els.children.value);
+      p.set('suites', els.rooms.value);
+      history.replaceState(null, '', location.pathname + '?' + p.toString());
+    } catch (e) { /* never let sharing break searching */ }
+  }
+  function restoreFromUrl() {
+    try {
+      var p = new URLSearchParams(location.search);
+      var arrive = p.get('arrive');
+      var n = parseInt(p.get('nights') || '', 10);
+      if (!arrive || !/^\d{4}-\d{2}-\d{2}$/.test(arrive)) return;
+      if (!(n >= 2 && n <= 30)) return;
+      if (arrive < C.isoToday(0)) return; // a stale link keeps the defaults
+      var setSel = function (el, v, lo, hi) {
+        var x = parseInt(v || '', 10);
+        if (x >= lo && x <= hi) el.value = String(x);
+      };
+      els.arrive.value = arrive;
+      setNights(n);
+      setSel(els.adults, p.get('adults'), 1, 12);
+      setSel(els.children, p.get('children'), 0, 12);
+      setSel(els.rooms, p.get('suites'), 1, 6);
+      if (form.requestSubmit) form.requestSubmit();
+      else form.dispatchEvent(new Event('submit', { cancelable: true }));
+    } catch (e) { /* defaults are a fine landing */ }
+  }
+
   // ---- boot ----
   C.startSession('desktop');
   C.fetchStatus()
@@ -659,4 +696,5 @@
       lodge = (j && j.lodge) || null;
     })
     .catch(function () {});
+  restoreFromUrl();
 })();

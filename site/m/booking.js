@@ -171,6 +171,7 @@
       return;
     }
     var to = C.addDays(from, n);
+    updateUrl(from, n);
     current.from = from;
     current.to = to;
     current.picks = {};
@@ -607,6 +608,42 @@
     }
   }
 
+  /* Shareable URLs (Dave, 2026-08-23): the search lands in the query string
+     so a copied link renders the same for the next person — and the same
+     params a desktop link carries restore here after the phone redirect. */
+  function updateUrl(from, n) {
+    try {
+      var p = new URLSearchParams(location.search);
+      p.set('arrive', from);
+      p.set('nights', String(n));
+      p.set('adults', els.adults.textContent);
+      p.set('children', els.children.textContent);
+      p.set('suites', els.rooms.textContent);
+      history.replaceState(null, '', location.pathname + '?' + p.toString());
+    } catch (e) { /* never let sharing break searching */ }
+  }
+  function restoreFromUrl() {
+    try {
+      var p = new URLSearchParams(location.search);
+      var arrive = p.get('arrive');
+      var n = parseInt(p.get('nights') || '', 10);
+      if (!arrive || !/^\d{4}-\d{2}-\d{2}$/.test(arrive)) return;
+      if (!(n >= 2 && n <= 30)) return;
+      if (arrive < C.isoToday(0)) return; // a stale link keeps the defaults
+      var setOut = function (el, v, lo, hi) {
+        var x = parseInt(v || '', 10);
+        if (x >= lo && x <= hi) el.textContent = String(x);
+      };
+      els.arrive.value = arrive;
+      setNights(n);
+      setOut(els.adults, p.get('adults'), 1, 12);
+      setOut(els.children, p.get('children'), 0, 12);
+      setOut(els.rooms, p.get('suites'), 1, 6);
+      if (form.requestSubmit) form.requestSubmit();
+      else form.dispatchEvent(new Event('submit', { cancelable: true }));
+    } catch (e) { /* defaults are a fine landing */ }
+  }
+
   // ---- boot ----
   C.startSession('mobile');
   C.fetchStatus()
@@ -631,4 +668,5 @@
       lodge = (j && j.lodge) || null;
     })
     .catch(function () {});
+  restoreFromUrl();
 })();

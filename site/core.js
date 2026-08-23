@@ -301,8 +301,10 @@ window.BKCore = (function () {
   /** Per-day cheapest-rate calendar for the date picker. Resolves to
    *  { days: { iso: { minRate, available } }, currency } or null — the
    *  picker renders without rates rather than failing. */
-  function fetchRateCalendar(from, to) {
-    return fetch(API + '/rate-calendar?from=' + from + '&to=' + to)
+  function fetchRateCalendar(from, to, roomTypeId) {
+    var q = '?from=' + from + '&to=' + to +
+      (roomTypeId ? '&roomTypeId=' + encodeURIComponent(roomTypeId) : '');
+    return fetch(API + '/rate-calendar' + q)
       .then(function (r) { return r.ok ? r.json() : null; })
       .catch(function () { return null; });
   }

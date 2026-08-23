@@ -37,6 +37,19 @@ window.BKLight = (function () {
     '.blb-body{padding:20px 24px 24px}',
     '.blb-top{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap}',
     '.blb-name{margin:0;font-family:"Didot","Bodoni MT","Playfair Display","Georgia",serif;font-weight:400;font-size:27px}',
+    '.blb-subtitle{margin:4px 0 0;width:100%;font-size:13px;letter-spacing:0.16em;text-transform:uppercase;color:#c9a86a}',
+    '.blb-table{display:grid;grid-template-columns:1.4fr 1fr 1fr 1.2fr;gap:0;margin-top:16px;',
+    'border:1px solid rgba(255,255,255,0.14);border-radius:14px;overflow:hidden;font-size:13px}',
+    '.blb-th{background:rgba(255,255,255,0.06);color:rgba(244,239,230,0.62);font-size:10.5px;',
+    'letter-spacing:0.14em;text-transform:uppercase;padding:9px 12px}',
+    '.blb-td{padding:9px 12px;border-top:1px solid rgba(255,255,255,0.08);color:#f4efe6}',
+    '.blb-td.dim{color:rgba(244,239,230,0.62)}',
+    '.blb-td.gold{color:#c9a86a}',
+    '.blb-cta2{margin-top:14px;width:100%;min-height:48px;border-radius:14px;cursor:pointer;',
+    'background:transparent;border:1px solid rgba(201,168,106,0.6);color:#c9a86a;',
+    'font:600 14px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;letter-spacing:0.05em;',
+    'transition:background 0.15s,transform 0.15s cubic-bezier(0.34,1.56,0.64,1)}',
+    '.blb-cta2:hover{background:rgba(201,168,106,0.12)}.blb-cta2:active{transform:scale(0.97)}',
     '.blb-price{text-align:right}',
     '.blb-total{display:block;font-family:"Didot","Bodoni MT","Playfair Display","Georgia",serif;font-size:23px;color:#d8b46a}',
     '.blb-sub{display:block;font-size:12px;color:rgba(244,239,230,0.62);margin-top:2px}',
@@ -55,6 +68,8 @@ window.BKLight = (function () {
     '.blb-cta:hover{filter:brightness(1.06)}.blb-cta:active{transform:scale(0.97)}',
     '.blb-cta.on{background:transparent;border:1px solid rgba(201,168,106,0.6);color:#d8b46a}',
   ].join('');
+
+  var stack = [];
 
   function ensureStyle() {
     if (document.getElementById('blb-style')) return;
@@ -133,7 +148,7 @@ window.BKLight = (function () {
         'linear-gradient(150deg, hsl(' + h + ' 24% 22%), hsl(' + ((h + 40) % 360) + ' 30% 12%))';
       photo.appendChild(art);
     }
-    box.appendChild(photo);
+    if (!opts.noPhoto) box.appendChild(photo);
 
     // ---- body ----
     var body = document.createElement('div');
@@ -144,6 +159,12 @@ window.BKLight = (function () {
     name.className = 'blb-name';
     name.textContent = opts.title || '';
     top.appendChild(name);
+    if (opts.subtitle) {
+      var sub = document.createElement('p');
+      sub.className = 'blb-subtitle';
+      sub.textContent = opts.subtitle;
+      top.appendChild(sub);
+    }
     if (opts.price && opts.price.headline) {
       var price = document.createElement('div');
       price.className = 'blb-price';
@@ -184,18 +205,65 @@ window.BKLight = (function () {
       });
       body.appendChild(chips);
     }
+    /* The occupancy & extra-cost table (Dave, 2026-08-23): included and
+       maximum guests per age group, the total maximum, and what an extra
+       guest above the included number costs. */
+    if (opts.occupancy && opts.occupancy.rows && opts.occupancy.rows.length) {
+      var tbl = document.createElement('div');
+      tbl.className = 'blb-table';
+      ['Guests', 'Included', 'Maximum', 'Extra guest'].forEach(function (h) {
+        var th = document.createElement('span');
+        th.className = 'blb-th';
+        th.textContent = h;
+        tbl.appendChild(th);
+      });
+      opts.occupancy.rows.forEach(function (row) {
+        var cells = [
+          { t: row.label, c: 'blb-td' },
+          { t: row.included, c: 'blb-td' + (row.included === '—' ? ' dim' : '') },
+          { t: row.max, c: 'blb-td' + (row.max === '—' ? ' dim' : '') },
+          { t: row.extra, c: 'blb-td' + (row.extra === '—' ? ' dim' : ' gold') },
+        ];
+        cells.forEach(function (cdef) {
+          var td = document.createElement('span');
+          td.className = cdef.c;
+          td.textContent = cdef.t;
+          tbl.appendChild(td);
+        });
+      });
+      if (opts.occupancy.totalMax) {
+        [{ t: 'Total maximum', c: 'blb-td' }, { t: '', c: 'blb-td' },
+         { t: opts.occupancy.totalMax, c: 'blb-td gold' }, { t: '', c: 'blb-td' }]
+          .forEach(function (cdef) {
+            var td = document.createElement('span');
+            td.className = cdef.c;
+            td.textContent = cdef.t;
+            tbl.appendChild(td);
+          });
+      }
+      body.appendChild(tbl);
+    }
     if (opts.extraLine) {
       var ex = document.createElement('p');
       ex.className = 'blb-extra';
       ex.textContent = opts.extraLine;
       body.appendChild(ex);
     }
+    if (opts.customNode) body.appendChild(opts.customNode);
 
     if (opts.soldOut) {
       var so = document.createElement('div');
       so.className = 'blb-soldout';
       so.textContent = opts.soldOutText || 'Unavailable for your dates';
       body.appendChild(so);
+      if (opts.onShowAvailability) {
+        var avail = document.createElement('button');
+        avail.type = 'button';
+        avail.className = 'blb-cta2';
+        avail.textContent = 'Show availability';
+        avail.addEventListener('click', function () { opts.onShowAvailability(); });
+        body.appendChild(avail);
+      }
     } else if (opts.onToggle) {
       var cta = document.createElement('button');
       cta.type = 'button';
@@ -215,12 +283,16 @@ window.BKLight = (function () {
     }
     box.appendChild(body);
 
+    var api;
     function close() {
       document.removeEventListener('keydown', onKey);
+      var at = stack.indexOf(api);
+      if (at >= 0) stack.splice(at, 1);
       if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
     }
     function onKey(ev) {
-      if (ev.key === 'Escape') close();
+      // Stacked lightboxes: Escape peels only the TOP one.
+      if (ev.key === 'Escape' && stack[stack.length - 1] === api) close();
       if (ev.key === 'ArrowLeft' && img) showPhoto(idx - 1);
       if (ev.key === 'ArrowRight' && img) showPhoto(idx + 1);
     }
@@ -230,7 +302,9 @@ window.BKLight = (function () {
     });
     document.addEventListener('keydown', onKey);
     document.body.appendChild(backdrop);
-    return { close: close };
+    api = { close: close };
+    stack.push(api);
+    return api;
   }
 
   return { open: open };

@@ -227,4 +227,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.17',
+    version: '0.1.17',
+    date: '2026-08-23T22:20:00+02:00',
+    changes: [
+      {
+        headline:
+          'The suite lightbox now answers the two questions the card cannot: who fits, and when. A guest-occupancy table shows Included and Maximum counts for adults, children and infants, the extra cost per additional guest per night (0 reads as free), and the suite\u0027s total maximum - fed from the replicated Guest Suites settings, rows appearing only when the lodge has filled them in. And every unavailable suite gains a Show availability button that opens a second lightbox, Suite Availability, with the suite\u0027s name at the top and the rate calendar filtered to THAT suite alone: its own rate on each bookable day, a dash on days it is sold out.',
+        detail:
+          'Lightbox grows subtitle, occupancy table, a customNode slot, a noPhoto mode and a second call-to-action, with a module-level stack so Escape peels only the top lightbox. Calendar grows BKCal.inline - a read-only variant that rides the panel\u0027s own glass (no popup chrome, no selection, same month navigation and clamps). The per-suite data is the engine\u0027s rate-calendar with the new roomTypeId parameter (engine 0.1.15) - served from the same per-day cache as the lodge view, so the filtered calendar costs no extra Cloudbeds calls. VERIFIED by real Chromium on both builds: table read Adults 2/2/R350 per night, Children 0/1/R200 per night, Infants 0/1/free, Total maximum 4; the sold-out villa\u0027s Suite Availability opened with its name as subtitle, every request carried roomTypeId, all 39 loaded days showed the dash while the unfiltered calendar still priced them, month navigation advanced, and Escape closed the availability lightbox while leaving the suite lightbox open. NEEDS engine 0.1.15 deployed for the filtered calendar; the occupancy table fills after the next content sync.',
+      },
+    ],
+  },
 ];

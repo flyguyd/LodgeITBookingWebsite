@@ -369,6 +369,28 @@
   }
 
 
+
+  /* The occupancy & extra-cost table for the lightbox: Included / Maximum /
+     Extra-guest cost per age group, plus the total maximum. Values the lodge
+     has not set show as an em dash; a configured 0 extra cost reads free. */
+  function occupancyFor(sc, currency) {
+    if (!sc) return null;
+    var dash = '\u2014';
+    var n = function (v) { return v != null && isFinite(Number(v)) ? String(v) : dash; };
+    var x = function (v) {
+      if (v == null || !isFinite(Number(v))) return dash;
+      return Number(v) > 0 ? C.money(v, currency) + '/night' : 'free';
+    };
+    var rows = [
+      { label: 'Adults', included: n(sc.includedAdults), max: n(sc.maxAdults), extra: x(sc.extraAdultCost) },
+      { label: 'Children', included: n(sc.includedChildren), max: n(sc.maxChildren), extra: x(sc.extraChildCost) },
+      { label: 'Infants', included: n(sc.includedInfants), max: n(sc.maxInfants), extra: x(sc.extraInfantCost) },
+    ];
+    var any = rows.some(function (r) { return r.included !== dash || r.max !== dash || r.extra !== dash; });
+    if (!any && sc.maxTotalGuests == null) return null;
+    return { rows: rows, totalMax: sc.maxTotalGuests != null ? String(sc.maxTotalGuests) : null };
+  }
+
   /* The card click opens the full story — gallery, description, amenities,
      pricing — and the Add action lives inside (Dave, 2026-08-23). */
   function openLightbox(room, nights) {
@@ -405,11 +427,31 @@
       price: price,
       description: String((sc && sc.description) || room.description || '').replace(/<[^>]*>/g, ''),
       chips: chips,
+      occupancy: occupancyFor(sc, room.currency),
       extraLine: C.extraGuestsLine(sc, room.currency),
       onToggle: soldOut ? null : function () {
         togglePick(room);
         return !!current.picks[room.roomTypeId];
       },
+      /* An unavailable suite offers its own availability calendar: our
+         calendar, filtered to just this suite's rates. */
+      onShowAvailability: soldOut ? function () {
+        var holder = document.createElement('div');
+        window.BKCal.inline(holder, {
+          fetchRates: function (f, t) {
+            return C.fetchRateCalendar(f, t, String(room.roomTypeId));
+          },
+          minIso: C.isoToday(0),
+          maxIso: C.isoToday(365 * 3),
+        });
+        window.BKLight.open({
+          title: 'Suite Availability',
+          subtitle: room.name,
+          noPhoto: true,
+          photos: [],
+          customNode: holder,
+        });
+      } : null,
     });
   }
 

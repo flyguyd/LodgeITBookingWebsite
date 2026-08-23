@@ -437,7 +437,145 @@ window.BKCal = (function () {
     return { sync: sync };
   }
 
-  return { attach: attach, glassSelect: glassSelect, fmtShort: fmtShort };
+  /* ------------------------------------------ read-only inline calendar */
+  /* The same month grid rendered INTO a container (the Suite Availability
+     lightbox): browse-only — month arrows work, days do not pick. The
+     fetchRates passed in carries any per-suite filter. */
+  function inline(container, opts) {
+    var fetchRates = opts.fetchRates;
+    var minIso = opts.minIso || TODAY;
+    var maxIso = opts.maxIso || '';
+    var monthCache = {}; // 'YYYY-MM' -> {days,currency} or in-flight promise
+    var view = null;
+
+    var pop = document.createElement('div');
+    pop.className = 'cal cal-inline' + (window.matchMedia && window.matchMedia('(min-width: 720px)').matches ? ' cal-double' : '');
+    container.appendChild(pop);
+
+    function addDay(d) {
+      return new Date(Date.parse(d + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10);
+    }
+    function loadMonth(y, m) {
+      var key = y + '-' + String(m + 1).padStart(2, '0');
+      if (monthCache[key]) return monthCache[key];
+      var first = iso(y, m, 1);
+      var next = m === 11 ? iso(y + 1, 0, 1) : iso(y, m + 1, 1);
+      if (minIso && next <= minIso) {
+        monthCache[key] = { days: {}, currency: null };
+        return monthCache[key];
+      }
+      if (minIso && first < minIso) first = minIso;
+      var p = fetchRates(first, next).then(function (r) {
+        monthCache[key] = (r && r.days) ? { days: r.days, currency: r.currency } : { days: {}, currency: null };
+        return monthCache[key];
+      });
+      monthCache[key] = p;
+      return p;
+    }
+
+    function buildMonth(y, m) {
+      var block = document.createElement('div');
+      block.className = 'cal-month';
+      var title = document.createElement('div');
+      title.className = 'cal-title';
+      title.textContent = MONTHS[m] + ' ' + y;
+      block.appendChild(title);
+      var grid = document.createElement('div');
+      grid.className = 'cal-grid';
+      DOW.forEach(function (d) {
+        var el = document.createElement('span');
+        el.className = 'cal-dow';
+        el.textContent = d;
+        grid.appendChild(el);
+      });
+      var firstDow = (new Date(Date.UTC(y, m, 1)).getUTCDay() + 6) % 7;
+      var daysIn = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+      for (var i = 0; i < firstDow; i++) grid.appendChild(document.createElement('span'));
+      var cells = {};
+      for (var d = 1; d <= daysIn; d++) {
+        var dayIso = iso(y, m, d);
+        var cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'cal-day cal-view';
+        if (dayIso === TODAY) cell.className += ' today';
+        if ((minIso && dayIso < minIso) || (maxIso && dayIso > maxIso)) {
+          cell.disabled = true;
+          cell.className += ' past';
+        }
+        var num = document.createElement('span');
+        num.className = 'cal-num';
+        num.textContent = String(d);
+        var rate = document.createElement('span');
+        rate.className = 'cal-rate';
+        cell.appendChild(num);
+        cell.appendChild(rate);
+        cells[dayIso] = cell;
+        grid.appendChild(cell);
+      }
+      block.appendChild(grid);
+      Promise.resolve(loadMonth(y, m)).then(function (data) {
+        Object.keys(cells).forEach(function (dIso) {
+          var day = data.days[dIso];
+          var cell = cells[dIso];
+          if (!day || cell.disabled) return;
+          var el = cell.querySelector('.cal-rate');
+          if (day.available === false) {
+            cell.classList.add('full');
+            el.textContent = '—';
+          } else if (day.minRate != null && isFinite(Number(day.minRate))) {
+            el.textContent = fmtShort(Number(day.minRate), data.currency);
+          }
+        });
+      });
+      return block;
+    }
+
+    function render(y, m) {
+      view = { y: y, m: m };
+      pop.textContent = '';
+      var count = pop.classList.contains('cal-double') ? 2 : 1;
+      var prev = navBtn('‹', -1);
+      var next = navBtn('›', 1);
+      var idx = y * 12 + m;
+      if (minIso) prev.disabled = idx <= Number(minIso.slice(0, 4)) * 12 + Number(minIso.slice(5, 7)) - 1;
+      if (maxIso) next.disabled = idx + count - 1 >= Number(maxIso.slice(0, 4)) * 12 + Number(maxIso.slice(5, 7)) - 1;
+      pop.appendChild(prev);
+      pop.appendChild(next);
+      var months = document.createElement('div');
+      months.className = 'cal-months';
+      for (var i = 0; i < count; i++) {
+        var mm = m + i;
+        var yy = y + Math.floor(mm / 12);
+        mm = ((mm % 12) + 12) % 12;
+        months.appendChild(buildMonth(yy, mm));
+      }
+      pop.appendChild(months);
+      var note = document.createElement('div');
+      note.className = 'cal-note';
+      note.textContent = opts.note || 'Rate per night for this suite';
+      pop.appendChild(note);
+    }
+
+    function navBtn(label, delta) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cal-nav ' + (delta < 0 ? 'cal-prev' : 'cal-next');
+      b.textContent = label;
+      b.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var m = view.m + delta;
+        var y = view.y;
+        if (m < 0) { m = 11; y -= 1; }
+        if (m > 11) { m = 0; y += 1; }
+        render(y, m);
+      });
+      return b;
+    }
+
+    render(Number(TODAY.slice(0, 4)), Number(TODAY.slice(5, 7)) - 1);
+  }
+
+  return { attach: attach, glassSelect: glassSelect, inline: inline, fmtShort: fmtShort };
 })();
 
 /* Exposed for the verification harness only. */

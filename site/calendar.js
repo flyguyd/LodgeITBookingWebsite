@@ -64,6 +64,10 @@ window.BKCal = (function () {
        restarts the range instead. */
     var rangeStart = null;
     var cellIndex = {}; // iso -> cell button, across the visible months
+    /* First open lands on TODAY's month (the field's prefilled default may
+       sit weeks out); once the guest has actually picked a date, reopening
+       returns to that date's month. */
+    var everPicked = false;
 
     // The native picker steps aside; the field stays the source of truth
     // (ISO in .value) so the form code never changes.
@@ -315,6 +319,7 @@ window.BKCal = (function () {
           }
         }
         rangeStart = dayIso;
+        everPicked = true;
         input.value = dayIso;
         setPicked(dayIso);
         suggestFive();
@@ -331,9 +336,9 @@ window.BKCal = (function () {
     function open() {
       if (!pop.hidden) return;
       rangeStart = null;
-      var base = input.value && /^\d{4}-\d{2}-\d{2}$/.test(input.value)
+      var base = everPicked && input.value && /^\d{4}-\d{2}-\d{2}$/.test(input.value)
         ? input.value
-        : (minIso || new Date().toISOString().slice(0, 10));
+        : (minIso || TODAY);
       render(Number(base.slice(0, 4)), Number(base.slice(5, 7)) - 1);
       pop.hidden = false;
       // The search bar can sit near the fold — bring the months into view.

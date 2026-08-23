@@ -150,20 +150,41 @@ window.BKCore = (function () {
     }
   }
 
+  /** The conservation levy for a WHOLE stay of one room, per its basis.
+   *  "Persons" is adults + children — infants are never levied. */
+  function levyForStay(lodge, party, nights) {
+    if (!lodge || !(nights >= 1)) return 0;
+    var amt = Number(lodge.conservationLevy);
+    if (!isFinite(amt) || amt <= 0) return 0;
+    var persons = Math.max(1,
+      ((party && Number(party.adults)) || 0) + ((party && Number(party.children)) || 0));
+    switch (lodge.conservationBasis) {
+      case 'per_room_per_night': return amt * nights;
+      case 'per_person_per_night': return amt * persons * nights;
+      case 'per_person_per_stay': return amt * persons;
+      case 'per_room_per_stay': return amt;
+      case 'per_person_per_room_per_night': return amt * persons * nights;
+      default: return 0;
+    }
+  }
+
   /**
    * The 5th-night adjustment for one room's stay total, or null when it does
    * not apply (under 5 nights, unpriced room, or the "free" night would not
    * actually save anything — a promo that costs more is never shown).
-   * Returns { total, saved }.
+   * includeLevy: false when the stay's levy is itemised as its own line
+   * (the itemised display) — charging it inside the 5th night as well
+   * would collect it twice. Returns { total, saved }.
    */
-  function fifthNightAdjust(room, nights, lodge, party) {
+  function fifthNightAdjust(room, nights, lodge, party, includeLevy) {
     if (!(nights >= 5)) return null;
     var t = room.totalPrice != null ? Number(room.totalPrice) : null;
     if (t == null || !isFinite(t) || !(t > 0)) return null;
     var nightly = t / nights;
     var vatPct = lodge && isFinite(Number(lodge.vatPct)) ? Number(lodge.vatPct) : 0;
     var board = FIFTH_NIGHT_BOARD_SHARE * nightly;
-    var charge = levyForNight(lodge, party) + board * (1 + vatPct / 100);
+    var levy = includeLevy === false ? 0 : levyForNight(lodge, party);
+    var charge = levy + board * (1 + vatPct / 100);
     var total = t - nightly + charge;
     var saved = t - total;
     if (!(saved > 0)) return null;
@@ -283,6 +304,7 @@ window.BKCore = (function () {
     vatLine: vatLine,
     extraGuestsLine: extraGuestsLine,
     fifthNightAdjust: fifthNightAdjust,
+    levyForStay: levyForStay,
     stayBreakdown: stayBreakdown,
     startSession: startSession,
     track: track,
@@ -305,5 +327,6 @@ window.__bk = {
   vatLine: window.BKCore.vatLine,
   extraGuestsLine: window.BKCore.extraGuestsLine,
   fifthNightAdjust: window.BKCore.fifthNightAdjust,
+  levyForStay: window.BKCore.levyForStay,
   stayBreakdown: window.BKCore.stayBreakdown,
 };

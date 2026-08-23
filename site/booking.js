@@ -207,27 +207,40 @@
         current.nights = r.json.nights;
         /* 5+ nights: the 5th night's accommodation is free — each room's
            stay total is re-priced through the shared rule before display. */
+
+        var party = { adults: els.adults.value, children: els.children.value };
+        var itemised = config.rateDisplay === 'separate';
         if (r.json.nights >= 5) {
           current.results.forEach(function (room) {
-            var adj = C.fifthNightAdjust(room, r.json.nights, lodge,
-              { adults: els.adults.value, children: els.children.value });
+            /* Under the itemised display the stay's levy is its own line, so
+               the 5th night must not charge it a second time. */
+            var adj = C.fifthNightAdjust(room, r.json.nights, lodge, party, !itemised);
             if (adj) { room.totalPrice = adj.total; room.promoFree5 = true; }
           });
         }
         /* Real Cloudbeds does not itemise taxes on this endpoint. Under the
-           itemised setting, derive the VAT portion from the lodge's declared
-           vatPct (rates are VAT-inclusive) so guests still see base + VAT.
-           Provider itemisation, when present, always wins. */
-        if (config.rateDisplay === 'separate' && lodge && Number(lodge.vatPct) > 0) {
+           itemised setting the site builds the guest's true extras itself:
+           the VAT portion derived from the lodge's declared vatPct (rates
+           are VAT-inclusive; provider itemisation wins when present), PLUS
+           the conservation levy for the whole stay with VAT on it — both
+           from the replicated Guest Suites settings. */
+        if (itemised && lodge) {
+          var vatPct = Number(lodge.vatPct) > 0 ? Number(lodge.vatPct) : 0;
+          var levyStay = C.levyForStay(lodge, party, r.json.nights);
           current.results.forEach(function (room) {
             var t = Number(room.totalPrice);
+            if (!isFinite(t) || !(t > 0)) return;
             var hasOwn = (room.taxesTotal != null && isFinite(Number(room.taxesTotal))) ||
               (room.feesTotal != null && isFinite(Number(room.feesTotal)));
-            if (!hasOwn && isFinite(t) && t > 0) {
-              var vat = t * Number(lodge.vatPct) / (100 + Number(lodge.vatPct));
+            if (!hasOwn && vatPct > 0) {
+              var vat = t * vatPct / (100 + vatPct);
               room.totalPrice = t - vat;
               room.taxesTotal = vat;
               room.vatDerived = true;
+            }
+            if (levyStay > 0) {
+              room.feesTotal = (Number(room.feesTotal) || 0) + levyStay * (1 + vatPct / 100);
+              room.levyAdded = true;
             }
           });
         }
@@ -366,7 +379,7 @@
         perNight: C.money(pp.headline / nights, room.currency) + ' a night',
         note: pp.note
           ? (pp.note.kind === 'plus'
-            ? '+ ' + C.money(pp.note.extras, room.currency) + (room.vatDerived ? ' VAT' : ' taxes & fees')
+            ? '+ ' + C.money(pp.note.extras, room.currency) + extrasLabel(room)
             : 'taxes & fees included')
           : null,
       };
@@ -387,6 +400,13 @@
         return !!current.picks[room.roomTypeId];
       },
     });
+  }
+
+
+  /* What the itemised extras actually contain, said plainly. */
+  function extrasLabel(room) {
+    if (room.levyAdded) return room.vatDerived ? ' VAT & levy' : ' taxes, fees & levy';
+    return room.vatDerived ? ' VAT' : ' taxes & fees';
   }
 
   function renderRoom(room, nights, index) {
@@ -454,7 +474,7 @@
         var noteEl = document.createElement('span');
         noteEl.className = 'room-taxnote';
         noteEl.textContent = pp.note.kind === 'plus'
-          ? '+ ' + C.money(pp.note.extras, room.currency) + (room.vatDerived ? ' VAT' : ' taxes & fees')
+          ? '+ ' + C.money(pp.note.extras, room.currency) + extrasLabel(room)
           : 'taxes & fees included';
         price.appendChild(noteEl);
         if (pp.note.kind === 'plus') attachBreakdown(price, noteEl, room, nights);

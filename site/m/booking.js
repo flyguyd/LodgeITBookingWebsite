@@ -20,6 +20,9 @@
 
   var current = { from: null, to: null, results: [], picks: {}, nights: 0 };
   var media = {};
+  /* Display config managed on the Lodge Ops Booking Website page —
+     rateDisplay: 'inclusive' | 'separate'. */
+  var config = {};
   /* One level up from /m/ — resolves correctly under the /book/ mount too. */
   var MEDIA_BASE = '../media/';
 
@@ -168,17 +171,26 @@
     name.className = 'room-name';
     name.textContent = room.name;
     top.appendChild(name);
-    if (room.totalPrice != null) {
+    var pp = C.priceParts(room, config);
+    if (pp.headline != null) {
       var price = document.createElement('div');
       price.className = 'room-price';
       var total = document.createElement('span');
       total.className = 'room-total';
-      total.textContent = C.money(room.totalPrice, room.currency);
+      total.textContent = C.money(pp.headline, room.currency);
       var pn = document.createElement('span');
       pn.className = 'room-pn';
-      pn.textContent = C.money(Number(room.totalPrice) / nights, room.currency) + ' a night';
+      pn.textContent = C.money(pp.headline / nights, room.currency) + ' a night';
       price.appendChild(total);
       price.appendChild(pn);
+      if (pp.note) {
+        var noteEl = document.createElement('span');
+        noteEl.className = 'room-taxnote';
+        noteEl.textContent = pp.note.kind === 'plus'
+          ? '+ ' + C.money(pp.note.extras, room.currency) + ' taxes & fees'
+          : 'taxes & fees included';
+        price.appendChild(noteEl);
+      }
       top.appendChild(price);
     }
     body.appendChild(top);
@@ -284,15 +296,17 @@
     for (var i = 0; i < cards.length; i++) if (cards[i].__refresh) cards[i].__refresh();
   }
   function selectionTotal() {
-    var sum = 0, priced = false, currency = null;
+    var sum = 0, extras = 0, priced = false, currency = null;
     pickedRooms().forEach(function (p) {
-      if (p.room.totalPrice != null) {
-        sum += Number(p.room.totalPrice) * p.qty;
+      var pp = C.priceParts(p.room, config);
+      if (pp.headline != null) {
+        sum += pp.headline * p.qty;
+        if (pp.note && pp.note.kind === 'plus') extras += pp.note.extras * p.qty;
         priced = true;
         currency = currency || p.room.currency;
       }
     });
-    return priced ? { sum: sum, currency: currency } : null;
+    return priced ? { sum: sum, extras: extras, currency: currency } : null;
   }
   function updateSummary() {
     var picks = pickedRooms();
@@ -303,7 +317,10 @@
       .join(' · ');
     els.sumDates.textContent = suites + ' suite' + (suites === 1 ? '' : 's');
     var total = selectionTotal();
-    els.sumTotal.textContent = total ? C.money(total.sum, total.currency) : '';
+    els.sumTotal.textContent = total
+      ? C.money(total.sum, total.currency) +
+        (total.extras > 0 ? ' + ' + C.money(total.extras, total.currency) + ' taxes & fees' : '')
+      : '';
     els.sumNights.textContent = current.nights + ' night' + (current.nights === 1 ? '' : 's');
     els.continueNote.hidden = true;
     showSummary();
@@ -324,6 +341,10 @@
   C.startSession('mobile');
   C.fetchStatus()
     .then(function (s) { if (s && s.maintenance) show('maintenance'); })
+    .catch(function () {});
+  fetch('../config.json')
+    .then(function (r) { return r.ok ? r.json() : {}; })
+    .then(function (c) { config = c || {}; })
     .catch(function () {});
   fetch(MEDIA_BASE + 'rooms.json')
     .then(function (r) { return r.ok ? r.json() : {}; })

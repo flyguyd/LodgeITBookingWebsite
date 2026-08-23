@@ -50,6 +50,25 @@ window.BKCore = (function () {
     return out;
   }
 
+  /**
+   * How a room's price renders under the Lodge Ops display setting
+   * (rateDisplay: 'inclusive' | 'separate'). Never invents a breakdown: a
+   * room without itemised taxes/fees shows its price plainly in either mode.
+   * Returns { headline, note } with numbers, or headline null when unpriced.
+   */
+  function priceParts(room, config) {
+    var rate = room.totalPrice != null ? Number(room.totalPrice) : null;
+    if (rate == null || !isFinite(rate)) return { headline: null, note: null };
+    var taxes = room.taxesTotal != null ? Number(room.taxesTotal) : null;
+    var fees = room.feesTotal != null ? Number(room.feesTotal) : null;
+    var known = (taxes != null && isFinite(taxes)) || (fees != null && isFinite(fees));
+    var extras = (taxes != null && isFinite(taxes) ? taxes : 0) + (fees != null && isFinite(fees) ? fees : 0);
+    var separate = config && config.rateDisplay === 'separate';
+    if (!known) return { headline: rate, note: null };
+    if (separate) return { headline: rate, note: { extras: extras, kind: 'plus' } };
+    return { headline: rate + extras, note: { kind: 'included' } };
+  }
+
   /** Deterministic 0..359 hue from a room id, for the generative fallback
    *  treatment when a room has no photo. Same room, same colour, always. */
   function hueFor(id) {
@@ -109,6 +128,7 @@ window.BKCore = (function () {
     isoToday: isoToday,
     captureSource: captureSource,
     hueFor: hueFor,
+    priceParts: priceParts,
     startSession: startSession,
     track: track,
     searchAvailability: searchAvailability,
@@ -123,4 +143,5 @@ window.__bk = {
   fmtDate: window.BKCore.fmtDate,
   captureSource: window.BKCore.captureSource,
   hueFor: window.BKCore.hueFor,
+  priceParts: window.BKCore.priceParts,
 };

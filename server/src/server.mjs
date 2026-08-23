@@ -112,6 +112,19 @@ function readBody(req, cap = 64 * 1024) {
   });
 }
 
+// ---- display config (managed in Lodge Ops, pulled through the engine) ----
+let siteConfig = {};
+async function syncConfig() {
+  const r = await engineCall('GET', '/api/booking/site-config');
+  if (r.status !== 200 || !r.body) return;
+  try {
+    const parsed = JSON.parse(r.body);
+    if (parsed && typeof parsed === 'object') siteConfig = parsed;
+  } catch {
+    /* keep the last good config */
+  }
+}
+
 // ---- the suite-media cache ----
 // manifest: id -> { roomTypeId, contentType, sortOrder }; rooms.json is the
 // public view the booking pages read (roomTypeId -> [ids, best first]).
@@ -227,6 +240,13 @@ const server = createServer(async (req, res) => {
       res.end();
       return;
     }
+  }
+
+  // ---- display config for the pages ----
+  if (method === 'GET' && url.split('?')[0] === '/config.json') {
+    stats.recordStatic(2);
+    json(res, 200, siteConfig);
+    return;
   }
 
   // ---- the suite-media cache: the lodge's own photography ----
@@ -358,5 +378,9 @@ server.listen(PORT, () => {
   void heartbeat();
   setInterval(() => void heartbeat(), HEARTBEAT_MS).unref();
   void loadMediaManifest().then(() => void syncMedia().catch(() => {}));
+  void syncConfig().catch(() => {});
   setInterval(() => void syncMedia().catch(() => {}), MEDIA_SYNC_MS).unref();
+  // Display config is light — re-pull on the heartbeat cadence so a change
+  // made in Lodge Ops shows on the site within about a minute.
+  setInterval(() => void syncConfig().catch(() => {}), HEARTBEAT_MS).unref();
 });

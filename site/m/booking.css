@@ -149,6 +149,7 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
 .room-name { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 21px; }
 .room-price { text-align: right; flex: none; }
 .room-total { display: block; font-family: var(--serif); font-size: 19px; color: var(--gold); }
+.room-taxnote { display: block; font-size: 11px; color: var(--paper-dim); margin-top: 3px; font-style: italic; }
 .room-pn { display: block; font-size: 11.5px; color: var(--paper-dim); }
 .room-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .room-tag {

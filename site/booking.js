@@ -834,6 +834,9 @@
       if (star) star.hidden = true;
       var head = document.querySelector('.masthead');
       if (head) head.classList.add('logo-mode');
+      /* Body-level hook: the hero below tightens its spacing when the
+         masthead carries the tall lockup, so the fold still clears. */
+      document.body.classList.add('has-logo');
     }
     var fav = document.getElementById('favicon');
     if (fav) fav.href = MEDIA_BASE + config.logoId;

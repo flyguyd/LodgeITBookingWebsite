@@ -392,13 +392,23 @@ main { z-index: 3; }
 .foot-left { display: flex; flex-direction: column; gap: 4px; }
 .foot-copy { font-size: 11px; color: var(--paper-dim); opacity: 0.75; letter-spacing: 0.04em; }
 
-/* With a logo the masthead is a centred lockup: the mark large, the brand
-   name beneath it; the mobile-site link keeps its corner. */
+/* With a logo the masthead is a centred lockup: the mark large and alone —
+   the logo IS the brand, so the name under it goes (Dave, 2026-08-24) — and
+   the spacing tightens so the hero + booking bar still clear the fold. */
 .masthead.logo-mode { justify-content: center; position: relative; }
-.masthead.logo-mode .brand { flex-direction: column; gap: 12px; text-align: center; }
+.masthead.logo-mode .brand { flex-direction: column; text-align: center; }
 .masthead.logo-mode .brand-logo { max-height: 120px; max-width: min(360px, 70vw); }
-.masthead.logo-mode .brand-name { font-size: 16px; letter-spacing: 0.22em; }
+.masthead.logo-mode .brand-name { display: none; }
 .masthead.logo-mode .masthead-link {
   position: absolute; right: clamp(24px, 5vw, 64px); top: 50%;
   transform: translateY(-50%);
+}
+body.has-logo .masthead { padding: 16px clamp(24px, 5vw, 64px) 0; }
+body.has-logo .hero { padding-top: clamp(14px, 3vh, 36px); }
+/* Short screens: a smaller mark buys the fold back. */
+@media (max-height: 840px) {
+  .masthead.logo-mode .brand-logo { max-height: 84px; }
+  body.has-logo .hero { padding-top: 10px; }
+  body.has-logo .hero-sub { margin-top: 16px; }
+  body.has-logo .bar-wrap { margin-top: 18px; }
 }

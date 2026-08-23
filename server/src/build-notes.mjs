@@ -318,4 +318,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.24',
+    version: '0.1.24',
+    date: '2026-08-24T04:45:00+02:00',
+    changes: [
+      {
+        headline:
+          'The logo stands alone and the fold is guaranteed. With a logo the brand name under it goes - the mark IS the brand - and the dead space around the lockup tightens: slimmer masthead, the hero pulled up under it. On short screens the mark itself steps down from 120px to 84px so the page still fits. Checked at three real desktop sizes: the whole first screen - logo, kicker, both headline lines, subtitle and the booking bar - sits above the fold at 1900x995, 1440x900 and 1366x768, with nothing below it but the footer.',
+        detail:
+          'CSS only plus one body-level has-logo hook from applyLogo (the hero cannot be reached from a masthead class alone). logo-mode hides .brand-name and drops the lockup gap; has-logo slims the masthead padding and the hero top; a max-height 840px media query shrinks the mark to 84px and tightens the subtitle and bar margins further - written at the right specificity, since the first draft of that rule silently lost to the lockup\u0027s own selector and the E2E caught the mark still measuring 120px. The logo-less masthead is untouched. VERIFIED by real Chromium at all three viewports: name display none, booking-bar bottom 778/995, 775/900 and 701/768.',
+      },
+    ],
+  },
 ];

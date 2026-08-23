@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>7 Star Lodges — Book your stay</title>
+  <meta name="description" content="Private luxury lodges on the water's edge. Check availability and book in under a minute." />
+  <link rel="stylesheet" href="booking.css" />
+</head>
+<body>
+  <div class="aura" aria-hidden="true">
+    <div class="aura-blob a"></div>
+    <div class="aura-blob b"></div>
+  </div>
+
+  <main>
+    <header class="hero">
+      <p class="kicker">7 Star Lodges</p>
+      <h1 class="hero-title">Stillness, on the water's <em>edge</em></h1>
+    </header>
+
+    <form id="searchForm" class="glass panel" novalidate>
+      <div class="dates">
+        <label class="date-field">
+          <span>Arrive</span>
+          <input id="fArrive" type="date" required />
+        </label>
+        <span class="date-arrow" aria-hidden="true">→</span>
+        <label class="date-field">
+          <span>Depart</span>
+          <input id="fDepart" type="date" required />
+        </label>
+      </div>
+      <div class="steppers">
+        <div class="stepper" data-for="fAdults">
+          <span class="stepper-label">Adults</span>
+          <div class="stepper-ctl">
+            <button type="button" class="step" data-step="-1">−</button>
+            <output id="fAdults" data-min="1" data-max="12">2</output>
+            <button type="button" class="step" data-step="1">+</button>
+          </div>
+        </div>
+        <div class="stepper" data-for="fChildren">
+          <span class="stepper-label">Children</span>
+          <div class="stepper-ctl">
+            <button type="button" class="step" data-step="-1">−</button>
+            <output id="fChildren" data-min="0" data-max="12">0</output>
+            <button type="button" class="step" data-step="1">+</button>
+          </div>
+        </div>
+        <div class="stepper" data-for="fRooms">
+          <span class="stepper-label">Suites</span>
+          <div class="stepper-ctl">
+            <button type="button" class="step" data-step="-1">−</button>
+            <output id="fRooms" data-min="1" data-max="6">1</output>
+            <button type="button" class="step" data-step="1">+</button>
+          </div>
+        </div>
+      </div>
+      <button id="searchBtn" type="submit" class="cta big">Check availability</button>
+      <p id="formNote" class="form-note" hidden></p>
+    </form>
+
+    <section id="stateLoading" class="state" hidden>
+      <div class="glass skeleton"></div>
+      <div class="glass skeleton"></div>
+    </section>
+    <section id="stateMaintenance" class="state glass state-card" hidden>
+      <h2>Bookings are briefly paused</h2>
+      <p>Please try again in a few minutes — your dates will still be here.</p>
+    </section>
+    <section id="stateUnavailable" class="state glass state-card" hidden>
+      <h2>Let us book this for you</h2>
+      <p>Online booking for these dates is being prepared. Contact the lodge
+        and our reservations team will confirm your stay personally.</p>
+    </section>
+    <section id="stateEmpty" class="state glass state-card" hidden>
+      <h2>Fully booked for these dates</h2>
+      <p>Try shifting your stay by a day or two.</p>
+    </section>
+
+    <section id="results" hidden>
+      <h2 id="resultsHead" class="results-title"></h2>
+      <div id="roomList"></div>
+    </section>
+
+    <footer class="foot">
+      <a href="../?full=1">View the full site</a>
+    </footer>
+  </main>
+
+  <!-- sticky conversion bar: appears the moment anything is picked -->
+  <aside id="summary" class="glass sticky" hidden>
+    <div class="sticky-row">
+      <div class="sticky-text">
+        <span id="sumRoom" class="sticky-rooms"></span>
+        <span class="sticky-meta"><span id="sumDates"></span> · <span id="sumNights"></span></span>
+      </div>
+      <span id="sumTotal" class="sticky-total"></span>
+    </div>
+    <button id="continueBtn" type="button" class="cta big">Continue</button>
+    <p id="continueNote" class="sticky-note" hidden>
+      Secure checkout is almost ready — your selection is saved, and the
+      reservations team can confirm it today if you contact the lodge.
+    </p>
+  </aside>
+
+  <script src="../core.js"></script>
+  <script src="booking.js"></script>
+</body>
+</html>

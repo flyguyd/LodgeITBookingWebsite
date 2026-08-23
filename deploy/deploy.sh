@@ -74,7 +74,7 @@ echo "==> Deploying v${APP_VERSION}"
 # ---- 2. Install (no build — zero-dependency service) ----
 echo "==> Installing into ${APP_ROOT}…"
 mkdir -p "${APP_ROOT}"
-rsync -a --delete --exclude .git --exclude .env "${REPO_DIR}/" "${APP_ROOT}/"
+rsync -a --delete --exclude .git --exclude .env --exclude data "${REPO_DIR}/" "${APP_ROOT}/"
 chown -R oase:oase "${APP_ROOT}"
 
 # ---- 3. First-run gates: .env and the unit ----

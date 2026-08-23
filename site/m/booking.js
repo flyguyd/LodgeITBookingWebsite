@@ -1,6 +1,6 @@
-/* 7 Star Lodges booking — desktop/tablet UI on top of core.js.
-   Presentation only: every API call, helper and analytics event lives in
-   BKCore. This file renders the magazine layout and the glass behaviour. */
+/* 7 Star Lodges booking — MOBILE UI on top of ../core.js. Presentation only;
+   built for one thumb: steppers instead of selects, whole-card tap-to-add
+   (any number of suites), and a sticky glass bar carrying total + Continue. */
 (function () {
   'use strict';
   var C = window.BKCore;
@@ -18,16 +18,23 @@
     continueBtn: $('continueBtn'), continueNote: $('continueNote'),
   };
 
-  /* picks: roomTypeId -> { room, qty } — guests can take MORE THAN ONE suite
-     (Dave, 2026-08-23), and more than one unit of a type when available. */
   var current = { from: null, to: null, results: [], picks: {}, nights: 0 };
-  /* Relative on purpose: under the /book/ path-mount this resolves to
-     /book/media/… which nginx strips back to /media/… for the site server. */
-  var MEDIA_BASE = 'media/';
-  /* roomTypeId -> [urls]: the lodge's own suite photography, synced from
-     Lodge Ops through the engine and cached by this site's server. Falls
-     back to provider photos, then to the generative treatment. */
   var media = {};
+  /* One level up from /m/ — resolves correctly under the /book/ mount too. */
+  var MEDIA_BASE = '../media/';
+
+  // ---- steppers (adults / children / suites) ----
+  Array.prototype.forEach.call(document.querySelectorAll('.stepper'), function (box) {
+    var out = box.querySelector('output');
+    var min = Number(out.dataset.min);
+    var max = Number(out.dataset.max);
+    Array.prototype.forEach.call(box.querySelectorAll('.step'), function (btn) {
+      btn.addEventListener('click', function () {
+        var next = Number(out.textContent) + Number(btn.dataset.step);
+        if (next >= min && next <= max) out.textContent = String(next);
+      });
+    });
+  });
 
   // ---- UI states ----
   var stateEls = ['loading', 'maintenance', 'unavailable', 'empty', 'results'];
@@ -36,31 +43,14 @@
     if (state !== 'results') hideSummary();
   }
   function hideStates() { stateEls.forEach(function (k) { els[k].hidden = true; }); }
-  function hideSummary() {
-    els.summary.classList.remove('on');
-    els.summary.hidden = true;
-  }
+  function hideSummary() { els.summary.classList.remove('on'); els.summary.hidden = true; }
   function showSummary() {
     els.summary.hidden = false;
-    /* next frame so the slide-up transition actually plays */
     requestAnimationFrame(function () {
       requestAnimationFrame(function () { els.summary.classList.add('on'); });
     });
   }
 
-  // ---- form init ----
-  function fillSelect(el, from, to, selectedValue) {
-    for (var i = from; i <= to; i++) {
-      var o = document.createElement('option');
-      o.value = String(i);
-      o.textContent = String(i);
-      if (i === selectedValue) o.selected = true;
-      el.appendChild(o);
-    }
-  }
-  fillSelect(els.adults, 1, 12, 2);
-  fillSelect(els.children, 0, 12, 0);
-  fillSelect(els.rooms, 1, 6, 1);
   els.arrive.value = C.isoToday(14);
   els.depart.value = C.isoToday(17);
   els.arrive.min = C.isoToday(0);
@@ -82,14 +72,13 @@
     current.picks = {};
     show('loading');
     els.btn.disabled = true;
-    C.track('search_started',
-      { from: from, to: to, adults: els.adults.value, children: els.children.value, rooms: els.rooms.value },
-      { from: from, to: to });
-
-    C.searchAvailability({
+    var params = {
       from: from, to: to,
-      adults: els.adults.value, children: els.children.value, rooms: els.rooms.value,
-    })
+      adults: els.adults.textContent, children: els.children.textContent,
+      rooms: els.rooms.textContent,
+    };
+    C.track('search_started', params, { from: from, to: to });
+    C.searchAvailability(params)
       .then(function (r) {
         els.btn.disabled = false;
         if (r.status === 503) { show('maintenance'); return; }
@@ -127,20 +116,19 @@
   }
 
   function renderResults(payload) {
-    var nights = payload.nights;
     els.resultsHead.textContent =
       C.fmtDate(payload.from) + ' — ' + C.fmtDate(payload.to) + ' · ' +
-      nights + ' night' + (nights === 1 ? '' : 's');
+      payload.nights + ' night' + (payload.nights === 1 ? '' : 's');
     els.roomList.textContent = '';
     payload.results.forEach(function (room, i) {
-      els.roomList.appendChild(renderRoom(room, nights, i));
+      els.roomList.appendChild(renderRoom(room, payload.nights, i));
     });
   }
 
   function renderRoom(room, nights, index) {
     var card = document.createElement('article');
     card.className = 'glass room';
-    card.style.animationDelay = (0.08 + index * 0.09) + 's';
+    card.style.animationDelay = (0.05 + index * 0.08) + 's';
     card.setAttribute('role', 'button');
     card.tabIndex = 0;
 
@@ -160,18 +148,20 @@
     } else {
       photo.appendChild(art(room));
     }
-    /* Factual scarcity only — no artificial urgency (spec §7). */
     if (room.available > 0 && room.available <= 2) {
       var sc = document.createElement('span');
       sc.className = 'room-scarce';
       sc.textContent = room.available === 1 ? 'Last suite' : 'Only ' + room.available + ' left';
       photo.appendChild(sc);
     }
+    var pickMark = document.createElement('span');
+    pickMark.className = 'room-pick';
+    pickMark.textContent = '✓';
+    photo.appendChild(pickMark);
     card.appendChild(photo);
 
     var body = document.createElement('div');
     body.className = 'room-body';
-
     var top = document.createElement('div');
     top.className = 'room-top';
     var name = document.createElement('h3');
@@ -193,36 +183,22 @@
     }
     body.appendChild(top);
 
-    if (room.description) {
-      var desc = document.createElement('p');
-      desc.className = 'room-desc';
-      desc.textContent = String(room.description).replace(/<[^>]*>/g, '');
-      body.appendChild(desc);
-    }
-
     var meta = document.createElement('div');
     meta.className = 'room-meta';
     if (room.maxGuests) meta.appendChild(tag('Sleeps ' + room.maxGuests));
     if (room.restrictions && room.restrictions.minLos > 1) {
-      meta.appendChild(tag('Minimum ' + room.restrictions.minLos + ' nights'));
+      meta.appendChild(tag('Min ' + room.restrictions.minLos + ' nights'));
     }
-    meta.appendChild(tag('Book direct — best rate'));
+    meta.appendChild(tag('Tap to add'));
     body.appendChild(meta);
 
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'room-cta';
-    btn.textContent = 'Add to stay';
-    body.appendChild(btn);
-
-    /* quantity stepper, shown once picked when the type has spare units */
     var qtyRow = document.createElement('div');
     qtyRow.className = 'room-qty';
     qtyRow.hidden = true;
-    var minus = qtyBtn('−');
+    var minus = stepBtn('−');
     var qtyVal = document.createElement('span');
     qtyVal.className = 'room-qty-n';
-    var plus = qtyBtn('+');
+    var plus = stepBtn('+');
     qtyRow.appendChild(minus);
     qtyRow.appendChild(qtyVal);
     qtyRow.appendChild(plus);
@@ -232,32 +208,28 @@
     function refresh() {
       var pick = current.picks[room.roomTypeId];
       card.classList.toggle('selected', !!pick);
-      btn.textContent = pick ? 'Remove from stay' : 'Add to stay';
       qtyRow.hidden = !(pick && room.available > 1);
       if (pick) qtyVal.textContent = pick.qty + ' of ' + room.available;
     }
     card.__refresh = refresh;
 
-    function toggle() { togglePick(room); }
-    card.addEventListener('click', toggle);
+    card.addEventListener('click', function () { togglePick(room); });
     card.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); }
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); togglePick(room); }
     });
     minus.addEventListener('click', function (ev) { ev.stopPropagation(); bumpQty(room, -1); });
     plus.addEventListener('click', function (ev) { ev.stopPropagation(); bumpQty(room, 1); });
     return card;
   }
 
-  function qtyBtn(label) {
+  function stepBtn(label) {
     var b = document.createElement('button');
     b.type = 'button';
-    b.className = 'room-qty-btn';
+    b.className = 'step';
     b.textContent = label;
     return b;
   }
 
-  /* The generative fallback: a deterministic dusk gradient per suite, so a
-     photo-less room still looks deliberate rather than broken. */
   function art(room) {
     var h = C.hueFor(room.roomTypeId);
     var el = document.createElement('div');
@@ -275,24 +247,27 @@
     return t;
   }
 
-  // ---- selection: any number of suites, any spare units of each ----
+  // ---- multi-selection (same model as the full site) ----
   function pickedRooms() {
     return Object.keys(current.picks).map(function (k) { return current.picks[k]; });
   }
-
+  function stateCheckpoint() {
+    return {
+      from: current.from, to: current.to,
+      rooms: pickedRooms().map(function (p) { return { roomTypeId: p.room.roomTypeId, qty: p.qty }; }),
+    };
+  }
   function togglePick(room) {
     if (current.picks[room.roomTypeId]) {
       delete current.picks[room.roomTypeId];
       C.track('room_selected', { roomTypeId: room.roomTypeId, action: 'removed' }, stateCheckpoint());
     } else {
       current.picks[room.roomTypeId] = { room: room, qty: 1 };
-      C.track('room_selected',
-        { roomTypeId: room.roomTypeId, total: room.totalPrice }, stateCheckpoint());
+      C.track('room_selected', { roomTypeId: room.roomTypeId, total: room.totalPrice }, stateCheckpoint());
     }
     refreshCards();
     updateSummary();
   }
-
   function bumpQty(room, delta) {
     var pick = current.picks[room.roomTypeId];
     if (!pick) return;
@@ -304,24 +279,12 @@
     refreshCards();
     updateSummary();
   }
-
   function refreshCards() {
     var cards = els.roomList.querySelectorAll('.room');
     for (var i = 0; i < cards.length; i++) if (cards[i].__refresh) cards[i].__refresh();
   }
-
-  function stateCheckpoint() {
-    return {
-      from: current.from,
-      to: current.to,
-      rooms: pickedRooms().map(function (p) { return { roomTypeId: p.room.roomTypeId, qty: p.qty }; }),
-    };
-  }
-
   function selectionTotal() {
-    var sum = 0;
-    var priced = false;
-    var currency = null;
+    var sum = 0, priced = false, currency = null;
     pickedRooms().forEach(function (p) {
       if (p.room.totalPrice != null) {
         sum += Number(p.room.totalPrice) * p.qty;
@@ -331,7 +294,6 @@
     });
     return priced ? { sum: sum, currency: currency } : null;
   }
-
   function updateSummary() {
     var picks = pickedRooms();
     if (!picks.length) { hideSummary(); return; }
@@ -339,8 +301,7 @@
     els.sumRoom.textContent = picks
       .map(function (p) { return p.room.name + (p.qty > 1 ? ' ×' + p.qty : ''); })
       .join(' · ');
-    els.sumDates.textContent = C.fmtDate(current.from) + ' — ' + C.fmtDate(current.to) +
-      ' · ' + suites + ' suite' + (suites === 1 ? '' : 's');
+    els.sumDates.textContent = suites + ' suite' + (suites === 1 ? '' : 's');
     var total = selectionTotal();
     els.sumTotal.textContent = total ? C.money(total.sum, total.currency) : '';
     els.sumNights.textContent = current.nights + ' night' + (current.nights === 1 ? '' : 's');
@@ -351,8 +312,6 @@
   els.continueBtn.addEventListener('click', function () {
     var picks = pickedRooms();
     if (!picks.length) return;
-    /* Honest state: checkout ships in its own certified batch; the intent —
-       every suite and quantity — is recorded so the team can follow up. */
     var total = selectionTotal();
     C.track('checkout_started', {
       rooms: picks.map(function (p) { return { roomTypeId: p.room.roomTypeId, qty: p.qty }; }),
@@ -362,7 +321,7 @@
   });
 
   // ---- boot ----
-  C.startSession('desktop');
+  C.startSession('mobile');
   C.fetchStatus()
     .then(function (s) { if (s && s.maintenance) show('maintenance'); })
     .catch(function () {});

@@ -3,111 +3,134 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Book your stay — 7 Star Lodges</title>
-  <meta name="description" content="Book your stay at 7 Star Lodges — live availability, direct rates, no middleman." />
+  <title>7 Star Lodges — Reserve your stay</title>
+  <meta name="description" content="Private luxury lodges on the water's edge. Check live availability and reserve your suite." />
   <link rel="stylesheet" href="booking.css" />
 </head>
 <body>
-  <main class="bk" id="app">
-    <!-- ============ Hero + search ============ -->
-    <header class="bk-hero">
-      <p class="bk-kicker">7 Star Lodges · Oase</p>
-      <h1>Your place in the wild&nbsp;is waiting.</h1>
-      <p class="bk-lede">
-        Book directly with the lodge — the best available rate, flexible
-        service, and every rand goes to the people looking after you.
-      </p>
-    </header>
+  <!-- The living backdrop: slow aurora light behind everything, film grain
+       over it. Pure CSS/SVG — the site makes no external requests of its own
+       (spec §23); the only remote pixels are the suites' photographs. -->
+  <div class="aura" aria-hidden="true">
+    <div class="aura-blob a"></div>
+    <div class="aura-blob b"></div>
+    <div class="aura-blob c"></div>
+  </div>
+  <div class="grain" aria-hidden="true"></div>
 
-    <form class="bk-search" id="searchForm" autocomplete="off">
-      <div class="bk-field">
-        <label for="fArrive">Arrival</label>
-        <input type="date" id="fArrive" required />
-      </div>
-      <div class="bk-field">
-        <label for="fDepart">Departure</label>
-        <input type="date" id="fDepart" required />
-      </div>
-      <div class="bk-field bk-field-s">
-        <label for="fAdults">Adults</label>
-        <select id="fAdults"></select>
-      </div>
-      <div class="bk-field bk-field-s">
-        <label for="fChildren">Children</label>
-        <select id="fChildren"></select>
-      </div>
-      <div class="bk-field bk-field-s">
-        <label for="fRooms">Suites</label>
-        <select id="fRooms"></select>
-      </div>
-      <button type="submit" class="bk-cta" id="searchBtn">Check availability</button>
-    </form>
-    <p class="bk-form-note" id="formNote" hidden></p>
+  <header class="masthead">
+    <div class="brand">
+      <span class="brand-star" aria-hidden="true">✦</span>
+      <span class="brand-name">7&nbsp;Star&nbsp;Lodges</span>
+    </div>
+    <a class="masthead-link" href="m/">Mobile&nbsp;site</a>
+  </header>
 
-    <!-- ============ States ============ -->
-    <section class="bk-state" id="stateLoading" hidden>
-      <div class="bk-spinner" aria-hidden="true"></div>
-      <p>Checking live availability…</p>
-    </section>
-
-    <section class="bk-state bk-state-calm" id="stateMaintenance" hidden>
-      <h2>Bookings are briefly paused</h2>
-      <p>
-        We are doing a little housekeeping of our own. Please try again in a
-        few minutes, or contact the lodge and we will hold your dates.
+  <main>
+    <section class="hero">
+      <p class="kicker reveal">Private lagoon · Seven suites</p>
+      <h1 class="hero-title">
+        <span class="reveal d1">Stillness,</span>
+        <span class="hero-line reveal d2">on the water's <em>edge</em></span>
+      </h1>
+      <p class="hero-sub reveal d3">
+        Seven private suites. One quiet lagoon. Choose your dates and the
+        lodge is yours.
       </p>
     </section>
 
-    <section class="bk-state bk-state-calm" id="stateUnavailable" hidden>
-      <h2>Let us book this for you</h2>
-      <p>
-        Online booking for these dates is being prepared. Contact the lodge
-        directly and our reservations team will confirm your stay personally.
-      </p>
+    <section class="bar-wrap reveal d4">
+      <form id="searchForm" class="glass bar" novalidate>
+        <label class="bar-field">
+          <span>Arrive</span>
+          <input id="fArrive" type="date" required />
+        </label>
+        <span class="bar-sep" aria-hidden="true"></span>
+        <label class="bar-field">
+          <span>Depart</span>
+          <input id="fDepart" type="date" required />
+        </label>
+        <span class="bar-sep" aria-hidden="true"></span>
+        <label class="bar-field slim">
+          <span>Adults</span>
+          <select id="fAdults"></select>
+        </label>
+        <label class="bar-field slim">
+          <span>Children</span>
+          <select id="fChildren"></select>
+        </label>
+        <label class="bar-field slim">
+          <span>Suites</span>
+          <select id="fRooms"></select>
+        </label>
+        <button id="searchBtn" type="submit" class="cta">
+          <span class="cta-label">Check availability</span>
+        </button>
+      </form>
+      <p id="formNote" class="form-note" hidden></p>
     </section>
 
-    <section class="bk-state bk-state-calm" id="stateEmpty" hidden>
-      <h2>Fully booked for those dates</h2>
-      <p>
-        Every suite is taken on at least one of your nights. Try shifting your
-        stay by a day or two — or contact the lodge; plans change and we keep
-        a list.
-      </p>
-    </section>
-
-    <!-- ============ Results ============ -->
-    <section class="bk-results" id="results" hidden>
-      <h2 class="bk-results-head" id="resultsHead"></h2>
-      <div class="bk-rooms" id="roomList"></div>
-    </section>
-
-    <!-- ============ Selection summary ============ -->
-    <aside class="bk-summary" id="summary" hidden>
-      <div class="bk-summary-inner">
-        <div class="bk-summary-text">
-          <span class="bk-summary-room" id="sumRoom"></span>
-          <span class="bk-summary-dates" id="sumDates"></span>
-        </div>
-        <div class="bk-summary-price">
-          <span class="bk-summary-total" id="sumTotal"></span>
-          <span class="bk-summary-nights" id="sumNights"></span>
-        </div>
-        <button type="button" class="bk-cta" id="continueBtn">Continue</button>
+    <section id="stateLoading" class="state" hidden>
+      <div class="skeleton-grid">
+        <div class="glass skeleton"></div>
+        <div class="glass skeleton"></div>
+        <div class="glass skeleton"></div>
       </div>
-      <p class="bk-summary-note" id="continueNote" hidden>
-        Secure checkout is almost ready. Contact the lodge to confirm this
-        stay today — your selection has been noted.
-      </p>
-    </aside>
+      <p class="state-note">Asking the lodge…</p>
+    </section>
 
-    <footer class="bk-foot">
-      <p>
-        Booking directly supports the lodge and its people. Secure payment ·
-        clear cancellation terms · no booking fees.
-      </p>
-    </footer>
+    <section id="stateMaintenance" class="state glass state-card" hidden>
+      <h2 class="state-title">Bookings are briefly paused</h2>
+      <p>We are doing a little housekeeping of our own. Please try again in a
+        few minutes — your dates will still be here.</p>
+    </section>
+
+    <section id="stateUnavailable" class="state glass state-card" hidden>
+      <h2 class="state-title">Let us book this for you</h2>
+      <p>Online booking for these dates is being prepared. Contact the lodge
+        directly and our reservations team will confirm your stay personally.</p>
+    </section>
+
+    <section id="stateEmpty" class="state glass state-card" hidden>
+      <h2 class="state-title">Fully booked for these dates</h2>
+      <p>Every suite is taken — a quiet compliment to the lagoon. Try shifting
+        your stay by a day or two.</p>
+    </section>
+
+    <section id="results" hidden>
+      <div class="results-head">
+        <p class="kicker">Available suites</p>
+        <h2 id="resultsHead" class="results-title"></h2>
+      </div>
+      <div id="roomList" class="room-grid"></div>
+    </section>
   </main>
 
+  <aside id="summary" class="glass summary" hidden>
+    <div class="summary-text">
+      <span id="sumRoom" class="summary-room"></span>
+      <span class="summary-meta">
+        <span id="sumDates"></span> · <span id="sumNights"></span>
+      </span>
+    </div>
+    <div class="summary-right">
+      <span id="sumTotal" class="summary-total"></span>
+      <button id="continueBtn" type="button" class="cta">
+        <span class="cta-label">Continue</span>
+      </button>
+    </div>
+    <p id="continueNote" class="summary-note" hidden>
+      Secure checkout is almost ready — we have saved your selection, and the
+      reservations team can confirm it today if you contact the lodge.
+    </p>
+  </aside>
+
+  <footer class="foot">
+    <span>7 Star Lodges</span>
+    <a href="m/">Mobile site</a>
+  </footer>
+
+  <script src="core.js"></script>
   <script src="booking.js"></script>
 </body>
 </html>

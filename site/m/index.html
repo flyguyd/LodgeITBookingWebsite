@@ -15,8 +15,9 @@
 
   <main>
     <header class="hero">
-      <p class="kicker">7 Star Lodges</p>
-      <h1 class="hero-title">Stillness, on the water's <em>edge</em></h1>
+      <img id="siteLogo" class="site-logo" hidden alt="" />
+      <p class="kicker" id="txtBrand">7 Star Lodges</p>
+      <h1 class="hero-title"><span id="txtLine1">Stillness,</span> <span id="txtLine2">on the water's <em>edge</em></span></h1>
     </header>
 
     <form id="searchForm" class="glass panel" novalidate>
@@ -66,17 +67,17 @@
       <div class="glass skeleton"></div>
     </section>
     <section id="stateMaintenance" class="state glass state-card" hidden>
-      <h2>Bookings are briefly paused</h2>
-      <p>Please try again in a few minutes — your dates will still be here.</p>
+      <h2 id="txtMaintTitle">Bookings are briefly paused</h2>
+      <p id="txtMaintBody">Please try again in a few minutes — your dates will still be here.</p>
     </section>
     <section id="stateUnavailable" class="state glass state-card" hidden>
-      <h2>Let us book this for you</h2>
-      <p>Online booking for these dates is being prepared. Contact the lodge
+      <h2 id="txtUnavailTitle">Let us book this for you</h2>
+      <p id="txtUnavailBody">Online booking for these dates is being prepared. Contact the lodge
         and our reservations team will confirm your stay personally.</p>
     </section>
     <section id="stateEmpty" class="state glass state-card" hidden>
-      <h2>Fully booked for these dates</h2>
-      <p>Try shifting your stay by a day or two.</p>
+      <h2 id="txtEmptyTitle">Fully booked for these dates</h2>
+      <p id="txtEmptyBody">Try shifting your stay by a day or two.</p>
     </section>
 
     <section id="results" hidden>

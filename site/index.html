@@ -20,20 +20,21 @@
 
   <header class="masthead">
     <div class="brand">
-      <span class="brand-star" aria-hidden="true">✦</span>
-      <span class="brand-name">7&nbsp;Star&nbsp;Lodges</span>
+      <span class="brand-star" id="brandStar" aria-hidden="true">✦</span>
+      <img id="siteLogo" class="brand-logo" hidden alt="7 Star Lodges" />
+      <span class="brand-name" id="txtBrand">7&nbsp;Star&nbsp;Lodges</span>
     </div>
     <a class="masthead-link" href="m/">Mobile&nbsp;site</a>
   </header>
 
   <main>
     <section class="hero">
-      <p class="kicker reveal">Private lagoon · Seven suites</p>
+      <p class="kicker reveal" id="txtKicker">Private lagoon · Seven suites</p>
       <h1 class="hero-title">
-        <span class="reveal d1">Stillness,</span>
-        <span class="hero-line reveal d2">on the water's <em>edge</em></span>
+        <span class="reveal d1" id="txtLine1">Stillness,</span>
+        <span class="hero-line reveal d2" id="txtLine2">on the water's <em>edge</em></span>
       </h1>
-      <p class="hero-sub reveal d3">
+      <p class="hero-sub reveal d3" id="txtSub">
         Seven private suites. One quiet lagoon. Choose your dates and the
         lodge is yours.
       </p>
@@ -80,20 +81,20 @@
     </section>
 
     <section id="stateMaintenance" class="state glass state-card" hidden>
-      <h2 class="state-title">Bookings are briefly paused</h2>
-      <p>We are doing a little housekeeping of our own. Please try again in a
+      <h2 class="state-title" id="txtMaintTitle">Bookings are briefly paused</h2>
+      <p id="txtMaintBody">We are doing a little housekeeping of our own. Please try again in a
         few minutes — your dates will still be here.</p>
     </section>
 
     <section id="stateUnavailable" class="state glass state-card" hidden>
-      <h2 class="state-title">Let us book this for you</h2>
-      <p>Online booking for these dates is being prepared. Contact the lodge
+      <h2 class="state-title" id="txtUnavailTitle">Let us book this for you</h2>
+      <p id="txtUnavailBody">Online booking for these dates is being prepared. Contact the lodge
         directly and our reservations team will confirm your stay personally.</p>
     </section>
 
     <section id="stateEmpty" class="state glass state-card" hidden>
-      <h2 class="state-title">Fully booked for these dates</h2>
-      <p>Every suite is taken — a quiet compliment to the lagoon. Try shifting
+      <h2 class="state-title" id="txtEmptyTitle">Fully booked for these dates</h2>
+      <p id="txtEmptyBody">Every suite is taken — a quiet compliment to the lagoon. Try shifting
         your stay by a day or two.</p>
     </section>
 
@@ -126,7 +127,7 @@
   </aside>
 
   <footer class="foot">
-    <span>7 Star Lodges</span>
+    <span id="txtFootBrand">7 Star Lodges</span>
     <a href="m/">Mobile site</a>
   </footer>
 

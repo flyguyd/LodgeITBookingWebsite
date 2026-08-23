@@ -80,7 +80,8 @@ main, .masthead, .foot, .summary { position: relative; z-index: 2; }
   display: flex; justify-content: space-between; align-items: center;
   padding: 26px clamp(24px, 5vw, 64px);
 }
-.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-logo { max-height: 44px; max-width: 200px; display: block; }
 .brand-star { color: var(--gold); font-size: 14px; }
 .brand-name {
   font-family: var(--serif); font-size: 19px; letter-spacing: 0.14em;
@@ -211,6 +212,10 @@ main, .masthead, .foot, .summary { position: relative; z-index: 2; }
   transition: transform 0.45s var(--ease-out), box-shadow 0.45s var(--ease-out), border-color 0.3s;
 }
 .room:hover { transform: translateY(-6px); box-shadow: 0 34px 80px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.22); }
+.room.soldout { cursor: default; opacity: 0.82; }
+.room.soldout:hover { transform: none; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22); }
+.room.soldout .room-photo img, .room.soldout .room-photo .room-art { filter: grayscale(0.55) brightness(0.85); }
+.room.soldout:hover .room-photo img, .room.soldout:hover .room-photo .room-art { transform: none; }
 .room.selected { border-color: var(--gold); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(216, 180, 106, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22); }
 
 .room-photo {

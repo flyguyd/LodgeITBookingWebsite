@@ -47,6 +47,7 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
 }
 
 .hero { text-align: center; padding: 40px 6px 22px; }
+.site-logo { max-height: 52px; max-width: 220px; margin: 0 auto 10px; display: block; }
 .kicker { margin: 0 0 10px; font-size: 11px; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold); }
 .hero-title {
   margin: 0; font-family: var(--serif); font-weight: 400;
@@ -124,6 +125,9 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
 }
 @keyframes rise-in { to { opacity: 1; transform: none; } }
 .room:active { transform: scale(0.985); }
+.room.soldout { opacity: 0.82; }
+.room.soldout:active { transform: none; }
+.room.soldout .room-photo img, .room.soldout .room-photo .room-art { filter: grayscale(0.55) brightness(0.85); }
 .room.selected { border-color: var(--gold); box-shadow: 0 16px 44px rgba(0,0,0,0.4), 0 0 0 3px rgba(216,180,106,0.35), inset 0 1px 0 rgba(255,255,255,0.2); }
 
 .room-photo { height: 200px; position: relative; overflow: hidden; border-radius: 19px 19px 0 0; background: #1a1f28; }

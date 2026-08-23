@@ -106,8 +106,14 @@
         current.results = r.json.results || [];
         current.nights = r.json.nights;
         C.track('availability_viewed', { count: current.results.length });
-        if (!current.results.length) { show('empty'); return; }
-        renderResults(r.json);
+        /* Fully-booked suites appear only when Lodge Ops says so
+           (site_config.showUnavailable); the empty state judges what is
+           actually shown. */
+        var visible = current.results.filter(function (room) {
+          return room.available > 0 || config.showUnavailable === true;
+        });
+        if (!visible.length) { show('empty'); return; }
+        renderResults({ from: r.json.from, to: r.json.to, nights: r.json.nights, results: visible });
         show('results');
         els.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
       })
@@ -164,6 +170,14 @@
       photo.appendChild(art(room));
     }
     /* Factual scarcity only — no artificial urgency (spec §7). */
+    var soldOut = !(room.available > 0);
+    if (soldOut) {
+      card.classList.add('soldout');
+      var so = document.createElement('span');
+      so.className = 'room-scarce';
+      so.textContent = 'Fully booked for these dates';
+      photo.appendChild(so);
+    }
     if (room.available > 0 && room.available <= 2) {
       var sc = document.createElement('span');
       sc.className = 'room-scarce';
@@ -250,6 +264,13 @@
     }
     card.__refresh = refresh;
 
+    if (soldOut) {
+      btn.remove();
+      qtyRow.remove();
+      card.removeAttribute('role');
+      card.tabIndex = -1;
+      return card;
+    }
     function toggle() { togglePick(room); }
     card.addEventListener('click', toggle);
     card.addEventListener('keydown', function (ev) {
@@ -376,6 +397,50 @@
     els.continueNote.hidden = false;
   });
 
+
+  /* Lodge Ops-managed copy: every guest-facing string can be overridden from
+     Settings \u2192 Booking Website. Defaults live in the HTML. */
+  function setText(id, value) {
+    var el = document.getElementById(id);
+    if (el && value) el.textContent = value;
+  }
+  function applySiteText() {
+    var t = config.text || {};
+    setText('txtBrand', t.brand);
+    setText('txtFootBrand', t.brand);
+    setText('txtKicker', t.heroKicker);
+    setText('txtLine1', t.heroLine1);
+    setText('txtSub', t.heroSub);
+    setText('txtMaintTitle', t.maintenanceTitle);
+    setText('txtMaintBody', t.maintenanceBody);
+    setText('txtUnavailTitle', t.unavailableTitle);
+    setText('txtUnavailBody', t.unavailableBody);
+    setText('txtEmptyTitle', t.emptyTitle);
+    setText('txtEmptyBody', t.emptyBody);
+    setText('continueNote', t.continueNote);
+    if (t.heroLine2) {
+      var el = document.getElementById('txtLine2');
+      if (el) {
+        var words = String(t.heroLine2).trim().split(/\s+/);
+        var last = words.pop();
+        el.textContent = words.join(' ') + (words.length ? ' ' : '');
+        var em = document.createElement('em');
+        em.textContent = last;
+        el.appendChild(em);
+      }
+    }
+  }
+  function applyLogo() {
+    if (!config.logoId) return;
+    var img = document.getElementById('siteLogo');
+    if (img) {
+      img.src = MEDIA_BASE + config.logoId;
+      img.hidden = false;
+      var star = document.getElementById('brandStar');
+      if (star) star.hidden = true;
+    }
+  }
+
   // ---- boot ----
   C.startSession('desktop');
   C.fetchStatus()
@@ -383,7 +448,11 @@
     .catch(function () {});
   fetch('config.json')
     .then(function (r) { return r.ok ? r.json() : {}; })
-    .then(function (c) { config = c || {}; })
+    .then(function (c) {
+      config = c || {};
+      applySiteText();
+      applyLogo();
+    })
     .catch(function () {});
   fetch(MEDIA_BASE + 'rooms.json')
     .then(function (r) { return r.ok ? r.json() : {}; })

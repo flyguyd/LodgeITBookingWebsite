@@ -133,6 +133,8 @@ let mediaManifest = {};
 function roomsView() {
   const byRoom = {};
   for (const [id, m] of Object.entries(mediaManifest)) {
+    // '__'-prefixed room ids are reserved site assets (the logo), not suites.
+    if (String(m.roomTypeId).startsWith('__')) continue;
     (byRoom[m.roomTypeId] = byRoom[m.roomTypeId] || []).push({ id, sort: m.sortOrder ?? 0 });
   }
   const out = {};
@@ -140,6 +142,14 @@ function roomsView() {
     out[room] = list.sort((a, b) => a.sort - b.sort).map((x) => x.id);
   }
   return out;
+}
+
+/** The site logo's media id, when Lodge Ops has uploaded one. */
+function logoId() {
+  for (const [id, m] of Object.entries(mediaManifest)) {
+    if (m.roomTypeId === '__site_logo__') return id;
+  }
+  return null;
 }
 
 async function loadMediaManifest() {
@@ -245,7 +255,7 @@ const server = createServer(async (req, res) => {
   // ---- display config for the pages ----
   if (method === 'GET' && url.split('?')[0] === '/config.json') {
     stats.recordStatic(2);
-    json(res, 200, siteConfig);
+    json(res, 200, { ...siteConfig, logoId: logoId() });
     return;
   }
 

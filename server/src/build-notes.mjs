@@ -266,4 +266,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.20',
+    version: '0.1.20',
+    date: '2026-08-24T00:45:00+02:00',
+    changes: [
+      {
+        headline:
+          'The itemised display now shows all the numbers AND the arithmetic. The breakdown behind the price note grew from day rows plus a total into the full statement: each night\u0027s rate, the Accommodation subtotal, the VAT amount with its percentage, the conservation levy line carrying its own multiplication (R175 \u00d7 2 guests \u00d7 5 nights), VAT on the levy, and the Total - every figure to the cent, and the column genuinely sums to the printed total because the last night absorbs the sub-cent remainder and the total is computed from the printed lines. Also in this build: a spinner over each month of the Suite Availability calendar while its rates are still being fetched, and the mobile entry card\u0027s Adults / Children / Suites steppers no longer overlap on an iPhone.',
+        detail:
+          'core.js gains moneyC (cents formatting), levyMathLabel (the multiplication per levy basis) and stayMath (the extras as labelled lines: derived VAT reads as VAT n% on accommodation, provider figures read as the provider\u0027s, the levy carries its math); both builds\u0027 breakdown tips render nights, subtotal, lines, total in integer cents, and the tip\u0027s height cap rose from 260px (which cut the fuller statement mid-scroll) to min(60vh, 480px). BKCal.inline shows a .cal-loading veil per month while its fetch is in flight - a cache hit paints instantly with no flicker. The stepper overlap was real arithmetic: three tiles of 38px-circle steppers need 102px each where a 390pt iPhone gives 95 - media queries at 430px and 350px size the circles to the tile. VERIFIED by real Chromium on both builds: the 5-night promo statement reads 4 \u00d7 R2,174.00 + R692.53 = R9,388.53, + R1,408.28 + R1,750.00 + R262.50 = R12,809.31 exactly, on desktop hover and mobile tap; the spinner shows under a throttled network and clears into populated days; stepper tiles at 430/390/375/320pt neither overlap nor spill, and still tap at 320.',
+      },
+    ],
+  },
 ];

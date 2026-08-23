@@ -251,3 +251,25 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
   transition: background 0.15s, transform 0.15s;
 }
 .room-cta-avail:active { transform: scale(0.95); background: rgba(216, 180, 106, 0.12); }
+
+/* The itemised statement: labels may carry their arithmetic, values never
+   wrap, and the subtotal rules off the nightly rows. */
+.bk-breakdown { min-width: 280px; max-width: calc(100vw - 48px); max-height: min(60vh, 480px); }
+.bk-row span:first-child { flex: 1 1 auto; }
+.bk-row span:last-child { white-space: nowrap; }
+.bk-sub { border-top: 1px solid rgba(255, 255, 255, 0.14); margin-top: 6px; padding-top: 6px; }
+
+/* Narrow phones: the three party steppers must fit side by side without the
+   circles spilling into the neighbouring tile (seen live on an iPhone). */
+@media (max-width: 430px) {
+  .steppers { gap: 6px; }
+  .stepper { padding: 8px 3px 6px; }
+  .step { width: 34px; height: 34px; font-size: 18px; }
+  .stepper output { min-width: 20px; font-size: 16px; }
+}
+@media (max-width: 350px) {
+  .steppers { gap: 4px; }
+  .stepper { padding: 8px 2px 6px; }
+  .step { width: 30px; height: 30px; font-size: 16px; }
+  .stepper output { min-width: 16px; font-size: 15px; }
+}

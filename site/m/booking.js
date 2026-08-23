@@ -312,41 +312,53 @@
   }
 
 
-  /* The itemised note's hover card: each night's base + share of taxes &
-     fees, and the stay total. Hover on desktop, tap on touch — the tap
-     never toggles the room pick. */
+  /* The itemised note's hover card: the FULL statement — each night's rate,
+     the accommodation subtotal, every tax and levy line with its arithmetic,
+     and the total, all to the cent so the column visibly adds up (Dave,
+     2026-08-23). Hover on desktop, tap on touch — the tap never toggles the
+     room pick. */
   function attachBreakdown(price, noteEl, room, nights) {
     var bd = C.stayBreakdown(room, current.from, nights);
     if (!bd) return;
+    var party = { adults: els.adults.textContent, children: els.children.textContent };
+    var lines = C.stayMath(room, lodge, party, nights);
     var tip = document.createElement('div');
     tip.className = 'bk-breakdown';
     tip.hidden = true;
-    bd.rows.forEach(function (row) {
+    function addRow(label, cents, cls, marker) {
       var r = document.createElement('div');
-      r.className = 'bk-row';
+      r.className = 'bk-row' + (cls ? ' ' + cls : '');
       var d = document.createElement('span');
-      d.textContent = C.fmtDate(row.date);
-      if (row.free5) {
+      d.textContent = label;
+      if (marker) {
         var f = document.createElement('em');
         f.className = 'bk-free';
-        f.textContent = '5th night free';
+        f.textContent = marker;
         d.appendChild(f);
       }
       var v = document.createElement('span');
-      v.textContent = C.money(row.base, room.currency) + ' + ' + C.money(row.extras, room.currency);
+      v.textContent = C.moneyC(cents / 100, room.currency);
       r.appendChild(d);
       r.appendChild(v);
       tip.appendChild(r);
+    }
+    /* The last night absorbs the sub-cent remainder so the nights sum
+       exactly to the Accommodation line. */
+    var accC = Math.round(bd.baseTotal * 100);
+    var leftC = accC;
+    bd.rows.forEach(function (row, i) {
+      var c = i === bd.rows.length - 1 ? leftC : Math.round(row.base * 100);
+      leftC -= c;
+      addRow(C.fmtDate(row.date), c, '', row.free5 ? '5th night free' : null);
     });
-    var t = document.createElement('div');
-    t.className = 'bk-row bk-total';
-    var tl = document.createElement('span');
-    tl.textContent = 'Total';
-    var tv = document.createElement('span');
-    tv.textContent = C.money(bd.grand, room.currency);
-    t.appendChild(tl);
-    t.appendChild(tv);
-    tip.appendChild(t);
+    var totalC = accC;
+    addRow('Accommodation', accC, 'bk-sub', null);
+    lines.forEach(function (l) {
+      var c = Math.round(l.amount * 100);
+      totalC += c;
+      addRow(l.label, c, '', null);
+    });
+    addRow('Total', totalC, 'bk-total', null);
     price.style.position = 'relative';
     price.appendChild(tip);
     noteEl.className += ' has-tip';

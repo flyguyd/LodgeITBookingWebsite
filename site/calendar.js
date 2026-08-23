@@ -513,7 +513,20 @@ window.BKCal = (function () {
         grid.appendChild(cell);
       }
       block.appendChild(grid);
-      Promise.resolve(loadMonth(y, m)).then(function (data) {
+      /* A month still fetching shows a spinner over its grid; a cache hit
+         returns a plain object and paints instantly with no flicker. */
+      var pending = loadMonth(y, m);
+      var spin = null;
+      if (pending && typeof pending.then === 'function') {
+        spin = document.createElement('div');
+        spin.className = 'cal-loading';
+        var dot = document.createElement('span');
+        dot.className = 'cal-spin';
+        spin.appendChild(dot);
+        block.appendChild(spin);
+      }
+      Promise.resolve(pending).then(function (data) {
+        if (spin && spin.parentNode) spin.parentNode.removeChild(spin);
         Object.keys(cells).forEach(function (dIso) {
           var day = data.days[dIso];
           var cell = cells[dIso];

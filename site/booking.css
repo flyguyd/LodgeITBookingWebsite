@@ -362,3 +362,10 @@ main { z-index: 3; }
    kept gold at rest so it reads on the dimmed card. */
 .room-cta.room-cta-avail { border-color: rgba(216, 180, 106, 0.55); color: var(--gold); }
 .room.soldout .room-cta-avail:hover { background: rgba(216, 180, 106, 0.12); }
+
+/* The itemised statement: labels may carry their arithmetic, values never
+   wrap, and the subtotal rules off the nightly rows. */
+.bk-breakdown { min-width: 300px; max-height: min(60vh, 480px); }
+.bk-row span:first-child { flex: 1 1 auto; }
+.bk-row span:last-child { white-space: nowrap; }
+.bk-sub { border-top: 1px solid rgba(255, 255, 255, 0.14); margin-top: 6px; padding-top: 6px; }

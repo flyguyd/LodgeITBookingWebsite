@@ -25,6 +25,16 @@ window.BKCore = (function () {
     return (currency === 'ZAR' || !currency ? 'R' : currency + ' ') + s;
   }
 
+  /** money to the cent — the itemised math must visibly add up, and whole
+   *  rand can be off by one where the true amounts carry cents. */
+  function moneyC(amount, currency) {
+    var n = Number(amount);
+    if (!isFinite(n)) return '';
+    var s = Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return (n < 0 ? '−' : '') +
+      (currency === 'ZAR' || !currency ? 'R' : currency + ' ') + s;
+  }
+
   function fmtDate(iso) {
     var d = new Date(iso + 'T00:00:00Z');
     var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -246,6 +256,58 @@ window.BKCore = (function () {
     return { rows: rows, baseTotal: total, extrasTotal: extras, grand: total + extras };
   }
 
+  /** 'R175 × 2 guests × 4 nights' — how the levy total is reached, spelled
+   *  out per its basis. Empty when the lodge levies nothing. */
+  function levyMathLabel(lodge, party, nights) {
+    if (!lodge) return '';
+    var amt = Number(lodge.conservationLevy);
+    if (!isFinite(amt) || amt <= 0) return '';
+    var persons = Math.max(1,
+      ((party && Number(party.adults)) || 0) + ((party && Number(party.children)) || 0));
+    var cur = lodge.currency;
+    var g = persons + (persons === 1 ? ' guest' : ' guests');
+    var nn = nights + (nights === 1 ? ' night' : ' nights');
+    switch (lodge.conservationBasis) {
+      case 'per_room_per_night': return money(amt, cur) + ' × ' + nn;
+      case 'per_person_per_night':
+      case 'per_person_per_room_per_night': return money(amt, cur) + ' × ' + g + ' × ' + nn;
+      case 'per_person_per_stay': return money(amt, cur) + ' × ' + g;
+      case 'per_room_per_stay': return money(amt, cur) + ' per stay';
+      default: return '';
+    }
+  }
+
+  /**
+   * The itemised extras as individual lines with the arithmetic shown —
+   * every number a guest needs to reach the final amount themselves
+   * (Dave, 2026-08-23). Only ever states amounts actually charged on this
+   * room: derived VAT reads as VAT, provider figures read as the
+   * provider's, the levy line carries its own multiplication.
+   */
+  function stayMath(room, lodge, party, nights) {
+    var lines = [];
+    var vatPct = lodge && Number(lodge.vatPct) > 0 ? Number(lodge.vatPct) : 0;
+    var pctS = Math.round(vatPct * 100) / 100;
+    var taxes = isFinite(Number(room.taxesTotal)) ? Number(room.taxesTotal) : 0;
+    var fees = isFinite(Number(room.feesTotal)) ? Number(room.feesTotal) : 0;
+    var levy = room.levyAdded ? levyForStay(lodge, party, nights) : 0;
+    var levyVat = levy * vatPct / 100;
+    if (taxes > 0) {
+      lines.push({
+        label: room.vatDerived ? 'VAT ' + pctS + '% on accommodation' : 'Taxes (provider)',
+        amount: taxes,
+      });
+    }
+    var provFees = fees - levy - levyVat;
+    if (provFees > 0.005) lines.push({ label: 'Fees (provider)', amount: provFees });
+    if (levy > 0) {
+      var math = levyMathLabel(lodge, party, nights);
+      lines.push({ label: 'Conservation levy' + (math ? ' · ' + math : ''), amount: levy });
+      if (levyVat > 0) lines.push({ label: 'VAT ' + pctS + '% on levy', amount: levyVat });
+    }
+    return lines;
+  }
+
   /** Deterministic 0..359 hue from a room id, for the generative fallback
    *  treatment when a room has no photo. Same room, same colour, always. */
   function hueFor(id) {
@@ -324,6 +386,9 @@ window.BKCore = (function () {
     fifthNightAdjust: fifthNightAdjust,
     levyForStay: levyForStay,
     stayBreakdown: stayBreakdown,
+    moneyC: moneyC,
+    levyMathLabel: levyMathLabel,
+    stayMath: stayMath,
     startSession: startSession,
     track: track,
     searchAvailability: searchAvailability,
@@ -347,4 +412,7 @@ window.__bk = {
   fifthNightAdjust: window.BKCore.fifthNightAdjust,
   levyForStay: window.BKCore.levyForStay,
   stayBreakdown: window.BKCore.stayBreakdown,
+  moneyC: window.BKCore.moneyC,
+  levyMathLabel: window.BKCore.levyMathLabel,
+  stayMath: window.BKCore.stayMath,
 };

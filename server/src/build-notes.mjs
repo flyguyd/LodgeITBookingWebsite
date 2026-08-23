@@ -279,4 +279,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.21',
+    version: '0.1.21',
+    date: '2026-08-24T01:30:00+02:00',
+    changes: [
+      {
+        headline:
+          'The selected-suites bar no longer falls apart on an iPhone. Two live defects compounded (Dave\u0027s screenshot): the bar\u0027s amount was one long line - R56,592 + R9,903 taxes & fees - in a span that refused to shrink, crushing the left side to a word per line, and iOS Safari\u0027s font boosting then inflated that long line to display size. The bar now leads with the grand total the guest will actually pay, with the base-plus-extras split as a small line underneath, and both builds pin text-size-adjust to 100% so iOS renders text at its designed size. Also: the conservation levy / VAT line above the result cards is removed (the itemised statement on each card carries those facts now), and Copyright 2026 Lodge IT Pty Ltd sits at the bottom left of both builds.',
+        detail:
+          'updateSummary on both builds fills the bar total through one fillBarTotal: the grand (sum + extras) as the gold figure, then a .sum-split sub-line reading base + extras with the same honest label as the cards (VAT & levy when worked out from the replicated settings), falling back to taxes & fees only if picked rooms ever carried differing labels. Mobile CSS gives the left text flex priority and caps the total column at 58% so neither side crushes the other. The levy/VAT header applyStayNote is deleted outright - the #stayNote element stays hidden. VERIFIED by real Chromium: at 390pt the bar reads R14,111 over R10,870 + R3,241 VAT & levy at 11px, the left text holds 169px and two tidy lines, nothing overflows the viewport; the desktop bar matches; the header line is gone and the copyright sits bottom-left on both builds.',
+      },
+    ],
+  },
 ];

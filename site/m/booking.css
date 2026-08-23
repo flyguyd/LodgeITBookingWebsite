@@ -1,3 +1,4 @@
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 /* 7 Star Lodges — MOBILE. Same liquid-glass DNA as the full site, tuned for
    one thumb and maximum conversion: 48px+ targets, native pickers, a sticky
    glass bar that carries the total and the Continue button, and lighter blur
@@ -273,3 +274,16 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
   .step { width: 30px; height: 30px; font-size: 16px; }
   .stepper output { min-width: 16px; font-size: 15px; }
 }
+
+/* Sticky bar: the grand total reads large, the base + extras split small
+   under it — the long one-line amount crushed the left text to a word per
+   line on an iPhone. */
+.sticky-text { flex: 1 1 auto; }
+.sticky-total { display: flex; flex-direction: column; align-items: flex-end; flex: 0 1 auto; min-width: 0; max-width: 58%; }
+.sticky-total .sum-split {
+  font-family: var(--sans); font-size: 11px; color: var(--paper-dim);
+  text-align: right; letter-spacing: 0.02em;
+}
+
+/* Bottom-left of the page, under the full-site link. */
+.foot .foot-copy { display: block; text-align: left; margin-top: 16px; font-size: 11px; color: var(--paper-dim); opacity: 0.75; letter-spacing: 0.04em; }

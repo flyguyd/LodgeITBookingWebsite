@@ -290,21 +290,13 @@
     return [];
   }
 
-  /* The lodge-wide facts under the results heading: conservation levy and
-     VAT, straight from the Guest Suites settings. Hidden when unset. */
-  function applyStayNote() {
-    var el = document.getElementById('stayNote');
-    if (!el) return;
-    var parts = [C.levyLine(lodge), C.vatLine(lodge)].filter(Boolean);
-    el.textContent = parts.join(' · ');
-    el.hidden = !parts.length;
-  }
+  /* The levy/VAT header line above the cards was removed (Dave, 2026-08-24):
+     the itemised statement on each card is where those facts now live. */
 
   function renderResults(payload) {
     els.resultsHead.textContent =
       C.fmtDate(payload.from) + ' — ' + C.fmtDate(payload.to) + ' · ' +
       payload.nights + ' night' + (payload.nights === 1 ? '' : 's');
-    applyStayNote();
     els.roomList.textContent = '';
     payload.results.forEach(function (room, i) {
       els.roomList.appendChild(renderRoom(room, payload.nights, i));
@@ -480,6 +472,27 @@
   function inclLabel(room) {
     if (room.levyAdded) return room.providerExtras ? 'taxes, fees & levy included' : 'VAT & levy included';
     return 'taxes & fees included';
+  }
+
+  /* The summary bar's amount: the grand total the guest will actually pay,
+     with the base-plus-extras split as a small line under it — the long
+     one-line form crushed the bar's layout on a phone (Dave, 2026-08-24). */
+  function fillBarTotal(el, total, picks) {
+    el.textContent = '';
+    if (!total) return;
+    el.appendChild(document.createTextNode(
+      C.money(total.sum + total.extras, total.currency)));
+    if (total.extras > 0) {
+      var labels = {};
+      picks.forEach(function (p) { labels[extrasLabel(p.room)] = true; });
+      var keys = Object.keys(labels);
+      var split = document.createElement('span');
+      split.className = 'sum-split';
+      split.textContent = C.money(total.sum, total.currency) + ' + ' +
+        C.money(total.extras, total.currency) +
+        (keys.length === 1 ? keys[0] : ' taxes & fees');
+      el.appendChild(split);
+    }
   }
 
   function renderRoom(room, nights, index) {
@@ -733,10 +746,7 @@
       .join(' · ');
     els.sumDates.textContent = suites + ' suite' + (suites === 1 ? '' : 's');
     var total = selectionTotal();
-    els.sumTotal.textContent = total
-      ? C.money(total.sum, total.currency) +
-        (total.extras > 0 ? ' + ' + C.money(total.extras, total.currency) + ' taxes & fees' : '')
-      : '';
+    fillBarTotal(els.sumTotal, total, picks);
     els.sumNights.textContent = current.nights + ' night' + (current.nights === 1 ? '' : 's');
     els.continueNote.hidden = true;
     showSummary();

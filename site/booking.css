@@ -62,6 +62,10 @@ body {
 }
 
 main, .masthead, .foot, .summary { position: relative; z-index: 2; }
+/* main above the footer: the calendar (inside main) can overlap the footer's
+   band on a short page, and equal z with later DOM order let the footer eat
+   the calendar's clicks — Dave hit this live on the month arrows. */
+main { z-index: 3; }
 
 /* ------------------------------------------------------------- the glass */
 .glass {

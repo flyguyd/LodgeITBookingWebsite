@@ -22,6 +22,7 @@
 window.BKCal = (function () {
   'use strict';
 
+  var TODAY = new Date().toISOString().slice(0, 10);
   var DOW = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
@@ -49,7 +50,13 @@ window.BKCal = (function () {
        passes three years out) — days outside it disable, and the month
        navigation stops at the window's edges. */
     var maxIso = opts.maxIso || '';
-    var monthCache = {}; // 'YYYY-MM' -> {days,currency} (or in-flight promise)
+    /* Rates are cached PER DAY so a page-load prefetch (opts.prefetchDays —
+       the site passes 30) can warm the near future before the calendar ever
+       opens, and opening it then fetches ONLY the days still missing from
+       the visible months. Spans in flight are de-duped by their range. */
+    var dayCache = {}; // iso -> {minRate, available}
+    var currency = null;
+    var pending = {}; // 'from..to' -> promise
     /* Range selection (Dave, 2026-08-23): the first click picks check-in and
        the calendar STAYS OPEN; a click on a later day picks checkout — the
        nights are computed and handed to opts.onRange. A click at or before
@@ -74,25 +81,52 @@ window.BKCal = (function () {
 
     var view = null; // {y, m} of the FIRST rendered month
 
-    function monthKey(y, m) { return y + '-' + String(m + 1).padStart(2, '0'); }
+    function addDay(d) {
+      return new Date(Date.parse(d + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10);
+    }
 
-    function loadMonth(y, m) {
-      var key = monthKey(y, m);
-      if (monthCache[key]) return monthCache[key];
+    function fetchSpan(from, to) {
+      var key = from + '..' + to;
+      if (pending[key]) return pending[key];
+      var p = fetchRates(from, to).then(function (r) {
+        delete pending[key];
+        if (r && r.days) {
+          currency = r.currency || currency;
+          for (var k in r.days) dayCache[k] = r.days[k];
+        }
+        return null;
+      });
+      pending[key] = p;
+      return p;
+    }
+
+    /** Resolve once every in-window day of the month is in dayCache —
+     *  fetching only the missing stretch (past days are never asked for). */
+    function ensureMonth(y, m) {
       var first = iso(y, m, 1);
       var next = m === 11 ? iso(y + 1, 0, 1) : iso(y, m + 1, 1);
-      // Past days are never asked for — their cells are disabled anyway.
-      if (minIso && next <= minIso) {
-        monthCache[key] = { days: {}, currency: null };
-        return monthCache[key];
-      }
       if (minIso && first < minIso) first = minIso;
-      var p = fetchRates(first, next).then(function (r) {
-        monthCache[key] = (r && r.days) ? { days: r.days, currency: r.currency } : { days: {}, currency: null };
-        return monthCache[key];
-      });
-      monthCache[key] = p; // de-dupe concurrent loads
-      return p;
+      if (maxIso && next > addDay(maxIso)) next = addDay(maxIso);
+      if (next <= first) return Promise.resolve(null);
+      var missFrom = null;
+      var missTo = null;
+      for (var d = first; d < next; d = addDay(d)) {
+        if (!dayCache[d]) {
+          if (!missFrom) missFrom = d;
+          missTo = d;
+        }
+      }
+      if (!missFrom) return Promise.resolve(null);
+      return fetchSpan(missFrom, addDay(missTo));
+    }
+
+    /* The page-load prefetch: today's next N days, before any open. */
+    if (opts.prefetchDays > 0) {
+      var pFrom = minIso || new Date().toISOString().slice(0, 10);
+      fetchSpan(pFrom, addDay(addDaysIso(pFrom, opts.prefetchDays - 1)));
+    }
+    function addDaysIso(d, n) {
+      return new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
     }
 
     function monthCount() {
@@ -127,6 +161,7 @@ window.BKCal = (function () {
         cell.className = 'cal-day';
         if (dayIso === input.value) cell.className += ' picked';
         cell.dataset.iso = dayIso;
+        if (dayIso === TODAY) cell.className += ' today';
         var num = document.createElement('span');
         num.className = 'cal-num';
         num.textContent = String(d);
@@ -148,10 +183,10 @@ window.BKCal = (function () {
     }
 
     function fillRates(built) {
-      Promise.resolve(loadMonth(built.y, built.m)).then(function (data) {
+      var paint = function () {
         if (!view) return;
         Object.keys(built.cells).forEach(function (dIso) {
-          var day = data.days[dIso];
+          var day = dayCache[dIso];
           var cell = built.cells[dIso];
           if (!day || cell.disabled) return;
           var el = cell.querySelector('.cal-rate');
@@ -159,10 +194,12 @@ window.BKCal = (function () {
             cell.classList.add('full');
             el.textContent = '—';
           } else if (day.minRate != null && isFinite(Number(day.minRate))) {
-            el.textContent = fmtShort(Number(day.minRate), data.currency);
+            el.textContent = fmtShort(Number(day.minRate), currency);
           }
         });
-      });
+      };
+      paint(); // whatever the prefetch already brought in shows instantly
+      ensureMonth(built.y, built.m).then(paint);
     }
 
     function render(y, m) {

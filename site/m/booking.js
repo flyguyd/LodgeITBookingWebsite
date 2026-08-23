@@ -127,6 +127,9 @@
       fetchRates: C.fetchRateCalendar,
       minIso: C.isoToday(0),
       maxIso: C.isoToday(365 * 3),
+      /* Warm the next 30 days the moment the page loads, so the calendar
+         opens with its rates already there. */
+      prefetchDays: 30,
       onRange: function (fromIso, nights) { setNights(nights); },
     });
     /* The native select popup cannot be styled — dress Nights in the site's

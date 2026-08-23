@@ -69,6 +69,7 @@
 }
 .cal-day:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); transform: translateY(-1px); }
 .cal-day:active:not(:disabled) { transform: scale(0.95); }
+.cal-day.today { outline: 1px dashed rgba(201, 168, 106, 0.55); }
 .cal-day.picked { background: rgba(201, 168, 106, 0.22); outline: 1px solid var(--gold, #c9a86a); }
 .cal-day.in-range { background: rgba(201, 168, 106, 0.1); }
 .cal-day.past { opacity: 0.28; cursor: default; }

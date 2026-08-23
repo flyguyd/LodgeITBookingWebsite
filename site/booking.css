@@ -357,3 +357,8 @@ main { z-index: 3; }
 .bk-total span { color: var(--gold); font-size: 13px; }
 
 .bk-free { color: var(--gold); font-style: normal; font-size: 10px; margin-left: 7px; letter-spacing: 0.04em; }
+
+/* Sold-out cards: the CTA leads to the suite's own availability calendar,
+   kept gold at rest so it reads on the dimmed card. */
+.room-cta.room-cta-avail { border-color: rgba(216, 180, 106, 0.55); color: var(--gold); }
+.room.soldout .room-cta-avail:hover { background: rgba(216, 180, 106, 0.12); }

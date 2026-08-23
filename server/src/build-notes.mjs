@@ -240,4 +240,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.18',
+    version: '0.1.18',
+    date: '2026-08-23T23:05:00+02:00',
+    changes: [
+      {
+        headline:
+          'Show availability now lives on the result cards themselves. Every unavailable suite card carries the button directly - one tap from the results straight into that suite\u0027s own filtered calendar, without opening the suite details first. On desktop the card\u0027s Add to stay slot becomes the Show availability button (gold at rest so it reads on the greyed card); on mobile, where sold-out cards had no button at all, one is added. The same calendar is still reachable from inside the suite lightbox as before.',
+        detail:
+          'Both builds extract the Suite Availability opener into one openAvailability(room) shared by the card button and the lightbox\u0027s cta, so the two doors stay identical. The card button stops the click from bubbling into the card (which would have opened the suite lightbox underneath), and the desktop card\u0027s refresh() is stubbed on sold-out cards so pick changes elsewhere can no longer rewrite the button back to Add to stay. VERIFIED by real Chromium on both builds: sold-out cards each carried the button while the available card kept Add to stay; clicking it opened exactly ONE lightbox - Suite Availability, subtitled with the suite\u0027s name, its requests filtered by roomTypeId - picked nothing, and Escape returned to the results; the plain card click still opens the full suite lightbox with its own button. Rides the engine 0.1.15 per-suite calendar already required by 0.1.17.',
+      },
+    ],
+  },
 ];

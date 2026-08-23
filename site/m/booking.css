@@ -240,3 +240,14 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
 .bk-total span { color: var(--gold); font-size: 13px; }
 
 .bk-free { color: var(--gold); font-style: normal; font-size: 10px; margin-left: 7px; letter-spacing: 0.04em; }
+
+/* Sold-out cards: a way in to the suite's own availability calendar. */
+.room-cta-avail {
+  display: inline-block; margin-top: 12px;
+  border: 1px solid rgba(216, 180, 106, 0.55); border-radius: 999px;
+  background: transparent; color: var(--gold); cursor: pointer;
+  font: 500 12.5px/1 var(--sans); letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 12px 22px;
+  transition: background 0.15s, transform 0.15s;
+}
+.room-cta-avail:active { transform: scale(0.95); background: rgba(216, 180, 106, 0.12); }

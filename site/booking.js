@@ -391,6 +391,28 @@
     return { rows: rows, totalMax: sc.maxTotalGuests != null ? String(sc.maxTotalGuests) : null };
   }
 
+  /* An unavailable suite offers its own availability calendar: our calendar,
+     filtered to just this suite's rates. Reached from the sold-out card's
+     button and from inside the suite lightbox alike. */
+  function openAvailability(room) {
+    if (!window.BKLight || !window.BKCal) return;
+    var holder = document.createElement('div');
+    window.BKCal.inline(holder, {
+      fetchRates: function (f, t) {
+        return C.fetchRateCalendar(f, t, String(room.roomTypeId));
+      },
+      minIso: C.isoToday(0),
+      maxIso: C.isoToday(365 * 3),
+    });
+    window.BKLight.open({
+      title: 'Suite Availability',
+      subtitle: room.name,
+      noPhoto: true,
+      photos: [],
+      customNode: holder,
+    });
+  }
+
   /* The card click opens the full story — gallery, description, amenities,
      pricing — and the Add action lives inside (Dave, 2026-08-23). */
   function openLightbox(room, nights) {
@@ -433,25 +455,7 @@
         togglePick(room);
         return !!current.picks[room.roomTypeId];
       },
-      /* An unavailable suite offers its own availability calendar: our
-         calendar, filtered to just this suite's rates. */
-      onShowAvailability: soldOut ? function () {
-        var holder = document.createElement('div');
-        window.BKCal.inline(holder, {
-          fetchRates: function (f, t) {
-            return C.fetchRateCalendar(f, t, String(room.roomTypeId));
-          },
-          minIso: C.isoToday(0),
-          maxIso: C.isoToday(365 * 3),
-        });
-        window.BKLight.open({
-          title: 'Suite Availability',
-          subtitle: room.name,
-          noPhoto: true,
-          photos: [],
-          customNode: holder,
-        });
-      } : null,
+      onShowAvailability: soldOut ? function () { openAvailability(room); } : null,
     });
   }
 
@@ -617,8 +621,16 @@
       if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); details(); }
     });
     if (soldOut) {
-      btn.remove();
+      /* The Add action makes no sense here; the CTA becomes the way in to
+         this suite's own availability calendar instead. */
       qtyRow.remove();
+      card.__refresh = function () {}; /* refresh() must not rewrite the CTA */
+      btn.textContent = 'Show availability';
+      btn.classList.add('room-cta-avail');
+      btn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        openAvailability(room);
+      });
       return card;
     }
     btn.addEventListener('click', function (ev) { ev.stopPropagation(); togglePick(room); });

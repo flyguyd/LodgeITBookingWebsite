@@ -23,6 +23,10 @@
   /* Display config managed on the Lodge Ops Booking Website page —
      rateDisplay: 'inclusive' | 'separate'. */
   var config = {};
+  /* Replicated suite settings + lodge levy/VAT from Lodge Ops, cached by the
+     site server and served as /suites.json. */
+  var suites = {};
+  var lodge = null;
   /* One level up from /m/ — resolves correctly under the /book/ mount too. */
   var MEDIA_BASE = '../media/';
 
@@ -124,10 +128,21 @@
     return [];
   }
 
+  /* The lodge-wide facts under the results heading: conservation levy and
+     VAT, straight from the Guest Suites settings. Hidden when unset. */
+  function applyStayNote() {
+    var el = document.getElementById('stayNote');
+    if (!el) return;
+    var parts = [C.levyLine(lodge), C.vatLine(lodge)].filter(Boolean);
+    el.textContent = parts.join(' · ');
+    el.hidden = !parts.length;
+  }
+
   function renderResults(payload) {
     els.resultsHead.textContent =
       C.fmtDate(payload.from) + ' — ' + C.fmtDate(payload.to) + ' · ' +
       payload.nights + ' night' + (payload.nights === 1 ? '' : 's');
+    applyStayNote();
     els.roomList.textContent = '';
     payload.results.forEach(function (room, i) {
       els.roomList.appendChild(renderRoom(room, payload.nights, i));
@@ -209,14 +224,46 @@
     }
     body.appendChild(top);
 
+    /* The lodge's own words and facts win over the provider's. */
+    var sc = suites[String(room.roomTypeId)] || null;
+    var descText = (sc && sc.description) || room.description;
+    if (descText) {
+      var desc = document.createElement('p');
+      desc.className = 'room-desc';
+      desc.textContent = String(descText).replace(/<[^>]*>/g, '');
+      body.appendChild(desc);
+    }
+
     var meta = document.createElement('div');
     meta.className = 'room-meta';
-    if (room.maxGuests) meta.appendChild(tag('Sleeps ' + room.maxGuests));
+    var sleeps = (sc && sc.maxTotalGuests) || room.maxGuests;
+    if (sleeps) meta.appendChild(tag('Sleeps ' + sleeps));
+    if (sc && sc.pool) meta.appendChild(tag(sc.pool));
+    if (sc && sc.style) meta.appendChild(tag(sc.style));
     if (room.restrictions && room.restrictions.minLos > 1) {
       meta.appendChild(tag('Min ' + room.restrictions.minLos + ' nights'));
     }
     meta.appendChild(tag('Tap to add'));
     body.appendChild(meta);
+
+    if (sc && sc.amenities && sc.amenities.length) {
+      var am = document.createElement('div');
+      am.className = 'room-amenities';
+      sc.amenities.forEach(function (a) {
+        var chip = document.createElement('span');
+        chip.className = 'room-am';
+        chip.textContent = a;
+        am.appendChild(chip);
+      });
+      body.appendChild(am);
+    }
+    var xg = C.extraGuestsLine(sc, room.currency);
+    if (xg) {
+      var xEl = document.createElement('p');
+      xEl.className = 'room-extra';
+      xEl.textContent = xg;
+      body.appendChild(xEl);
+    }
 
     var qtyRow = document.createElement('div');
     qtyRow.className = 'room-qty';
@@ -417,5 +464,12 @@
   fetch(MEDIA_BASE + 'rooms.json')
     .then(function (r) { return r.ok ? r.json() : {}; })
     .then(function (m) { media = m || {}; })
+    .catch(function () {});
+  fetch('../suites.json')
+    .then(function (r) { return r.ok ? r.json() : {}; })
+    .then(function (j) {
+      suites = (j && j.suites) || {};
+      lodge = (j && j.lodge) || null;
+    })
     .catch(function () {});
 })();

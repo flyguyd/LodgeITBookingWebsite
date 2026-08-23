@@ -125,6 +125,39 @@ async function syncConfig() {
   }
 }
 
+// ---- replicated suite content (settings, amenities, levy + VAT) ----
+// Pushed from Lodge Ops to the engine on its 15-minute cadence; cached here
+// on disk so a restart (or an unreachable engine) never blanks the pages.
+let suiteContent = {};
+
+async function loadSuiteContent() {
+  try {
+    const parsed = JSON.parse(await readFile(join(DATA_DIR, 'suite-content.json'), 'utf8'));
+    if (parsed && typeof parsed === 'object') suiteContent = parsed;
+  } catch {
+    suiteContent = {};
+  }
+}
+
+async function syncSuiteContent() {
+  const r = await engineCall('GET', '/api/booking/suite-content');
+  if (r.status !== 200 || !r.body) return;
+  try {
+    const parsed = JSON.parse(r.body);
+    if (!parsed || typeof parsed !== 'object') return;
+    if (JSON.stringify(parsed) !== JSON.stringify(suiteContent)) {
+      suiteContent = parsed;
+      await mkdir(DATA_DIR, { recursive: true });
+      await writeFile(join(DATA_DIR, 'suite-content.json'), JSON.stringify(suiteContent));
+      console.log(
+        `[site] suite content synced: ${Object.keys(suiteContent.suites ?? {}).length} suite types`,
+      );
+    }
+  } catch {
+    /* keep the last good copy */
+  }
+}
+
 // ---- the suite-media cache ----
 // manifest: id -> { roomTypeId, contentType, sortOrder }; rooms.json is the
 // public view the booking pages read (roomTypeId -> [ids, best first]).
@@ -259,6 +292,13 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // ---- replicated suite settings for the pages ----
+  if (method === 'GET' && url.split('?')[0] === '/suites.json') {
+    stats.recordStatic(2);
+    json(res, 200, suiteContent);
+    return;
+  }
+
   // ---- the suite-media cache: the lodge's own photography ----
   if (method === 'GET' && url.split('?')[0] === '/media/rooms.json') {
     stats.recordStatic(2);
@@ -389,8 +429,11 @@ server.listen(PORT, () => {
   setInterval(() => void heartbeat(), HEARTBEAT_MS).unref();
   void loadMediaManifest().then(() => void syncMedia().catch(() => {}));
   void syncConfig().catch(() => {});
+  void loadSuiteContent().then(() => void syncSuiteContent().catch(() => {}));
   setInterval(() => void syncMedia().catch(() => {}), MEDIA_SYNC_MS).unref();
-  // Display config is light — re-pull on the heartbeat cadence so a change
-  // made in Lodge Ops shows on the site within about a minute.
+  // Display config and suite content are light — re-pull on the heartbeat
+  // cadence so a change made in Lodge Ops shows on the site within about a
+  // minute of the engine having it.
   setInterval(() => void syncConfig().catch(() => {}), HEARTBEAT_MS).unref();
+  setInterval(() => void syncSuiteContent().catch(() => {}), HEARTBEAT_MS).unref();
 });

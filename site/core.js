@@ -69,6 +69,52 @@ window.BKCore = (function () {
     return { headline: rate + extras, note: { kind: 'included' } };
   }
 
+  /* ---- replicated suite content (Lodge Ops → engine → /suites.json) ---- */
+
+  var BASIS_WORDS = {
+    per_room_per_night: 'per room per night',
+    per_person_per_night: 'per person per night',
+    per_person_per_stay: 'per person per stay',
+    per_room_per_stay: 'per room per stay',
+    per_person_per_room_per_night: 'per person per room per night',
+  };
+
+  /** 'Conservation levy R150 per person per night' — null when not levied
+   *  (amount absent or 0). Never invents an amount. */
+  function levyLine(lodge) {
+    if (!lodge) return null;
+    var amount = Number(lodge.conservationLevy);
+    if (!isFinite(amount) || amount <= 0) return null;
+    var basis = BASIS_WORDS[lodge.conservationBasis] ||
+      String(lodge.conservationBasis || '').replace(/_/g, ' ');
+    return 'Conservation levy ' + money(amount, lodge.currency) + (basis ? ' ' + basis : '');
+  }
+
+  /** 'VAT 15%' — null when the lodge has not supplied a percentage. */
+  function vatLine(lodge) {
+    if (!lodge) return null;
+    var pct = Number(lodge.vatPct);
+    if (!isFinite(pct) || pct <= 0) return null;
+    return 'VAT ' + (Math.round(pct * 100) / 100) + '%';
+  }
+
+  /** 'Extra guests per night: adult R350 · child R200 · infant free' — only
+   *  the costs the lodge has set; null when none are. A configured 0 reads
+   *  as free, honestly. */
+  function extraGuestsLine(suite, currency) {
+    if (!suite) return null;
+    var parts = [];
+    [['extraAdultCost', 'adult'], ['extraChildCost', 'child'], ['extraInfantCost', 'infant']]
+      .forEach(function (d) {
+        var v = suite[d[0]];
+        if (v == null) return;
+        var n = Number(v);
+        if (!isFinite(n)) return;
+        parts.push(d[1] + ' ' + (n > 0 ? money(n, currency) : 'free'));
+      });
+    return parts.length ? 'Extra guests per night: ' + parts.join(' · ') : null;
+  }
+
   /** Deterministic 0..359 hue from a room id, for the generative fallback
    *  treatment when a room has no photo. Same room, same colour, always. */
   function hueFor(id) {
@@ -129,6 +175,9 @@ window.BKCore = (function () {
     captureSource: captureSource,
     hueFor: hueFor,
     priceParts: priceParts,
+    levyLine: levyLine,
+    vatLine: vatLine,
+    extraGuestsLine: extraGuestsLine,
     startSession: startSession,
     track: track,
     searchAvailability: searchAvailability,
@@ -144,4 +193,7 @@ window.__bk = {
   captureSource: window.BKCore.captureSource,
   hueFor: window.BKCore.hueFor,
   priceParts: window.BKCore.priceParts,
+  levyLine: window.BKCore.levyLine,
+  vatLine: window.BKCore.vatLine,
+  extraGuestsLine: window.BKCore.extraGuestsLine,
 };

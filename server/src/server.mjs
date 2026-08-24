@@ -244,6 +244,68 @@ async function syncMedia() {
   }
 }
 
+/* ---- the site's own engine session (0.1.27) ----
+   The site opens ONE session on the engine when it starts and holds it
+   open for its whole life: the engine's per-night rate cache is keyed by
+   session, so a held session is what makes repeat quotes cheap. The engine
+   answers its own TTL when the session opens — the keepalive cadence is
+   derived from that (a third of the TTL), never guessed here, so changing
+   RATE_SESSION_TTL_MS on the engine is enough. A lapsed or dropped session
+   is simply re-opened on the next keepalive; guests never see it. */
+const SITE_SESSION_KEY = 'site-' + Math.random().toString(36).slice(2, 10) + '-' + process.pid;
+let sessionTtlMs = null;
+let sessionOpenedAt = null;
+let sessionTimer = null;
+
+async function openEngineSession() {
+  const body = JSON.stringify({ sessionKey: SITE_SESSION_KEY, label: 'booking website' });
+  const r = await engineCall('POST', '/api/engine/rate-engine/sessions', body);
+  if (r.status !== 200 && r.status !== 201) {
+    console.warn(`[site] engine session not opened (status ${r.status}) — rates still answer, uncached`);
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(r.body ?? '{}');
+    const ttl = Number(parsed.ttlMs);
+    if (Number.isFinite(ttl) && ttl > 0) sessionTtlMs = ttl;
+  } catch {
+    /* the session is open even if the body surprised us */
+  }
+  sessionOpenedAt = Date.now();
+  // A third of the TTL: two keepalives may be lost before a session lapses.
+  const every = Math.max(15_000, Math.floor((sessionTtlMs ?? 300_000) / 3));
+  if (sessionTimer) clearInterval(sessionTimer);
+  sessionTimer = setInterval(() => void keepEngineSession(), every);
+  sessionTimer.unref?.();
+  console.log(
+    `[site] engine session ${SITE_SESSION_KEY} open (ttl ${Math.round((sessionTtlMs ?? 0) / 1000)}s, keepalive ${Math.round(every / 1000)}s)`,
+  );
+  return true;
+}
+
+async function keepEngineSession() {
+  // The label rides the keepalive so an engine restart re-registers this
+  // session under its own name rather than as an anonymous key.
+  const r = await engineCall(
+    'PUT',
+    `/api/engine/rate-engine/sessions/${encodeURIComponent(SITE_SESSION_KEY)}`,
+    JSON.stringify({ label: 'booking website' }),
+  );
+  // The engine re-opens an unknown key itself; anything else means the
+  // engine is unreachable and the next tick tries again.
+  if (r.status === 0) return;
+  if (r.status !== 200) void openEngineSession();
+}
+
+async function closeEngineSession() {
+  if (sessionTimer) clearInterval(sessionTimer);
+  await engineCall(
+    'DELETE',
+    `/api/engine/rate-engine/sessions/${encodeURIComponent(SITE_SESSION_KEY)}`,
+    '',
+  ).catch(() => {});
+}
+
 /* ---- rates from the Rate Engine (0.1.26) ----
    The two rate-bearing guest answers are rewritten before they leave this
    server: provider (Cloudbeds) rate figures stripped, the Rate Engine's
@@ -253,7 +315,15 @@ async function syncMedia() {
 async function engineRatesQuote(roomTypeIds, from, to, ip) {
   const ids = [...new Set(roomTypeIds.map(String))].slice(0, 20);
   if (!ids.length || !from || !to || to <= from) return null;
-  const raw = JSON.stringify({ roomTypeIds: ids, from, to, sessionKey: siteSessionKey(ip) });
+  // The per-visitor key hangs off the site's own held session (0.1.27), so
+  // the engine sees one open session for the site and still keeps each
+  // visitor's answers consistent within it.
+  const raw = JSON.stringify({
+    roomTypeIds: ids,
+    from,
+    to,
+    sessionKey: `${SITE_SESSION_KEY}|${siteSessionKey(ip)}`,
+  });
   const r = await engineCall('POST', '/api/engine/rates/quote', raw);
   if (r.status !== 200 || !r.body) return null;
   try {
@@ -491,6 +561,8 @@ server.listen(PORT, () => {
   }
   void heartbeat();
   setInterval(() => void heartbeat(), HEARTBEAT_MS).unref();
+  // Hold one engine session open for the site's whole life (0.1.27).
+  void openEngineSession().catch(() => {});
   void loadMediaManifest().then(() => void syncMedia().catch(() => {}));
   void syncConfig().catch(() => {});
   void loadSuiteContent().then(() => void syncSuiteContent().catch(() => {}));
@@ -501,3 +573,15 @@ server.listen(PORT, () => {
   setInterval(() => void syncConfig().catch(() => {}), HEARTBEAT_MS).unref();
   setInterval(() => void syncSuiteContent().catch(() => {}), HEARTBEAT_MS).unref();
 });
+
+/* A clean shutdown closes the engine session (and with it the session's
+   cached answers) instead of leaving it to time out. */
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => {
+    void closeEngineSession().finally(() => {
+      server.close(() => process.exit(0));
+      // Never hang a deploy on a stuck socket.
+      setTimeout(() => process.exit(0), 3_000).unref?.();
+    });
+  });
+}

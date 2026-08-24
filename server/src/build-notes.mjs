@@ -357,4 +357,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.27',
+    version: '0.1.27',
+    date: '2026-08-25T09:00:00+02:00',
+    changes: [
+      {
+        headline:
+          'AVAILABILITY NOW COMES FROM THE RATE ENGINE TOO (needs engine 0.1.24), and the site holds ONE engine session open for its whole life. Searches and the date-picker calendar are answered from the engine\u0027s own inventory instead of Cloudbeds - a 30-night search dropped to 22ms and a 30-day calendar to 14ms, from hundreds of milliseconds against a fast mock and many seconds against the real provider. A suite the engine has no availability for (dates beyond its synced window) now reads \u0022Availability on request\u0022 on both builds instead of being drawn as sold out, which was a guess.',
+        detail:
+          'The session is opened at boot with a label, kept alive at a THIRD of whatever TTL the engine answers (so two keepalives may be lost before it lapses, and changing the engine\u0027s TTL is enough - the site derives, never guesses), re-opened automatically if the engine restarts, and closed on SIGTERM/SIGINT so its cached answers go with it rather than timing out. Every guest rate call now rides that held session: the per-visitor cache key hangs off it as sessionKey|visitor-hash, which the engine rolls up into the session\u0027s own query counts and average response time. VERIFIED against the real chain (mock Cloudbeds -> engine 0.1.24 -> site): the session shows open on the engine with its label and accumulating counts, availability answers carry availabilitySource rate-engine with zero provider rate figures, a genuinely sold-out stay reports 0 with availabilityKnown true while a stay beyond the window reports availabilityKnown false, and both builds still price entirely from the Rate Engine.',
+      },
+    ],
+  },
 ];

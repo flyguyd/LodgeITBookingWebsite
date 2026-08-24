@@ -389,7 +389,8 @@
     if (!window.BKLight) { togglePick(room); return; }
     var sc = suites[String(room.roomTypeId)] || null;
     var pp = C.priceParts(room, config);
-    var soldOut = !(room.available > 0);
+    var soldOut = !(room.available > 0) && room.availabilityKnown !== false;
+    var availUnknown = room.availabilityKnown === false;
     var chips = [];
     if (room.promoFree5) chips.push({ text: '5th night\u2019s accommodation free', gold: true });
     var sleeps = (sc && sc.maxTotalGuests) || room.maxGuests;
@@ -488,13 +489,22 @@
     } else {
       photo.appendChild(art(room));
     }
-    var soldOut = !(room.available > 0);
+    var soldOut = !(room.available > 0) && room.availabilityKnown !== false;
+    var availUnknown = room.availabilityKnown === false;
     if (soldOut) {
       card.classList.add('soldout');
       var so = document.createElement('span');
       so.className = 'room-scarce';
       so.textContent = 'Unavailable for your dates';
       photo.appendChild(so);
+    } else if (availUnknown) {
+      /* The engine holds no availability for these dates (beyond its synced
+         window, or a suite it has never been told about). Said plainly —
+         never rendered as sold out, which would be a guess. */
+      var unk = document.createElement('span');
+      unk.className = 'room-scarce';
+      unk.textContent = 'Availability on request';
+      photo.appendChild(unk);
     }
     if (room.available > 0 && room.available <= 2) {
       var sc = document.createElement('span');

@@ -312,17 +312,22 @@ async function closeEngineSession() {
    quote for the OFFERED plans folded in. No fallback by design — an
    unpriced stay is presented as unpriced, never as a provider figure the
    lodge no longer controls. */
-async function engineRatesQuote(roomTypeIds, from, to, ip) {
+async function engineRatesQuote(roomTypeIds, from, to, ip, scan = false) {
   const ids = [...new Set(roomTypeIds.map(String))].slice(0, 20);
   if (!ids.length || !from || !to || to <= from) return null;
   // The per-visitor key hangs off the site's own held session (0.1.27), so
   // the engine sees one open session for the site and still keeps each
   // visitor's answers consistent within it.
+  // `scan` declares a sweep rather than a guest quote (0.1.28): the engine
+  // then counts the nights as traffic only, keeps them out of the demand
+  // heat map, does not let the sweep evict a guest's held rates, and does
+  // not throttle us. Undeclared sweeps get slowed down on purpose.
   const raw = JSON.stringify({
     roomTypeIds: ids,
     from,
     to,
     sessionKey: `${SITE_SESSION_KEY}|${siteSessionKey(ip)}`,
+    scan,
   });
   const r = await engineCall('POST', '/api/engine/rates/quote', raw);
   if (r.status !== 200 || !r.body) return null;
@@ -358,7 +363,9 @@ async function withEngineRates(kind, urlPath, body, ip) {
     // One suite when the picker is filtered, otherwise every replicated one.
     const one = params.get('roomTypeId');
     const ids = one ? [one] : Object.keys(suiteContent.suites ?? {}).filter((id) => id.charAt(0) !== '_');
-    const quote = await engineRatesQuote(ids, from, to, ip);
+    // The picker paints up to 45 nights across every suite — a scan, not a
+    // guest pricing one stay. Flagged so it never reads as guest demand.
+    const quote = await engineRatesQuote(ids, from, to, ip, true);
     return JSON.stringify(calendarWithEngineRates(parsed, quote));
   }
   return body;

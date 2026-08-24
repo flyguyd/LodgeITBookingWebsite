@@ -370,4 +370,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.28',
+    version: '0.1.28',
+    date: '2026-08-25T17:00:00+02:00',
+    changes: [
+      {
+        headline:
+          'THE DATE PICKER NOW DECLARES ITSELF A SCAN (needs engine 0.1.29). Painting the calendar sweeps up to 45 nights across every suite, and the engine was counting each of those nights as a guest considering that date - which quietly ruined the demand heat map. The calendar now sends scan: true; a guest searching a stay still does not, because that one IS demand.',
+        detail:
+          'One flag, on one of the two rate-bearing paths, chosen deliberately: the picker calendar is a survey of what the lodge could sell, the availability search is a person looking at a stay. Declaring it buys the site three things from the engine - the sweep stays off the demand counter, it reads the session rate cache but never writes to it (so painting a calendar can never evict the rates a guest is being shown mid-visit), and it is exempt from the throttle that progressively slows undeclared sweepers. VERIFIED through the real chain against a live engine: a 30-night picker calendar added 90 nights to the all-requests counter and ZERO to the quotes-only counter, while a 3-night guest search added to both. Counterpart: engine 0.1.29.',
+      },
+    ],
+  },
 ];

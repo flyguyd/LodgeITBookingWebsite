@@ -495,13 +495,23 @@ const server = createServer(async (req, res) => {
   // per-IP guest limiter, which exists to protect the engine from a
   // stranger and would throttle a load run to 120/min — useless. The
   // limiter is replaced here by explicit caps, not simply dropped.
-  if (LOAD_TEST && url.startsWith('/api/loadtest/')) {
+  // Under /api/public/ ON PURPOSE (0.1.31): the nginx edge proxies exactly
+  // /api/public/ and /book/ to this server. Routes at /api/loadtest/ match
+  // no location there, so behind the edge they never arrived at all and the
+  // lightbox reported the harness "switched off" — which was true of what
+  // it could see and useless as a diagnosis. This prefix is already routed,
+  // so the harness needs no nginx change to work on webbox.
+  if (url.startsWith('/api/public/loadtest/')) {
     const path = url.split('?')[0];
 
-    // What the page needs to know before it offers the harness at all.
-    if (method === 'GET' && path === '/api/loadtest/status') {
+    // Status answers WHETHER OR NOT the harness is enabled, so the page can
+    // tell three different situations apart: running, deliberately switched
+    // off here, and no harness at this address at all (an old build, or an
+    // edge not passing the path). Only the third is a 404. Saying "switched
+    // off" for all three is what sent Dave hunting the wrong fault.
+    if (method === 'GET' && path === '/api/public/loadtest/status') {
       json(res, 200, {
-        enabled: true,
+        enabled: LOAD_TEST,
         maxSessions: LOAD_MAX,
         maxSeconds: LOAD_MAX_SEC,
         inflight: loadInflight,
@@ -510,9 +520,15 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // Everything that generates traffic stays behind the switch.
+    if (!LOAD_TEST) {
+      json(res, 404, { code: 'NOT_FOUND', message: 'The load harness is switched off.' });
+      return;
+    }
+
     // The engine's own vital signs during a run: heap, cache, sessions.
     // This is the half that shows GC — the browser can only see latency.
-    if (method === 'GET' && path === '/api/loadtest/engine') {
+    if (method === 'GET' && path === '/api/public/loadtest/engine') {
       const r = await engineCall('GET', '/api/engine/rate-engine/state');
       if (r.status !== 200 || !r.body) {
         json(res, 503, { code: 'ENGINE_UNAVAILABLE', message: 'The engine did not answer.' });
@@ -535,7 +551,7 @@ const server = createServer(async (req, res) => {
     // engine session key, so N workers are N DISTINCT sessions filling the
     // cache — which is the whole point, since a shared key would just hit
     // the same cached nights and stress nothing.
-    if (method === 'POST' && path === '/api/loadtest/quote') {
+    if (method === 'POST' && path === '/api/public/loadtest/quote') {
       if (loadInflight >= LOAD_INFLIGHT_MAX) {
         json(res, 429, { code: 'LOAD_BUSY', message: 'Too many load requests in flight.' });
         return;

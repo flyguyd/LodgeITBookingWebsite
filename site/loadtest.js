@@ -201,25 +201,44 @@ window.BKLoad = (function () {
     b.textContent = msg || '';
   }
 
+  /* Reports WHICH failure it hit, not just that it failed. The first cut
+     said "switched off on this server" for a 404 as well as for a genuine
+     LOAD_TEST=0, and a 404 is what an out-of-date build or an edge that is
+     not routing this path looks like — three very different fixes wearing
+     one message. */
   function loadCaps() {
-    fetch('/api/loadtest/status', { cache: 'no-store' })
-      .then(function (r) { return r.ok ? r.json() : null; })
+    var status = 0;
+    fetch('/api/public/loadtest/status', { cache: 'no-store' })
+      .then(function (r) {
+        status = r.status;
+        return r.ok ? r.json() : null;
+      })
       .then(function (j) {
         if (!el) return;
-        if (!j || !j.enabled) {
-          caps = null;
-          el.box.querySelector('#blt-caps').textContent = 'the harness is switched off on this server';
-          el.box.querySelector('#blt-go').disabled = true;
+        if (j && j.enabled) {
+          caps = j;
+          el.box.querySelector('#blt-caps').textContent =
+            'up to ' + j.maxSessions + ' sessions, ' + j.maxSeconds + 's a run · site ' + (j.version || '?');
           return;
         }
-        caps = j;
+        caps = null;
+        el.box.querySelector('#blt-go').disabled = true;
         el.box.querySelector('#blt-caps').textContent =
-          'up to ' + j.maxSessions + ' sessions, ' + j.maxSeconds + 's a run';
+          status === 404
+            ? 'no harness at this address (HTTP 404)'
+            : 'the harness is switched off here (LOAD_TEST=0)';
+        if (status === 404) {
+          err('The server answered 404 for /api/public/loadtest/status. Either this ' +
+            'site build is older than 0.1.31, or the web server in front of it is not ' +
+            'passing that path through. The page itself is fine.');
+        }
       })
       .catch(function () {
         if (!el) return;
+        caps = null;
         el.box.querySelector('#blt-caps').textContent = 'the harness could not be reached';
         el.box.querySelector('#blt-go').disabled = true;
+        err('The status call did not complete at all — the site server may be down.');
       });
   }
 
@@ -292,7 +311,7 @@ window.BKLoad = (function () {
     var from = isoDay(offset);
     var to = isoDay(offset + r.nights);
     var t0 = performance.now();
-    fetch('/api/loadtest/quote', {
+    fetch('/api/public/loadtest/quote', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ worker: 'w' + w.id, from: from, to: to }),
@@ -327,7 +346,7 @@ window.BKLoad = (function () {
 
   function pollEngine() {
     if (!run) return;
-    fetch('/api/loadtest/engine', { cache: 'no-store' })
+    fetch('/api/public/loadtest/engine', { cache: 'no-store' })
       .then(function (res) { return res.ok ? res.json() : null; })
       .then(function (j) {
         if (!run || !el) return;

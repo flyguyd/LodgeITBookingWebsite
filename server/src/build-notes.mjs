@@ -409,4 +409,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.31',
+    version: '0.1.31',
+    date: '2026-08-25T20:40:00+02:00',
+    changes: [
+      {
+        headline:
+          'FIX: the load harness reported itself \u0022switched off on this server\u0022 everywhere behind nginx. Its routes sat at /api/loadtest/, and the edge proxies exactly two paths to this server - /api/public/ and /book/ - so nothing at /api/loadtest/ ever reached it. They now live under /api/public/loadtest/, which is already routed, so the harness works on webbox with NO nginx change.',
+        detail:
+          'Reproduced before fixing, against a stand-in edge forwarding only the locations the real conf actually has: the old path 404s through it, the new one answers, and a full 25-session run drives cleanly from the page at /book/ - 735 requests at 181/s with the engine heap and cache both reported. The MESSAGE was the second half of the fault and is fixed too. It said \u0022switched off\u0022 for a missing route as well as for a genuine LOAD_TEST=0, which are opposite problems wearing one sentence, and it sent the hunt in the wrong direction. Status now answers whether or not the harness is enabled, so the page distinguishes three states in its own words: running (with the caps and the site version), \u0022switched off here (LOAD_TEST=0)\u0022, and \u0022no harness at this address (HTTP 404)\u0022 - the last naming both of ITS causes, an out-of-date build or an edge not passing the path. Only status answers when disabled; every route that generates traffic stays closed behind the switch. VERIFIED in real Chromium across all three states, plus the full run behind the edge.',
+      },
+    ],
+  },
 ];

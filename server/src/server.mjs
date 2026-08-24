@@ -52,6 +52,30 @@ const MEDIA_SYNC_MS = Number(process.env.MEDIA_SYNC_MS) || 60_000;
 const DATA_DIR = process.env.SITE_DATA_DIR || join(here, '..', '..', 'data');
 const MEDIA_DIR = join(DATA_DIR, 'media');
 
+/* ---- the hidden load harness (0.1.30) ----------------------------------
+   Dave, 2026-08-25: a hidden page feature that fires N concurrent sessions
+   at the Rate Engine so he can watch garbage collection bite. It is a
+   DELIBERATE traffic generator against his own engine, so it is gated and
+   bounded rather than simply present:
+
+     LOAD_TEST=0     turns the whole thing off — the routes 404 and the
+                     page never learns the trigger exists.
+     LOAD_MAX        the most concurrent virtual sessions one run may use.
+     LOAD_MAX_SEC    a run stops itself after this many seconds, whatever
+                     the browser does.
+
+   ON by default at Dave's instruction. The caps matter BECAUSE it is on:
+   they are what keeps a stranger who discovers it from turning the booking
+   site into a weapon aimed at the engine. Nothing here writes anything —
+   it only asks for quotes — and NOTHING here goes anywhere near Cloudbeds. */
+const LOAD_TEST = (process.env.LOAD_TEST ?? '1') !== '0';
+const LOAD_MAX = Math.max(1, Math.min(500, Number(process.env.LOAD_MAX) || 200));
+const LOAD_MAX_SEC = Math.max(5, Math.min(600, Number(process.env.LOAD_MAX_SEC) || 120));
+/* A global ceiling on load requests in flight, so even a browser ignoring
+   its own caps cannot open unbounded sockets to the engine. */
+const LOAD_INFLIGHT_MAX = LOAD_MAX * 2;
+let loadInflight = 0;
+
 const STARTED_AT = Date.now();
 const allow = createRateLimiter(RATE_LIMIT, RATE_WINDOW_MS);
 let lastEngineOk = null;
@@ -463,6 +487,104 @@ const server = createServer(async (req, res) => {
       stats.recordStaticMiss();
       json(res, 404, { code: 'NOT_FOUND', message: 'No such image.' });
     }
+    return;
+  }
+
+  // ---- the hidden load harness (0.1.30) ----
+  // Deliberately BEFORE the guest API block: these calls must skip the
+  // per-IP guest limiter, which exists to protect the engine from a
+  // stranger and would throttle a load run to 120/min — useless. The
+  // limiter is replaced here by explicit caps, not simply dropped.
+  if (LOAD_TEST && url.startsWith('/api/loadtest/')) {
+    const path = url.split('?')[0];
+
+    // What the page needs to know before it offers the harness at all.
+    if (method === 'GET' && path === '/api/loadtest/status') {
+      json(res, 200, {
+        enabled: true,
+        maxSessions: LOAD_MAX,
+        maxSeconds: LOAD_MAX_SEC,
+        inflight: loadInflight,
+        version: VERSION,
+      });
+      return;
+    }
+
+    // The engine's own vital signs during a run: heap, cache, sessions.
+    // This is the half that shows GC — the browser can only see latency.
+    if (method === 'GET' && path === '/api/loadtest/engine') {
+      const r = await engineCall('GET', '/api/engine/rate-engine/state');
+      if (r.status !== 200 || !r.body) {
+        json(res, 503, { code: 'ENGINE_UNAVAILABLE', message: 'The engine did not answer.' });
+        return;
+      }
+      let parsed = null;
+      try { parsed = JSON.parse(r.body); } catch { parsed = null; }
+      json(res, 200, {
+        at: Date.now(),
+        memory: parsed?.memory ?? null,
+        cache: parsed?.cache ?? null,
+        sessions: parsed?.sessionStats
+          ? { open: parsed.sessionStats.open, queries: parsed.sessionStats.queries, avgUs: parsed.sessionStats.avgUs }
+          : null,
+      });
+      return;
+    }
+
+    // One virtual guest pricing one stay. The worker's id becomes its own
+    // engine session key, so N workers are N DISTINCT sessions filling the
+    // cache — which is the whole point, since a shared key would just hit
+    // the same cached nights and stress nothing.
+    if (method === 'POST' && path === '/api/loadtest/quote') {
+      if (loadInflight >= LOAD_INFLIGHT_MAX) {
+        json(res, 429, { code: 'LOAD_BUSY', message: 'Too many load requests in flight.' });
+        return;
+      }
+      let body = {};
+      try { body = JSON.parse(await readBody(req)) || {}; } catch { body = {}; }
+      const worker = String(body.worker ?? '0').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24) || '0';
+      const from = String(body.from ?? '');
+      const to = String(body.to ?? '');
+      const ids = Array.isArray(body.roomTypeIds)
+        ? body.roomTypeIds.map(String).slice(0, 20)
+        : Object.keys(suiteContent.suites ?? {}).filter((id) => id.charAt(0) !== '_');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+        json(res, 400, { code: 'BAD_DATES', message: 'from and to are YYYY-MM-DD.' });
+        return;
+      }
+      loadInflight += 1;
+      const started = Date.now();
+      try {
+        const raw = JSON.stringify({
+          roomTypeIds: ids,
+          from,
+          to,
+          // NOT the visitor's session: each worker is its own guest.
+          sessionKey: `loadtest|${worker}`,
+        });
+        const r = await engineCall('POST', '/api/engine/rates/quote', raw);
+        const ms = Date.now() - started;
+        let q = null;
+        try { q = JSON.parse(r.body ?? '{}'); } catch { q = null; }
+        // Only the measurements come back — a load run has no use for the
+        // rates themselves, and shipping them would measure JSON size as
+        // much as engine time. A body we cannot read reports zero rather
+        // than a guess.
+        json(res, r.status === 200 ? 200 : 502, {
+          ok: r.status === 200,
+          status: r.status,
+          ms,
+          nights: Number(q?.stayNights) || 0,
+          plans: Array.isArray(q?.plans) ? q.plans.length : 0,
+          engineUs: Number(q?.durationUs) || null,
+        });
+      } finally {
+        loadInflight -= 1;
+      }
+      return;
+    }
+
+    json(res, 404, { code: 'NOT_FOUND', message: 'No such endpoint.' });
     return;
   }
 

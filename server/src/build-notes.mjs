@@ -396,4 +396,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.30',
+    version: '0.1.30',
+    date: '2026-08-25T20:00:00+02:00',
+    changes: [
+      {
+        headline:
+          'A HIDDEN RATE ENGINE LOAD HARNESS (internal testing only). Type \u0022load\u0022 anywhere on the desktop booking page and a lightbox asks how many concurrent sessions to run; Go fires them at the engine and shows every working connection, its response times, the totals, and - the point of the exercise - the engine\u0027s own heap on the same time axis, so a latency spike can be lined up against the collection that caused it.',
+        detail:
+          'Two decisions make it a real measurement rather than a toy. Each virtual session gets its OWN engine session key (loadtest|wN), so a run genuinely fills the rate cache - workers sharing one key would keep hitting the same cached nights and stress nothing; a 25-session run reached 41,000 cached nights. And latency is timed in the BROWSER, end to end, exactly as a guest would feel it, while the heap is read from the engine itself, because either number alone says nothing about garbage collection. Three panels, one measure each and never two scales on one plot: throughput, response time (average and p95), and engine heap. Bounded because it is ON: the server caps concurrency (LOAD_MAX, 200) and run length (LOAD_MAX_SEC, 120s), holds a global in-flight ceiling, and the page obeys what the server says rather than what was typed. The run stops itself at the deadline whether or not the tab is watching. LOAD_TEST=0 switches the whole thing off - the routes 404 and the lightbox says so instead of pretending. The trigger never fires while a field has focus, so a guest typing dates is unaffected; nothing is booked and NOTHING goes near Cloudbeds. VERIFIED in real Chromium against a live engine, 15 assertions: the trigger opens it (and does NOT open from inside an input), 25 rows for 25 sessions with all 25 shown in flight, 638 requests at 129/s with real average and p95 figures, the engine heap and cache both reported and rising, the run stopping itself and NO requests continuing afterwards. Chart hues are the data-viz reference palette\u0027s dark steps, validated against this site\u0027s surface. Desktop only: the trigger needs a keyboard.',
+      },
+    ],
+  },
 ];

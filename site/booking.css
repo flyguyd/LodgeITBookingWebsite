@@ -286,6 +286,15 @@ main { z-index: 3; }
   color: var(--gold); border-color: rgba(201, 168, 106, 0.65);
   background: rgba(201, 168, 106, 0.1);
 }
+/* The cheapest plan's tag (0.1.29) — legible whether or not it is the
+   selected pill, so the guest can see the best price at a glance. */
+.room-plan.best { border-color: rgba(201, 168, 106, 0.4); }
+.plan-best {
+  display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; color: #1b1a17;
+  background: var(--gold); border-radius: 999px; padding: 2px 7px;
+  vertical-align: 1px;
+}
 .room-ror { display: block; font-size: 13px; color: var(--paper-dim); font-style: italic; }
 .room-meta { display: flex; flex-wrap: wrap; gap: 8px; }
 .room-tag {

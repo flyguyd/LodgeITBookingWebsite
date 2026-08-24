@@ -351,9 +351,43 @@ window.BKCore = (function () {
         vatTotal: s.vatTotal != null ? Number(s.vatTotal) : 0,
         grandTotal: Number(s.grandTotal),
         nights: s.nights || [],
+        cheapest: false,
       });
     });
-    return out;
+    return markCheapest(out);
+  }
+
+  /**
+   * Flag the option that costs the guest least (0.1.29). grandTotal is the
+   * engine's all-in figure for the stay; the conservation levy sits on top
+   * of every plan identically, so it cannot change which plan is cheapest
+   * and is deliberately left out of the comparison.
+   *
+   * A tie keeps the FIRST plan in the offered order — Dave's ordering wins
+   * when the money is the same. One plan is never tagged: "cheapest of one"
+   * tells the guest nothing.
+   */
+  function markCheapest(options) {
+    if (!options || options.length < 2) return options || [];
+    var best = null;
+    options.forEach(function (o) {
+      o.cheapest = false;
+      var t = Number(o.grandTotal);
+      if (!isFinite(t)) return;
+      if (best === null || t < Number(best.grandTotal)) best = o;
+    });
+    if (best) best.cheapest = true;
+    return options;
+  }
+
+  /** The option a search should land on: the cheapest when one is tagged,
+   *  otherwise the first priced plan. Never null for a non-empty list. */
+  function defaultPlanOption(options) {
+    if (!options || !options.length) return null;
+    for (var i = 0; i < options.length; i += 1) {
+      if (options[i] && options[i].cheapest === true) return options[i];
+    }
+    return options[0];
   }
 
   /**
@@ -465,6 +499,8 @@ window.BKCore = (function () {
     levyMathLabel: levyMathLabel,
     stayMath: stayMath,
     planOptionsFor: planOptionsFor,
+    markCheapest: markCheapest,
+    defaultPlanOption: defaultPlanOption,
     applyPlanToRoom: applyPlanToRoom,
     startSession: startSession,
     track: track,
@@ -493,5 +529,7 @@ window.__bk = {
   levyMathLabel: window.BKCore.levyMathLabel,
   stayMath: window.BKCore.stayMath,
   planOptionsFor: window.BKCore.planOptionsFor,
+  markCheapest: window.BKCore.markCheapest,
+  defaultPlanOption: window.BKCore.defaultPlanOption,
   applyPlanToRoom: window.BKCore.applyPlanToRoom,
 };

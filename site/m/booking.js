@@ -212,9 +212,11 @@
         var party = { adults: els.adults.textContent, children: els.children.textContent };
         current.results.forEach(function (room) {
           room.plans = C.planOptionsFor(room.roomTypeId, current.ratePlans);
-          if (room.plans.length) {
-            C.applyPlanToRoom(room, room.plans[0], lodge, party, r.json.nights);
-          }
+          /* A search lands on the CHEAPEST priced plan (0.1.29), not merely
+             the first one offered — the guest sees the best price the lodge
+             has for them without having to hunt through the pills. */
+          var pick = C.defaultPlanOption(room.plans);
+          if (pick) C.applyPlanToRoom(room, pick, lodge, party, r.json.nights);
         });
         /* The provider omits fully booked room types entirely — when Lodge
            Ops says to show them, the replicated suite list fills the gaps. */
@@ -571,8 +573,18 @@
       plans.forEach(function (opt) {
         var pb = document.createElement('button');
         pb.type = 'button';
-        pb.className = 'room-plan' + (opt.planId === room.planId ? ' on' : '');
+        pb.className = 'room-plan' + (opt.planId === room.planId ? ' on' : '')
+          + (opt.cheapest === true ? ' best' : '');
         pb.textContent = opt.name;
+        /* The cheapest plan wears its tag (0.1.29) so the guest can see
+           which pill is the best price without comparing totals by hand.
+           Only ever one, and only when there is something to compare. */
+        if (opt.cheapest === true) {
+          var tag = document.createElement('span');
+          tag.className = 'plan-best';
+          tag.textContent = 'Lowest rate';
+          pb.appendChild(tag);
+        }
         if (opt.description) pb.title = opt.description;
         pb.addEventListener('click', function (ev) {
           ev.stopPropagation();

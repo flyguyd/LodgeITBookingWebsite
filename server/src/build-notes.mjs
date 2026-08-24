@@ -383,4 +383,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.29',
+    version: '0.1.29',
+    date: '2026-08-25T18:00:00+02:00',
+    changes: [
+      {
+        headline:
+          'A SEARCH NOW LANDS ON THE CHEAPEST RATE PLAN, AND THAT PLAN WEARS A LOWEST RATE TAG. Until now a search opened on whichever plan was first in the offered list, so a guest only found the better price if they thought to try the other pills. Both builds, desktop and mobile.',
+        detail:
+          'The comparison is the engine\u0027s own all-in grandTotal for the stay, not a derivation - the conservation levy sits identically on top of every plan, so it cannot change which one is cheapest and is deliberately left out. Deliberate edges: a TIE keeps the first plan in Dave\u0027s offered order, because when the money is the same his ordering should win; a suite priced by only ONE plan is never tagged, since \u0022cheapest of one\u0022 tells a guest nothing; and switching pills by hand still works exactly as before, the tag simply stays on the cheapest. The tag reads \u0022Lowest rate\u0022 rather than \u0022Best rate\u0022 so it cannot be confused with the lodge\u0027s own \u0022Book direct - best rate\u0022 tag sitting a row below it on the same card. VERIFIED in real Chromium on both builds against a live Rate Engine quoting two plans 20% apart: 26 assertions - exactly one tag, on the cheapest plan, and that pill selected the moment the results render.',
+      },
+    ],
+  },
 ];

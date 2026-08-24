@@ -422,4 +422,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.32',
+    version: '0.1.32',
+    date: '2026-08-25T21:45:00+02:00',
+    changes: [
+      {
+        headline:
+          'THE LOAD HARNESS CAN NOW SOAK OVERNIGHT AND CHURNS SESSIONS. Run-for accepts 0 = until you hit Stop (LOAD_MAX_SEC now defaults to no limit), and every virtual session runs for a RANDOM life between two bounds, then closes - dropping its cached rates on the engine - and a fresh one opens. So the cache constantly grows and shrinks and garbage collection has real work to watch, which is the point of the soak.',
+        detail:
+          'Each worker carries a session key with an epoch (loadtest|w3e4); when its random life ends it fires a close for the old key, bumps the epoch and rolls a new life. A new /api/public/loadtest/close route drops that session on the engine via the existing DELETE, so the churn is real cache allocation and release, not just growth. New readouts for a long run: Sessions opened, a per-worker Cycles count, and a running clock in the caps line; the Slowest figure is now the ALL-TIME worst response, not a rolling-window max, so a GC pause an hour into the soak is still there to see. PROVEN end to end through a stand-in nginx edge: 30 distinct sessions each cache their own nights, one close drops exactly that session\u0027s entries and no others, recycling oscillates the cache rather than growing it without bound, and closing everything returns the cache to baseline. VERIFIED in real Chromium: an unlimited run reports \u0022until Stop\u0022, 12 workers with 2-4s lives recycled to 42 sessions in ~10s with per-worker cycle counts climbing, and Stop restores the ready line. Needs engine >= 0.1.24 for the close; pairs with engine 0.1.31 (shared cache budget). Nothing here books anything or touches Cloudbeds.',
+      },
+    ],
+  },
 ];

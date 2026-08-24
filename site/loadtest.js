@@ -129,18 +129,25 @@ window.BKLoad = (function () {
       '<button class="blt-x" type="button" aria-label="Close">&times;</button>' +
       '<h2>Rate Engine load harness</h2>' +
       '<p class="blt-sub">Each virtual session is a separate guest with its own engine ' +
-      'session key, so the run genuinely fills the rate cache. Response times are ' +
-      'measured here in the browser, end to end; the engine’s heap is read from the ' +
-      'engine itself, so a latency spike can be lined up against the collection that ' +
+      'session key, so the run genuinely fills the rate cache. Every session runs for a ' +
+      'random life between the two bounds below, then closes — dropping its cached rates ' +
+      'on the engine — and a fresh one opens, so the cache constantly churns and garbage ' +
+      'collection has something to do. Set the run to 0 for an overnight soak. Response ' +
+      'times are measured here in the browser, end to end; the engine’s heap is read from ' +
+      'the engine itself, so a latency spike can be lined up against the collection that ' +
       'caused it. Nothing is booked.</p>' +
       '<div class="blt-err" id="blt-err" style="display:none"></div>' +
       '<div class="blt-ctl">' +
         '<div class="blt-f"><label for="blt-n">Concurrent sessions</label>' +
         '<input id="blt-n" type="number" min="1" step="1" value="25" /></div>' +
-        '<div class="blt-f"><label for="blt-secs">Run for (seconds)</label>' +
-        '<input id="blt-secs" type="number" min="5" step="5" value="30" /></div>' +
+        '<div class="blt-f"><label for="blt-secs">Run for (s, 0 = until Stop)</label>' +
+        '<input id="blt-secs" type="number" min="0" step="10" value="0" /></div>' +
         '<div class="blt-f"><label for="blt-nights">Nights per quote</label>' +
         '<input id="blt-nights" type="number" min="1" max="62" step="1" value="7" /></div>' +
+        '<div class="blt-f"><label for="blt-smin">Session life min (s)</label>' +
+        '<input id="blt-smin" type="number" min="1" step="1" value="5" /></div>' +
+        '<div class="blt-f"><label for="blt-smax">Session life max (s)</label>' +
+        '<input id="blt-smax" type="number" min="1" step="1" value="45" /></div>' +
         '<button class="blt-go" id="blt-go" type="button">Go</button>' +
         '<span class="blt-note" id="blt-caps">checking…</span>' +
       '</div>' +
@@ -153,13 +160,14 @@ window.BKLoad = (function () {
         '<div class="blt-k"><b id="blt-k-err">0</b><span>Errors</span></div>' +
         '<div class="blt-k"><b id="blt-k-heap">—</b><span id="blt-k-heaplbl">Engine heap</span></div>' +
         '<div class="blt-k"><b id="blt-k-cache">—</b><span>Nights cached</span></div>' +
+        '<div class="blt-k"><b id="blt-k-sess">0</b><span>Sessions opened</span></div>' +
       '</div>' +
       panel('Requests completed per second', [['Throughput', C_THROUGHPUT]], 'blt-c-rps') +
       panel('Response time', [['Average', C_AVG], ['p95', C_P95]], 'blt-c-lat') +
       panel('Engine heap in use', [['Heap', C_HEAP]], 'blt-c-heap') +
       '<div class="blt-tablewrap"><table class="blt-t"><thead><tr>' +
         '<th>Session</th><th>State</th><th class="n">Done</th><th class="n">Last</th>' +
-        '<th class="n">Avg</th><th class="n">Errors</th></tr></thead>' +
+        '<th class="n">Avg</th><th class="n">Cycles</th><th class="n">Errors</th></tr></thead>' +
         '<tbody id="blt-rows"></tbody></table></div>';
     back.appendChild(box);
     document.body.appendChild(back);
@@ -251,29 +259,61 @@ window.BKLoad = (function () {
     return Number.isFinite(v) && v > 0 ? v : dflt;
   }
 
+  /* Like num(), but 0 is a legal answer (an unlimited run). */
+  function numOrZero(id, dflt) {
+    var v = Math.round(Number(el.box.querySelector(id).value));
+    return Number.isFinite(v) && v >= 0 ? v : dflt;
+  }
+
+  /* A whole number in [lo, hi] inclusive. */
+  function randInt(lo, hi) {
+    if (hi < lo) hi = lo;
+    return lo + Math.floor(Math.random() * (hi - lo + 1));
+  }
+
+  /* When this worker's current session should end and be recycled. */
+  function rollSessionLife(w, r) {
+    w.sessionEndsAt = Date.now() + randInt(r.sessMin, r.sessMax) * 1000;
+  }
+
   function start() {
     if (!caps) return;
     err('');
     var want = num('#blt-n', 25);
-    var secs = num('#blt-secs', 30);
+    var secs = numOrZero('#blt-secs', 0);
     var nights = Math.min(62, num('#blt-nights', 7));
+    var sMin = num('#blt-smin', 5);
+    var sMax = num('#blt-smax', 45);
+    if (sMax < sMin) sMax = sMin;
     // The SERVER's caps win over anything typed here, and the box is
     // corrected so the number on screen is the number being run.
     var n = Math.min(want, caps.maxSessions);
-    secs = Math.min(secs, caps.maxSeconds);
+    // maxSeconds 0 means the server sets no limit (an overnight soak). Only
+    // clamp when it names a real cap; an unlimited request (0) then becomes
+    // that cap rather than running forever on a shared box.
+    if (caps.maxSeconds > 0) secs = secs === 0 ? caps.maxSeconds : Math.min(secs, caps.maxSeconds);
     el.box.querySelector('#blt-n').value = String(n);
     el.box.querySelector('#blt-secs').value = String(secs);
+    el.box.querySelector('#blt-smin').value = String(sMin);
+    el.box.querySelector('#blt-smax').value = String(sMax);
     if (n < want) err('Capped at ' + n + ' sessions by the server.');
 
     run = {
       n: n, nights: nights, stop: false,
-      startedAt: Date.now(), endsAt: Date.now() + secs * 1000,
-      done: 0, errors: 0, lat: [], recent: [],
+      sessMin: sMin, sessMax: sMax,
+      // secs 0 -> Infinity: the run lasts until Stop. Every deadline test is
+      // `now >= endsAt`, which Infinity never satisfies, so one value covers
+      // both a timed run and an open-ended soak.
+      startedAt: Date.now(), endsAt: secs > 0 ? Date.now() + secs * 1000 : Infinity,
+      done: 0, errors: 0, maxMs: 0, recent: [], sessionsOpened: n,
       workers: [], series: { rps: [], avg: [], p95: [], heap: [] },
       lastTickDone: 0,
     };
     for (var i = 0; i < n; i++) {
-      run.workers.push({ id: i + 1, state: 'idle', done: 0, errors: 0, last: null, total: 0 });
+      var w = { id: i + 1, state: 'idle', done: 0, errors: 0, last: null, total: 0,
+        epoch: 1, cycles: 1, key: 'w' + (i + 1) + 'e1', sessionEndsAt: 0 };
+      rollSessionLife(w, run);
+      run.workers.push(w);
     }
     buildRows();
     var go = el.box.querySelector('#blt-go');
@@ -282,9 +322,9 @@ window.BKLoad = (function () {
 
     for (var w = 0; w < run.workers.length; w++) drive(run.workers[w], run);
     run.ticker = setInterval(tick, 1000);
-    // The run ends itself even if the tab is ignored: the deadline is
-    // checked by every worker, not only by the ticker.
-    run.stopper = setTimeout(stop, secs * 1000 + 500);
+    // A BOUNDED run ends itself even if the tab is ignored. An unlimited soak
+    // has no stopper — it runs until Stop, which is the whole point.
+    if (secs > 0) run.stopper = setTimeout(stop, secs * 1000 + 500);
     pollEngine();
   }
 
@@ -299,6 +339,9 @@ window.BKLoad = (function () {
       var go = el.box.querySelector('#blt-go');
       go.textContent = 'Go';
       go.classList.remove('stop');
+      // The caps line was showing the live soak clock; put the ready line
+      // back so the box does not look mid-run once it has stopped.
+      loadCaps();
     }
   }
 
@@ -306,6 +349,11 @@ window.BKLoad = (function () {
    *  own dates moving so it is not re-reading one cached night forever. */
   function drive(w, r) {
     if (r.stop || Date.now() >= r.endsAt) { w.state = 'done'; return; }
+    // A session that has reached its random life is CLOSED (its cached rates
+    // dropped on the engine) and a fresh one opened before the next quote.
+    // No quote for the old key is in flight here — drive loops only after the
+    // previous fetch settles — so closing it now is safe.
+    if (Date.now() >= w.sessionEndsAt) recycle(w, r);
     w.state = 'busy';
     var offset = (w.done * 3 + w.id * 7) % 300;
     var from = isoDay(offset);
@@ -314,7 +362,7 @@ window.BKLoad = (function () {
     fetch('/api/public/loadtest/quote', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ worker: 'w' + w.id, from: from, to: to }),
+      body: JSON.stringify({ worker: w.key, from: from, to: to }),
       cache: 'no-store',
     })
       .then(function (res) { return res.json().catch(function () { return { ok: false }; }); })
@@ -323,8 +371,7 @@ window.BKLoad = (function () {
         if (r.stop) return;
         w.done += 1; w.last = ms; w.total += ms;
         r.done += 1;
-        r.lat.push(ms);
-        if (r.lat.length > 5000) r.lat.shift();
+        if (ms > r.maxMs) r.maxMs = ms;   // ALL-TIME slowest — catches a GC pause
         r.recent.push(ms);
         if (!j || j.ok !== true) { w.errors += 1; r.errors += 1; w.state = 'err'; }
         else w.state = 'ok';
@@ -334,6 +381,25 @@ window.BKLoad = (function () {
         w.done += 1; w.errors += 1; r.done += 1; r.errors += 1; w.state = 'err';
       })
       .then(function () { if (!r.stop) drive(w, r); });
+  }
+
+  /* End this worker's session (dropping its engine-side cache) and open a
+     fresh one with a new random life. Fire-and-forget: the close must not
+     stall the worker's quote loop, and a failed close is not fatal to the
+     soak - the old session would simply age out on its TTL instead. */
+  function recycle(w, r) {
+    var oldKey = w.key;
+    fetch('/api/public/loadtest/close', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ worker: oldKey }),
+      cache: 'no-store',
+    }).catch(function () {});
+    w.epoch += 1;
+    w.cycles += 1;
+    w.key = 'w' + w.id + 'e' + w.epoch;
+    r.sessionsOpened += 1;
+    rollSessionLife(w, r);
   }
 
   function isoDay(offset) {
@@ -389,8 +455,17 @@ window.BKLoad = (function () {
     set('#blt-k-rps', String(rps));
     set('#blt-k-avg', ms(avg));
     set('#blt-k-p95', ms(p95));
-    set('#blt-k-max', ms(r.lat.length ? Math.max.apply(null, r.lat) : null));
+    set('#blt-k-max', ms(r.maxMs || null));
     set('#blt-k-err', String(r.errors));
+    set('#blt-k-sess', r.sessionsOpened.toLocaleString());
+    // While a run is live the caps line shows how long it has been going and
+    // how many sessions have churned — the two numbers a soak is watched by.
+    var note = el.box.querySelector('#blt-caps');
+    if (note) {
+      note.textContent = 'running ' + elapsed(Date.now() - r.startedAt) + ' · ' +
+        r.n + ' workers · ' + r.sessionsOpened.toLocaleString() + ' sessions opened' +
+        (r.endsAt === Infinity ? ' · until Stop' : '');
+    }
 
     drawRows();
     draw('blt-c-rps', [{ data: r.series.rps, color: C_THROUGHPUT }], 0);
@@ -404,6 +479,15 @@ window.BKLoad = (function () {
   }
 
   function trim(a) { while (a.length > HISTORY) a.shift(); }
+
+  /* A short human duration for the soak clock: 45s, 12m 03s, 3h 07m. */
+  function elapsed(msTotal) {
+    var t = Math.floor(msTotal / 1000);
+    var h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = t % 60;
+    if (h > 0) return h + 'h ' + String(m).padStart(2, '0') + 'm';
+    if (m > 0) return m + 'm ' + String(sec).padStart(2, '0') + 's';
+    return sec + 's';
+  }
 
   function pct(list, p) {
     if (!list.length) return null;
@@ -435,7 +519,7 @@ window.BKLoad = (function () {
     for (var i = 0; i < run.workers.length; i++) {
       var tr = document.createElement('tr');
       tr.innerHTML = '<td></td><td></td><td class="n"></td><td class="n"></td>' +
-        '<td class="n"></td><td class="n"></td>';
+        '<td class="n"></td><td class="n"></td><td class="n"></td>';
       tb.appendChild(tr);
     }
     drawRows();
@@ -449,7 +533,7 @@ window.BKLoad = (function () {
       var c = rows[i].children;
       var cls = w.state === 'busy' ? 'blt-busy' : w.state === 'err' ? 'blt-errd'
         : w.state === 'ok' ? 'blt-okd' : 'blt-idle';
-      c[0].innerHTML = '<span class="blt-dot ' + cls + '"></span>loadtest|w' + w.id;
+      c[0].innerHTML = '<span class="blt-dot ' + cls + '"></span>loadtest|' + w.key;
       c[1].textContent = w.state === 'busy' ? 'in flight'
         : w.state === 'err' ? 'last call failed'
         : w.state === 'ok' ? 'connected' : w.state === 'done' ? 'finished' : 'idle';
@@ -457,7 +541,8 @@ window.BKLoad = (function () {
       c[2].textContent = String(w.done);
       c[3].textContent = ms(w.last);
       c[4].textContent = ms(w.done ? w.total / w.done : null);
-      c[5].textContent = String(w.errors);
+      c[5].textContent = String(w.cycles);
+      c[6].textContent = String(w.errors);
     }
   }
 

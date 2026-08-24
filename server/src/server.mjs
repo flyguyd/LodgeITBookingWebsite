@@ -61,8 +61,10 @@ const MEDIA_DIR = join(DATA_DIR, 'media');
      LOAD_TEST=0     turns the whole thing off — the routes 404 and the
                      page never learns the trigger exists.
      LOAD_MAX        the most concurrent virtual sessions one run may use.
-     LOAD_MAX_SEC    a run stops itself after this many seconds, whatever
-                     the browser does.
+     LOAD_MAX_SEC    the LONGEST a single run may last, in seconds. 0 (the
+                     default) means NO limit - the run lasts until someone
+                     hits Stop, which is what an overnight soak needs. Set a
+                     positive number to cap runs on a shared box.
 
    ON by default at Dave's instruction. The caps matter BECAUSE it is on:
    they are what keeps a stranger who discovers it from turning the booking
@@ -70,7 +72,10 @@ const MEDIA_DIR = join(DATA_DIR, 'media');
    it only asks for quotes — and NOTHING here goes anywhere near Cloudbeds. */
 const LOAD_TEST = (process.env.LOAD_TEST ?? '1') !== '0';
 const LOAD_MAX = Math.max(1, Math.min(500, Number(process.env.LOAD_MAX) || 200));
-const LOAD_MAX_SEC = Math.max(5, Math.min(600, Number(process.env.LOAD_MAX_SEC) || 120));
+// 0 = unlimited (until Stop), which is the soak-test default. A positive
+// value caps a run's length; the ceiling is 24h so a typo cannot pin a run
+// open forever.
+const LOAD_MAX_SEC = Math.max(0, Math.min(86400, Number(process.env.LOAD_MAX_SEC) || 0));
 /* A global ceiling on load requests in flight, so even a browser ignoring
    its own caps cannot open unbounded sockets to the engine. */
 const LOAD_INFLIGHT_MAX = LOAD_MAX * 2;
@@ -597,6 +602,30 @@ const server = createServer(async (req, res) => {
       } finally {
         loadInflight -= 1;
       }
+      return;
+    }
+
+    // Close one virtual session and drop its cached rates on the engine
+    // (0.1.32). The harness calls this when a worker's random session life
+    // ends, so a soak churns sessions - opening and CLOSING them - rather
+    // than only ever growing the cache. That churn is what exercises garbage
+    // collection, which is the whole point of the soak.
+    if (method === 'POST' && path === '/api/public/loadtest/close') {
+      let body = {};
+      try { body = JSON.parse(await readBody(req)) || {}; } catch { body = {}; }
+      const worker = String(body.worker ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
+      if (!worker) {
+        json(res, 400, { code: 'BAD_WORKER', message: 'worker is required.' });
+        return;
+      }
+      const key = encodeURIComponent(`loadtest|${worker}`);
+      const r = await engineCall('DELETE', `/api/engine/rate-engine/sessions/${key}`);
+      let out = null;
+      try { out = JSON.parse(r.body ?? '{}'); } catch { out = null; }
+      json(res, r.status === 200 ? 200 : 502, {
+        ok: r.status === 200,
+        dropped: Number(out?.dropped) || 0,
+      });
       return;
     }
 

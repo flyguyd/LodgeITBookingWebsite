@@ -435,4 +435,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.33',
+    version: '0.1.33',
+    date: '2026-08-25T22:35:00+02:00',
+    changes: [
+      {
+        headline:
+          'THE LOAD HARNESS NOW NAMES ITS ERRORS, SHOWS GC LOAD, AND LISTS THE TEST SESSIONS. The errors were unexplained; they are client-side TIMEOUTS - the site gives up on the engine after ENGINE_TIMEOUT_MS (default 10s) when it is saturated, and a run\u0027s p95 pinned near 10s and slowest at ~10s were that ceiling, not the engine failing. The harness breaks the errors down by cause, so \u002225 timeout (10s)\u0022 replaces a bare count.',
+        detail:
+          'Three things, needing engine 0.1.32. (1) ERRORS ARE LEGIBLE: every failed quote is classified - timeout (with the timeout value), no response (engine down/refused), engine <status>, or network - and totalled under the KPIs, commonest first. The timeout is configurable with ENGINE_TIMEOUT_MS (floored at 1s) for a soak. (2) GC IS QUANTIFIED: two readouts from the engine\u0027s new perf_hooks counters - GC load, the fraction of wall time spent paused in the last interval, and GC worst pause - so the \u0022is GC hurting throughput?\u0022 question is answered from data. On the engine here a churn soak read ~5% GC load and a ~20ms worst pause: real but nowhere near the seconds a saturated event loop adds. (3) TEST SESSIONS ARE VISIBLE: each worker now opens a real engine session (labelled \u0022load test\u0022) for its random life and closes it on recycle or Stop, so the Open Sessions card fills and empties with the run instead of showing only the site\u0027s own held session. PROVEN end to end: a timeout returns reason:timeout and the page shows \u002225 timeout (1s)\u0022; 15 worker sessions appear in Open Sessions and clear when closed; GC load and worst pause render live. Nothing here books anything or touches Cloudbeds.',
+      },
+    ],
+  },
 ];

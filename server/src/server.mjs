@@ -106,9 +106,16 @@ function json(res, status, body) {
   res.end(raw);
 }
 
+// How long the site waits on the engine before giving up. A rate quote is
+// milliseconds when the engine is healthy; this only bites when it is
+// saturated - which is exactly what a load test is trying to find - so the
+// harness NAMES a timeout rather than hiding it in a bare error count. Tune
+// it for a soak with ENGINE_TIMEOUT_MS.
+const ENGINE_TIMEOUT_MS = Math.max(1000, Number(process.env.ENGINE_TIMEOUT_MS) || 10_000);
+
 async function engineCall(method, path, rawBody = '') {
   if (!ENGINE_URL || !CLIENT_KEY || !CLIENT_SECRET) {
-    return { status: 0, body: null, error: 'not_configured' };
+    return { status: 0, body: null, error: 'not_configured', timedOut: false };
   }
   try {
     const res = await fetch(ENGINE_URL + path, {
@@ -118,14 +125,17 @@ async function engineCall(method, path, rawBody = '') {
         ...signHeaders(CLIENT_KEY, CLIENT_SECRET, method, path, rawBody),
       },
       body: rawBody || undefined,
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(ENGINE_TIMEOUT_MS),
     });
     const body = await res.text();
     lastEngineOk = res.status < 500;
-    return { status: res.status, body };
+    return { status: res.status, body, timedOut: false };
   } catch (e) {
     lastEngineOk = false;
-    return { status: 0, body: null, error: String(e) };
+    // AbortSignal.timeout raises a TimeoutError; anything else is the engine
+    // refusing the connection or dropping it - a different failure to report.
+    const timedOut = e && (e.name === 'TimeoutError' || e.name === 'AbortError');
+    return { status: 0, body: null, error: String(e), timedOut };
   }
 }
 
@@ -587,13 +597,27 @@ const server = createServer(async (req, res) => {
         const ms = Date.now() - started;
         let q = null;
         try { q = JSON.parse(r.body ?? '{}'); } catch { q = null; }
+        const okQuote = r.status === 200;
+        // When it fails, say WHY in one word the harness can total up, so a
+        // run's errors are legible instead of a bare count: a timeout (the
+        // engine did not answer within ENGINE_TIMEOUT_MS - the saturation
+        // signal a load test is after), no response at all (engine down or
+        // connection refused), or a non-200 the engine itself returned.
+        let reason = null;
+        if (!okQuote) {
+          if (r.timedOut) reason = 'timeout';
+          else if (r.status === 0) reason = 'no response';
+          else reason = 'engine ' + r.status;
+        }
         // Only the measurements come back — a load run has no use for the
         // rates themselves, and shipping them would measure JSON size as
         // much as engine time. A body we cannot read reports zero rather
         // than a guess.
-        json(res, r.status === 200 ? 200 : 502, {
-          ok: r.status === 200,
+        json(res, okQuote ? 200 : 502, {
+          ok: okQuote,
           status: r.status,
+          reason,
+          timeoutMs: ENGINE_TIMEOUT_MS,
           ms,
           nights: Number(q?.stayNights) || 0,
           plans: Array.isArray(q?.plans) ? q.plans.length : 0,
@@ -602,6 +626,26 @@ const server = createServer(async (req, res) => {
       } finally {
         loadInflight -= 1;
       }
+      return;
+    }
+
+    // Open (register) one virtual session on the engine so it appears in the
+    // Open Sessions card for the length of its life (0.1.33). The load-test
+    // quote path keys its cache by loadtest|worker but never registered a
+    // session, so a run's sessions were invisible there - only the site's own
+    // held session showed. The harness now opens on a worker's (re)start and
+    // closes on recycle/stop, so the card fills and empties with the run.
+    if (method === 'POST' && path === '/api/public/loadtest/open') {
+      let body = {};
+      try { body = JSON.parse(await readBody(req)) || {}; } catch { body = {}; }
+      const worker = String(body.worker ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
+      if (!worker) {
+        json(res, 400, { code: 'BAD_WORKER', message: 'worker is required.' });
+        return;
+      }
+      const key = encodeURIComponent(`loadtest|${worker}`);
+      const r = await engineCall('PUT', `/api/engine/rate-engine/sessions/${key}`, JSON.stringify({ label: 'load test' }));
+      json(res, r.status === 200 ? 200 : 502, { ok: r.status === 200 });
       return;
     }
 

@@ -57,6 +57,8 @@ window.BKLoad = (function () {
     'background:rgba(201,168,106,0.14);color:#c9a86a}',
     '.blt-go:hover{background:rgba(201,168,106,0.24)}',
     '.blt-go.stop{border-color:rgba(227,73,72,0.6);background:rgba(227,73,72,0.14);color:#e66767}',
+    '.blt-errbreak{margin:2px 0 6px;font-size:12px;color:#e08a8a;min-height:1em}',
+    '.blt-errbreak:empty{display:none}',
     '.blt-go:disabled{opacity:0.45;cursor:not-allowed}',
     '.blt-note{font-size:11.5px;color:#a8a296}',
     '.blt-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 10px;margin:2px 0 18px}',
@@ -161,7 +163,10 @@ window.BKLoad = (function () {
         '<div class="blt-k"><b id="blt-k-heap">—</b><span id="blt-k-heaplbl">Engine heap</span></div>' +
         '<div class="blt-k"><b id="blt-k-cache">—</b><span>Nights cached</span></div>' +
         '<div class="blt-k"><b id="blt-k-sess">0</b><span>Sessions opened</span></div>' +
+        '<div class="blt-k"><b id="blt-k-gcload">—</b><span>GC load</span></div>' +
+        '<div class="blt-k"><b id="blt-k-gcmax">—</b><span>GC worst pause</span></div>' +
       '</div>' +
+      '<div class="blt-errbreak" id="blt-errbreak"></div>' +
       panel('Requests completed per second', [['Throughput', C_THROUGHPUT]], 'blt-c-rps') +
       panel('Response time', [['Average', C_AVG], ['p95', C_P95]], 'blt-c-lat') +
       panel('Engine heap in use', [['Heap', C_HEAP]], 'blt-c-heap') +
@@ -306,6 +311,8 @@ window.BKLoad = (function () {
       // both a timed run and an open-ended soak.
       startedAt: Date.now(), endsAt: secs > 0 ? Date.now() + secs * 1000 : Infinity,
       done: 0, errors: 0, maxMs: 0, recent: [], sessionsOpened: n,
+      errBy: {},              // reason -> count, so errors are legible
+      gcPrev: null,           // last engine GC snapshot, for interval deltas
       workers: [], series: { rps: [], avg: [], p95: [], heap: [] },
       lastTickDone: 0,
     };
@@ -320,6 +327,7 @@ window.BKLoad = (function () {
     go.textContent = 'Stop';
     go.classList.add('stop');
 
+    for (var oi = 0; oi < run.workers.length; oi++) openSession(run.workers[oi].key);
     for (var w = 0; w < run.workers.length; w++) drive(run.workers[w], run);
     run.ticker = setInterval(tick, 1000);
     // A BOUNDED run ends itself even if the tab is ignored. An unlimited soak
@@ -331,6 +339,9 @@ window.BKLoad = (function () {
   function stop() {
     if (!run) return;
     run.stop = true;
+    // Close every live session so the Open Sessions card empties with the
+    // run instead of waiting out the TTL.
+    for (var ci = 0; ci < run.workers.length; ci++) closeSession(run.workers[ci].key);
     clearInterval(run.ticker);
     clearTimeout(run.stopper);
     clearTimeout(run.enginePoll);
@@ -373,14 +384,41 @@ window.BKLoad = (function () {
         r.done += 1;
         if (ms > r.maxMs) r.maxMs = ms;   // ALL-TIME slowest — catches a GC pause
         r.recent.push(ms);
-        if (!j || j.ok !== true) { w.errors += 1; r.errors += 1; w.state = 'err'; }
-        else w.state = 'ok';
+        if (!j || j.ok !== true) {
+          w.errors += 1; r.errors += 1; w.state = 'err';
+          var reason = (j && j.reason) || (j && j.status ? 'engine ' + j.status : 'bad reply');
+          if (reason === 'timeout' && j && j.timeoutMs) reason = 'timeout (' + Math.round(j.timeoutMs / 1000) + 's)';
+          r.errBy[reason] = (r.errBy[reason] || 0) + 1;
+        } else w.state = 'ok';
       })
       .catch(function () {
         if (r.stop) return;
         w.done += 1; w.errors += 1; r.done += 1; r.errors += 1; w.state = 'err';
+        r.errBy['network'] = (r.errBy['network'] || 0) + 1;
       })
       .then(function () { if (!r.stop) drive(w, r); });
+  }
+
+  /* Register a worker's session on the engine so it shows in the Open
+     Sessions card. Fire-and-forget once per session life (not per quote), so
+     it adds nothing to the measured quote latency. */
+  function openSession(key) {
+    fetch('/api/public/loadtest/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ worker: key }),
+      cache: 'no-store',
+    }).catch(function () {});
+  }
+
+  /* Drop a worker's session (and its cached rates) on the engine. */
+  function closeSession(key) {
+    fetch('/api/public/loadtest/close', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ worker: key }),
+      cache: 'no-store',
+    }).catch(function () {});
   }
 
   /* End this worker's session (dropping its engine-side cache) and open a
@@ -388,18 +426,13 @@ window.BKLoad = (function () {
      stall the worker's quote loop, and a failed close is not fatal to the
      soak - the old session would simply age out on its TTL instead. */
   function recycle(w, r) {
-    var oldKey = w.key;
-    fetch('/api/public/loadtest/close', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ worker: oldKey }),
-      cache: 'no-store',
-    }).catch(function () {});
+    closeSession(w.key);
     w.epoch += 1;
     w.cycles += 1;
     w.key = 'w' + w.id + 'e' + w.epoch;
     r.sessionsOpened += 1;
     rollSessionLife(w, r);
+    openSession(w.key);
   }
 
   function isoDay(offset) {
@@ -426,6 +459,20 @@ window.BKLoad = (function () {
           set('#blt-k-heap', mb(m.heapUsedBytes));
           set('#blt-k-heaplbl', 'Engine heap of ' + mb(m.heapLimitBytes));
           set('#blt-k-cache', (m.cacheEntries || 0).toLocaleString());
+          // GC LOAD is the fraction of wall time spent paused for GC BETWEEN
+          // this poll and the last — the number that actually answers "is GC
+          // hurting throughput?". Worst pause is the longest single stop so
+          // far. Both come straight from the engine's perf_hooks counters.
+          if (typeof m.gcPauseMsTotal === 'number' && typeof m.uptimeMs === 'number') {
+            var prev = run.gcPrev;
+            if (prev) {
+              var dPause = m.gcPauseMsTotal - prev.gcPauseMsTotal;
+              var dWall = m.uptimeMs - prev.uptimeMs;
+              if (dWall > 0) set('#blt-k-gcload', Math.max(0, (dPause / dWall) * 100).toFixed(1) + '%');
+            }
+            run.gcPrev = { gcPauseMsTotal: m.gcPauseMsTotal, uptimeMs: m.uptimeMs };
+          }
+          if (typeof m.gcMaxPauseMs === 'number') set('#blt-k-gcmax', Math.round(m.gcMaxPauseMs) + ' ms');
         }
       })
       .catch(function () { /* the engine going quiet is itself a result */ })
@@ -458,6 +505,15 @@ window.BKLoad = (function () {
     set('#blt-k-max', ms(r.maxMs || null));
     set('#blt-k-err', String(r.errors));
     set('#blt-k-sess', r.sessionsOpened.toLocaleString());
+    // The error breakdown — what the failures actually ARE, not just how
+    // many. Sorted commonest first; empty (and hidden) when there are none.
+    var eb = el.box.querySelector('#blt-errbreak');
+    if (eb) {
+      var reasons = Object.keys(r.errBy).sort(function (a, b) { return r.errBy[b] - r.errBy[a]; });
+      eb.textContent = reasons.length
+        ? reasons.map(function (k) { return r.errBy[k].toLocaleString() + ' ' + k; }).join(' · ')
+        : '';
+    }
     // While a run is live the caps line shows how long it has been going and
     // how many sessions have churned — the two numbers a soak is watched by.
     var note = el.box.querySelector('#blt-caps');

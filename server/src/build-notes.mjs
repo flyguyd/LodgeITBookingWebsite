@@ -344,4 +344,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.26',
+    version: '0.1.26',
+    date: '2026-08-25T06:00:00+02:00',
+    changes: [
+      {
+        headline:
+          'PRICES NOW COME FROM THE RATE ENGINE - the Cloudbeds rate feed is disconnected (needs engine 0.1.23). Every figure a guest sees - the card totals, the itemised breakdown, the date picker\u0027s per-day rates - is quoted by the Rate Engine for the plans OFFERED to visitors (chosen in Lodge Ops under Settings > Booking Website). When more than one offered plan prices a suite, the card grows plan pills - Flexible, Saver, whatever Dave names them - and switching re-prices the card, the breakdown and the summary in place; the chosen plan travels through room_selected and checkout_started analytics. A suite the engine does not price says Rates on request, and no offered plans means no prices anywhere: there is deliberately NO fallback to provider figures. The site-side 5th-night promotion is retired with this - pricing rules live in the Rate Engine now.',
+        detail:
+          'The disconnection is enforced at the server boundary, not by the pages: the two rate-bearing guest answers (availability, rate-calendar) are rewritten before they leave - provider totalPrice/taxes/fees/nightlyPrices stripped wholesale, the engine\u0027s POST /api/engine/rates/quote (HMAC, offered-plans authority server-side, source pinned direct_web, session key a per-visitor IP HASH so the engine sees no PII) folded in as ratePlans with per-suite nights and totals. Availability itself still comes from Cloudbeds - the engine holds no inventory; only the money changed hands. The calendar\u0027s per-day figure is the cheapest VAT-inclusive engine price across offered plans and replicated suites. On the pages, core.js maps a plan onto the old display model (rate EX VAT + the engine\u0027s own VAT, per-night rate AND per-night VAT arrays feeding the day-by-day statement exactly), with the conservation levy still added from the replicated lodge settings - the engine knows nothing of it. PROVEN against the real chain mock Cloudbeds -> engine 0.1.23 -> site: 24 API/page-code assertions (figures stripped, offered-only, math to the cent, empty-offered visibly empty) plus 11 in real Chromium on BOTH builds (R11,385 inclusive card, pill switch to R9,315, plan name in the summary, zero Cloudbeds digits in the DOM).',
+      },
+    ],
+  },
 ];

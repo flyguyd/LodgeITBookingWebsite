@@ -83,11 +83,14 @@ export function safeSitePath(siteRoot, urlPath) {
 }
 
 /** The guest routes the server forwards, mapped onto the engine's private
- *  booking API. Anything not listed does not exist publicly. */
+ *  booking API. Anything not listed does not exist publicly. `rates` marks
+ *  the answers whose PRICE figures are replaced by the Rate Engine's before
+ *  they reach a browser (0.1.26) — the provider contributes availability
+ *  and content only. */
 export const FORWARD_ROUTES = {
   'GET /api/public/status': { method: 'GET', path: '/api/booking/status' },
-  'GET /api/public/availability': { method: 'GET', path: '/api/booking/availability' },
-  'GET /api/public/rate-calendar': { method: 'GET', path: '/api/booking/rate-calendar' },
+  'GET /api/public/availability': { method: 'GET', path: '/api/booking/availability', rates: 'stay' },
+  'GET /api/public/rate-calendar': { method: 'GET', path: '/api/booking/rate-calendar', rates: 'calendar' },
   'POST /api/public/sessions': { method: 'POST', path: '/api/booking/sessions' },
   'POST /api/public/events': { method: 'POST', path: '/api/booking/events' },
 };
@@ -98,7 +101,78 @@ export function forwardTargetFor(method, urlPath) {
   if (!route) return null;
   const qIdx = urlPath.indexOf('?');
   const query = qIdx >= 0 ? urlPath.slice(qIdx) : '';
-  return { method: route.method, path: route.path + query };
+  return { method: route.method, path: route.path + query, rates: route.rates ?? null };
+}
+
+/* ---- the Rate Engine connection (0.1.26) --------------------------------
+   Prices on the public site come from the Rate Engine's site quote
+   (POST /api/engine/rates/quote — the plans OFFERED to visitors, chosen in
+   Lodge Ops) and from nowhere else. The provider's (Cloudbeds) rate figures
+   are stripped at this boundary, deliberately without a fallback: when the
+   engine cannot price a stay, the site says so instead of quoting numbers
+   the lodge no longer controls. */
+
+/** A stable per-visitor key for the engine's session-consistent rate cache.
+ *  A hash, never the address itself — the engine sees no PII. */
+export function siteSessionKey(ip) {
+  return 'site-' + createHash('sha256').update(String(ip ?? '')).digest('hex').slice(0, 24);
+}
+
+/** Remove every provider rate figure from an availability answer. */
+export function stripProviderRates(availability) {
+  if (!availability || !Array.isArray(availability.results)) return availability;
+  for (const room of availability.results) {
+    if (!room || typeof room !== 'object') continue;
+    delete room.totalPrice;
+    delete room.taxesTotal;
+    delete room.feesTotal;
+    delete room.nightlyPrices;
+    delete room.currency;
+  }
+  return availability;
+}
+
+/**
+ * Fold the Rate Engine's site quote into an availability answer: provider
+ * figures out, `ratePlans` (the offered plans, each with per-suite nights
+ * and totals) in. A failed or empty quote still strips — the answer then
+ * carries no prices at all, visibly.
+ */
+export function attachEngineRates(availability, quote) {
+  stripProviderRates(availability);
+  availability.ratePlans = quote && Array.isArray(quote.plans) ? quote.plans : [];
+  availability.rateSource = 'rate-engine';
+  return availability;
+}
+
+/**
+ * Replace the calendar's per-day cheapest figures with the Rate Engine's:
+ * min across the offered plans and quoted suites of that night's
+ * VAT-inclusive price. Days the engine does not price lose their figure
+ * (the picker renders them without a rate); availability flags are the
+ * provider's and stay untouched.
+ */
+export function calendarWithEngineRates(calendar, quote) {
+  if (!calendar || typeof calendar.days !== 'object' || calendar.days === null) return calendar;
+  const best = {};
+  for (const plan of quote && Array.isArray(quote.plans) ? quote.plans : []) {
+    for (const suite of Object.values(plan?.suites ?? {})) {
+      const nights = suite && Array.isArray(suite.nights) ? suite.nights : [];
+      for (const n of nights) {
+        const v = n && n.totalInclVat != null ? Number(n.totalInclVat) : NaN;
+        if (!Number.isFinite(v) || !n.date) continue;
+        if (best[n.date] == null || v < best[n.date]) best[n.date] = v;
+      }
+    }
+  }
+  for (const day of Object.values(calendar.days)) {
+    if (day && typeof day === 'object') day.minRate = null;
+  }
+  for (const [iso, v] of Object.entries(best)) {
+    const day = calendar.days[iso];
+    if (day && typeof day === 'object') day.minRate = v;
+  }
+  return calendar;
 }
 
 /**

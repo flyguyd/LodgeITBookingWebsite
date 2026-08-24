@@ -17,12 +17,15 @@ import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  attachEngineRates,
+  calendarWithEngineRates,
   createRateLimiter,
   createStatsRecorder,
   forwardTargetFor,
   mimeFor,
   safeSitePath,
   signHeaders,
+  siteSessionKey,
 } from './lib.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -241,6 +244,56 @@ async function syncMedia() {
   }
 }
 
+/* ---- rates from the Rate Engine (0.1.26) ----
+   The two rate-bearing guest answers are rewritten before they leave this
+   server: provider (Cloudbeds) rate figures stripped, the Rate Engine's
+   quote for the OFFERED plans folded in. No fallback by design — an
+   unpriced stay is presented as unpriced, never as a provider figure the
+   lodge no longer controls. */
+async function engineRatesQuote(roomTypeIds, from, to, ip) {
+  const ids = [...new Set(roomTypeIds.map(String))].slice(0, 20);
+  if (!ids.length || !from || !to || to <= from) return null;
+  const raw = JSON.stringify({ roomTypeIds: ids, from, to, sessionKey: siteSessionKey(ip) });
+  const r = await engineCall('POST', '/api/engine/rates/quote', raw);
+  if (r.status !== 200 || !r.body) return null;
+  try {
+    const parsed = JSON.parse(r.body);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Rewrite one forwarded 200 answer with engine rates; returns the new body
+ *  string, or the original when the answer is not parseable. */
+async function withEngineRates(kind, urlPath, body, ip) {
+  let parsed;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return body;
+  }
+  if (!parsed || typeof parsed !== 'object') return body;
+  const params = new URLSearchParams(urlPath.includes('?') ? urlPath.slice(urlPath.indexOf('?') + 1) : '');
+  const from = params.get('from') ?? '';
+  const to = params.get('to') ?? '';
+  if (kind === 'stay') {
+    const ids = (Array.isArray(parsed.results) ? parsed.results : [])
+      .map((room) => room?.roomTypeId)
+      .filter((id) => id != null);
+    const quote = await engineRatesQuote(ids, from, to, ip);
+    return JSON.stringify(attachEngineRates(parsed, quote));
+  }
+  if (kind === 'calendar') {
+    // One suite when the picker is filtered, otherwise every replicated one.
+    const one = params.get('roomTypeId');
+    const ids = one ? [one] : Object.keys(suiteContent.suites ?? {}).filter((id) => id.charAt(0) !== '_');
+    const quote = await engineRatesQuote(ids, from, to, ip);
+    return JSON.stringify(calendarWithEngineRates(parsed, quote));
+  }
+  return body;
+}
+
 /** A signed engine GET returning raw bytes (the media pull). */
 async function engineCallRaw(method, path) {
   if (!ENGINE_URL || !CLIENT_KEY || !CLIENT_SECRET) return null;
@@ -374,11 +427,15 @@ const server = createServer(async (req, res) => {
       });
       return;
     }
+    let outBody = r.body ?? '';
+    if (r.status === 200 && target.rates) {
+      outBody = await withEngineRates(target.rates, url, outBody, ip);
+    }
     res.writeHead(r.status, {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
     });
-    res.end(r.body ?? '');
+    res.end(outBody);
     return;
   }
 

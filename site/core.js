@@ -241,6 +241,25 @@ window.BKCore = (function () {
       var pre = (nights - 1) * Number(room.promoNightly) + Number(room.promoCharge5);
       k = pre > 0 ? total / pre : 1;
     }
+    /* Engine-priced rooms carry each night's real VAT (0.1.26); the extras
+       column then splits VAT per night exactly and only the non-VAT part
+       (the levy) evenly. Fallback stays the even split. */
+    var perVat = null;
+    var nv = room.nightlyVat;
+    if (nv && nv.length === nights) {
+      perVat = [];
+      var vatSum = 0;
+      for (var m = 0; m < nv.length; m++) {
+        var vv = Number(nv[m]);
+        if (!isFinite(vv)) { perVat = null; break; }
+        perVat.push(vv);
+        vatSum += vv;
+      }
+      if (perVat && !(vatSum <= extras + 0.005)) perVat = null;
+    }
+    var restPerNight = perVat
+      ? (extras - perVat.reduce(function (a, b) { return a + b; }, 0)) / nights
+      : null;
     var rows = [];
     for (var i = 0; i < nights; i++) {
       var base = promo
@@ -249,7 +268,7 @@ window.BKCore = (function () {
       rows.push({
         date: addDays(from, i),
         base: base,
-        extras: extras / nights,
+        extras: perVat ? perVat[i] + restPerNight : extras / nights,
         free5: promo && i === 4,
       });
     }
@@ -306,6 +325,62 @@ window.BKCore = (function () {
       if (levyVat > 0) lines.push({ label: 'VAT ' + pctS + '% on levy', amount: levyVat });
     }
     return lines;
+  }
+
+  /* ---- rates from the Rate Engine (0.1.26) ----
+     The availability answer carries `ratePlans`: the plans Lodge Ops offers
+     to visitors, each with per-suite nights and totals straight from the
+     Rate Engine. Provider rate figures never reach the browser any more —
+     the site server strips them — so everything priced on these pages goes
+     through the two helpers below. */
+
+  /** The plan options that actually price one suite's stay — engine order
+   *  (the offered list's order) preserved, unpriced or LoS-blocked plans
+   *  left out. Empty = the suite has no rate to show, honestly. */
+  function planOptionsFor(roomTypeId, ratePlans) {
+    var out = [];
+    (ratePlans || []).forEach(function (p) {
+      var s = p && p.suites && p.suites[String(roomTypeId)];
+      if (!s || s.available !== true) return;
+      if (s.rateTotal == null || s.grandTotal == null) return;
+      out.push({
+        planId: String(p.id),
+        name: p.name || 'Standard rate',
+        description: p.description || null,
+        rateTotal: Number(s.rateTotal),
+        vatTotal: s.vatTotal != null ? Number(s.vatTotal) : 0,
+        grandTotal: Number(s.grandTotal),
+        nights: s.nights || [],
+      });
+    });
+    return out;
+  }
+
+  /**
+   * Map one engine plan option onto a room's display figures: totalPrice is
+   * the accommodation EX VAT, taxesTotal the engine's VAT (so both display
+   * modes show the engine's arithmetic, not a derivation), nightly rate and
+   * VAT arrays ride along for the day-by-day breakdown, and the conservation
+   * levy — which the engine knows nothing of — is added from the replicated
+   * lodge settings exactly as before.
+   */
+  function applyPlanToRoom(room, opt, lodge, party, nights) {
+    room.planId = opt.planId;
+    room.planName = opt.name;
+    room.totalPrice = opt.rateTotal;
+    room.taxesTotal = opt.vatTotal > 0 ? opt.vatTotal : null;
+    room.vatDerived = opt.vatTotal > 0;
+    room.providerExtras = false;
+    room.currency = (lodge && lodge.currency) || 'ZAR';
+    room.nightlyPrices = (opt.nights || []).map(function (n) { return { rate: n.rate }; });
+    room.nightlyVat = (opt.nights || []).map(function (n) {
+      return n.vatAmount != null ? Number(n.vatAmount) : 0;
+    });
+    var levyStay = levyForStay(lodge, party, nights);
+    var vatPct = lodge && Number(lodge.vatPct) > 0 ? Number(lodge.vatPct) : 0;
+    room.feesTotal = levyStay > 0 ? levyStay * (1 + vatPct / 100) : null;
+    room.levyAdded = levyStay > 0;
+    return room;
   }
 
   /** Deterministic 0..359 hue from a room id, for the generative fallback
@@ -389,6 +464,8 @@ window.BKCore = (function () {
     moneyC: moneyC,
     levyMathLabel: levyMathLabel,
     stayMath: stayMath,
+    planOptionsFor: planOptionsFor,
+    applyPlanToRoom: applyPlanToRoom,
     startSession: startSession,
     track: track,
     searchAvailability: searchAvailability,
@@ -415,4 +492,6 @@ window.__bk = {
   moneyC: window.BKCore.moneyC,
   levyMathLabel: window.BKCore.levyMathLabel,
   stayMath: window.BKCore.stayMath,
+  planOptionsFor: window.BKCore.planOptionsFor,
+  applyPlanToRoom: window.BKCore.applyPlanToRoom,
 };

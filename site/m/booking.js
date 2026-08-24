@@ -199,53 +199,23 @@
         }
         current.results = r.json.results || [];
         current.nights = r.json.nights;
-        /* 5+ nights: the 5th night's accommodation is free — each room's
-           stay total is re-priced through the shared rule before display. */
-
+        current.ratePlans = r.json.ratePlans || [];
+        /* Prices come from the Rate Engine ONLY (0.1.26): the server strips
+           the provider's figures and attaches the offered plans' quotes.
+           Each suite maps its first priced plan onto the card; further
+           plans become pills the guest can switch between. A suite the
+           engine does not price shows "Rates on request" — never a number
+           from anywhere else. (The old site-side 5th-night promotion is
+           retired with this: pricing rules live in the Rate Engine now.)
+           The conservation levy still comes from the replicated lodge
+           settings — the engine knows nothing of it. */
         var party = { adults: els.adults.textContent, children: els.children.textContent };
-        var itemised = config.rateDisplay === 'separate';
-        if (r.json.nights >= 5) {
-          current.results.forEach(function (room) {
-            /* The stay's levy is always collected in full below, so the 5th
-               night must never charge it a second time. */
-            var adj = C.fifthNightAdjust(room, r.json.nights, lodge, party, false);
-            if (adj) {
-              room.totalPrice = adj.total;
-              room.promoFree5 = true;
-              room.promoNightly = adj.nightly;
-              room.promoCharge5 = adj.charge;
-            }
-          });
-        }
-        /* Real Cloudbeds does not itemise taxes on this endpoint, so the
-           levy and VAT amounts are worked out from the replicated Guest
-           Suites settings under BOTH displays (Dave, 2026-08-23). Rates are
-           VAT-inclusive per the lodge's declared vatPct: the itemised
-           display derives that VAT out as its own amount (provider
-           itemisation wins when present); the inclusive display leaves it
-           in the rate. The conservation levy for the whole stay, with VAT
-           on it, is added either way — the provider knows nothing of it. */
-        if (lodge) {
-          var vatPct = Number(lodge.vatPct) > 0 ? Number(lodge.vatPct) : 0;
-          var levyStay = C.levyForStay(lodge, party, r.json.nights);
-          current.results.forEach(function (room) {
-            var t = Number(room.totalPrice);
-            if (!isFinite(t) || !(t > 0)) return;
-            var hasOwn = (room.taxesTotal != null && isFinite(Number(room.taxesTotal))) ||
-              (room.feesTotal != null && isFinite(Number(room.feesTotal)));
-            room.providerExtras = hasOwn;
-            if (itemised && !hasOwn && vatPct > 0) {
-              var vat = t * vatPct / (100 + vatPct);
-              room.totalPrice = t - vat;
-              room.taxesTotal = vat;
-              room.vatDerived = true;
-            }
-            if (levyStay > 0) {
-              room.feesTotal = (Number(room.feesTotal) || 0) + levyStay * (1 + vatPct / 100);
-              room.levyAdded = true;
-            }
-          });
-        }
+        current.results.forEach(function (room) {
+          room.plans = C.planOptionsFor(room.roomTypeId, current.ratePlans);
+          if (room.plans.length) {
+            C.applyPlanToRoom(room, room.plans[0], lodge, party, r.json.nights);
+          }
+        });
         /* The provider omits fully booked room types entirely — when Lodge
            Ops says to show them, the replicated suite list fills the gaps. */
         if (config.showUnavailable === true) {
@@ -471,7 +441,7 @@
      inside the rate, unless the provider itemised its own extras too. */
   function inclLabel(room) {
     if (room.levyAdded) return room.providerExtras ? 'taxes, fees & levy included' : 'VAT & levy included';
-    return 'taxes & fees included';
+    return room.vatDerived ? 'VAT included' : 'taxes & fees included';
   }
 
   /* The summary bar's amount: the grand total the guest will actually pay,
@@ -568,8 +538,50 @@
         if (pp.note.kind === 'plus') attachBreakdown(price, noteEl, room, nights);
       }
       top.appendChild(price);
+    } else if (!soldOut) {
+      /* Bookable but not priced by the Rate Engine — said plainly, never a
+         number from anywhere else. */
+      var ror = document.createElement('div');
+      ror.className = 'room-price';
+      var rorS = document.createElement('span');
+      rorS.className = 'room-ror';
+      rorS.textContent = 'Rates on request';
+      ror.appendChild(rorS);
+      top.appendChild(ror);
     }
     body.appendChild(top);
+
+    /* Rate plan options (0.1.26): when more than one offered plan prices
+       this suite, the guest switches between them here; the card re-prices
+       in place and any pick keeps the chosen plan. */
+    var plans = room.plans || [];
+    if (plans.length > 1 && !soldOut) {
+      var planRow = document.createElement('div');
+      planRow.className = 'room-plans';
+      plans.forEach(function (opt) {
+        var pb = document.createElement('button');
+        pb.type = 'button';
+        pb.className = 'room-plan' + (opt.planId === room.planId ? ' on' : '');
+        pb.textContent = opt.name;
+        if (opt.description) pb.title = opt.description;
+        pb.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          if (opt.planId === room.planId) return;
+          var party = { adults: els.adults.textContent, children: els.children.textContent };
+          C.applyPlanToRoom(room, opt, lodge, party, nights);
+          C.track('plan_selected',
+            { roomTypeId: room.roomTypeId, planId: opt.planId, total: room.totalPrice },
+            stateCheckpoint());
+          var fresh = renderRoom(room, nights, index);
+          fresh.style.animationDelay = '0s';
+          card.parentNode.replaceChild(fresh, card);
+          if (fresh.__refresh) fresh.__refresh();
+          updateSummary();
+        });
+        planRow.appendChild(pb);
+      });
+      body.appendChild(planRow);
+    }
 
     /* The lodge's own words and facts win over the provider's. */
     var sc = suites[String(room.roomTypeId)] || null;
@@ -695,7 +707,9 @@
   function stateCheckpoint() {
     return {
       from: current.from, to: current.to,
-      rooms: pickedRooms().map(function (p) { return { roomTypeId: p.room.roomTypeId, qty: p.qty }; }),
+      rooms: pickedRooms().map(function (p) {
+        return { roomTypeId: p.room.roomTypeId, qty: p.qty, planId: p.room.planId || null };
+      }),
     };
   }
   function togglePick(room) {
@@ -704,7 +718,9 @@
       C.track('room_selected', { roomTypeId: room.roomTypeId, action: 'removed' }, stateCheckpoint());
     } else {
       current.picks[room.roomTypeId] = { room: room, qty: 1 };
-      C.track('room_selected', { roomTypeId: room.roomTypeId, total: room.totalPrice }, stateCheckpoint());
+      C.track('room_selected',
+        { roomTypeId: room.roomTypeId, planId: room.planId || null, total: room.totalPrice },
+        stateCheckpoint());
     }
     refreshCards();
     updateSummary();
@@ -742,7 +758,11 @@
     if (!picks.length) { hideSummary(); return; }
     var suites = picks.reduce(function (n, p) { return n + p.qty; }, 0);
     els.sumRoom.textContent = picks
-      .map(function (p) { return p.room.name + (p.qty > 1 ? ' ×' + p.qty : ''); })
+      .map(function (p) {
+        var planTag = p.room.plans && p.room.plans.length > 1 && p.room.planName
+          ? ' — ' + p.room.planName : '';
+        return p.room.name + planTag + (p.qty > 1 ? ' ×' + p.qty : '');
+      })
       .join(' · ');
     els.sumDates.textContent = suites + ' suite' + (suites === 1 ? '' : 's');
     var total = selectionTotal();
@@ -757,7 +777,9 @@
     if (!picks.length) return;
     var total = selectionTotal();
     C.track('checkout_started', {
-      rooms: picks.map(function (p) { return { roomTypeId: p.room.roomTypeId, qty: p.qty }; }),
+      rooms: picks.map(function (p) {
+        return { roomTypeId: p.room.roomTypeId, qty: p.qty, planId: p.room.planId || null };
+      }),
       total: total ? total.sum.toFixed(2) : null,
     }, stateCheckpoint());
     els.continueNote.hidden = false;

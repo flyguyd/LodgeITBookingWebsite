@@ -415,6 +415,8 @@ main { z-index: 3; }
 .bk-row span:last-child { color: var(--paper); }
 .bk-total { border-top: 1px solid rgba(255, 255, 255, 0.14); margin-top: 6px; padding-top: 6px; }
 .bk-total span { color: var(--gold); font-size: 13px; }
+/* The discount line a code earned: gold, like the good news it is. */
+.bk-disc span { color: var(--gold); }
 
 .bk-free { color: var(--gold); font-style: normal; font-size: 10px; margin-left: 7px; letter-spacing: 0.04em; }
 

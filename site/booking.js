@@ -333,6 +333,15 @@
     });
     var totalC = accC;
     addRow('Accommodation', accC, 'bk-sub', null);
+    /* The discount the guest's code earned, as its own negative line right
+       under the (original-amount) Accommodation row — subtracting it lands
+       back on the charged figure before VAT and levy stack on. */
+    if (bd.discount > 0) {
+      var codeS = els.code && els.code.value ? els.code.value.trim().toUpperCase() : '';
+      var discC = Math.round(bd.discount * 100);
+      totalC -= discC;
+      addRow('Discount code' + (codeS ? ' ' + codeS : ''), -discC, 'bk-disc', null);
+    }
     lines.forEach(function (l) {
       var c = Math.round(l.amount * 100);
       totalC += c;

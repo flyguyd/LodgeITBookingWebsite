@@ -260,11 +260,27 @@ window.BKCore = (function () {
     var restPerNight = perVat
       ? (extras - perVat.reduce(function (a, b) { return a + b; }, 0)) / nights
       : null;
+    /* A DISCOUNT CODE took money off (engine 0.1.40): the nightly rows and
+       the Accommodation line show the ORIGINAL amounts and the discount then
+       appears as its own negative line, so the guest sees what the code
+       saved. Display recomposition ONLY — every charged figure (VAT
+       included) keeps coming from the discounted rate; total stays what the
+       guest pays. */
+    var disc = !promo && room.discountApplied === true &&
+      isFinite(Number(room.discountTotal)) && Number(room.discountTotal) > 0
+      ? Number(room.discountTotal) : 0;
+    if (disc > 0 && nightly && room.nightlyDiscount && room.nightlyDiscount.length === nights) {
+      for (var q = 0; q < nights; q++) {
+        var dq = Number(room.nightlyDiscount[q]);
+        if (isFinite(dq)) nightly[q] += dq;
+      }
+    }
+    var accTotal = total + disc;
     var rows = [];
     for (var i = 0; i < nights; i++) {
       var base = promo
         ? (i === 4 ? Number(room.promoCharge5) : Number(room.promoNightly)) * k
-        : (nightly ? nightly[i] : total / nights);
+        : (nightly ? nightly[i] : accTotal / nights);
       rows.push({
         date: addDays(from, i),
         base: base,
@@ -272,7 +288,9 @@ window.BKCore = (function () {
         free5: promo && i === 4,
       });
     }
-    return { rows: rows, baseTotal: total, extrasTotal: extras, grand: total + extras };
+    /* baseTotal is the ACCOMMODATION LINE as displayed — original when a
+       discount rode along; `discount` brings it back to the charged figure. */
+    return { rows: rows, baseTotal: accTotal, discount: disc, extrasTotal: extras, grand: total + extras };
   }
 
   /** 'R175 × 2 guests × 4 nights' — how the levy total is reached, spelled
@@ -312,8 +330,15 @@ window.BKCore = (function () {
     var levy = room.levyAdded ? levyForStay(lodge, party, nights) : 0;
     var levyVat = levy * vatPct / 100;
     if (taxes > 0) {
+      /* With a discount applied the Accommodation line shows the ORIGINAL
+         amount, but VAT is charged on what the guest pays — the label says
+         which figure the percentage is really on, so the arithmetic a guest
+         checks by hand still works out. */
       lines.push({
-        label: room.vatDerived ? 'VAT ' + pctS + '% on accommodation' : 'Taxes (provider)',
+        label: room.vatDerived
+          ? 'VAT ' + pctS + '% on ' +
+            (room.discountApplied === true ? 'discounted accommodation' : 'accommodation')
+          : 'Taxes (provider)',
         amount: taxes,
       });
     }
@@ -353,6 +378,12 @@ window.BKCore = (function () {
         rateTotal: Number(s.rateTotal),
         vatTotal: s.vatTotal != null ? Number(s.vatTotal) : 0,
         grandTotal: Number(s.grandTotal),
+        /* A discount code the guest typed took money off this plan's stay
+           (engine 0.1.40): the flag plus what it saved and the pre-discount
+           accommodation, for the itemised statement. */
+        discountApplied: s.discountApplied === true,
+        discountTotal: s.discountTotal != null ? Number(s.discountTotal) : 0,
+        preDiscountTotal: s.preDiscountTotal != null ? Number(s.preDiscountTotal) : null,
         nights: s.nights || [],
         cheapest: false,
       });
@@ -422,6 +453,16 @@ window.BKCore = (function () {
     room.nightlyPrices = (opt.nights || []).map(function (n) { return { rate: n.rate }; });
     room.nightlyVat = (opt.nights || []).map(function (n) {
       return n.vatAmount != null ? Number(n.vatAmount) : 0;
+    });
+    /* Discount-code figures ride along — and are explicitly CLEARED when
+       the guest switches to a plan the code did not touch, or a stale
+       discount line would survive the switch. */
+    room.discountApplied = opt.discountApplied === true && Number(opt.discountTotal) > 0;
+    room.discountTotal = room.discountApplied ? Number(opt.discountTotal) : 0;
+    room.preDiscountTotal = room.discountApplied && opt.preDiscountTotal != null
+      ? Number(opt.preDiscountTotal) : null;
+    room.nightlyDiscount = (opt.nights || []).map(function (n) {
+      return n.discountAmount != null ? Number(n.discountAmount) : 0;
     });
     var levyStay = levyForStay(lodge, party, nights);
     var vatPct = lodge && Number(lodge.vatPct) > 0 ? Number(lodge.vatPct) : 0;

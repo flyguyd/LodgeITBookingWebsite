@@ -383,10 +383,20 @@ window.BKCore = (function () {
     return options;
   }
 
-  /** The option a search should land on: the cheapest when one is tagged,
-   *  otherwise the first priced plan. Never null for a non-empty list. */
+  /** The option a search should land on. THE HOUSE DEFAULT IS ALL INCLUSIVE
+   *  (Dave, 2026-08-26): the card opens on the fullest presentation of the
+   *  stay whenever a plan by that name prices it — matched on the name,
+   *  case-insensitively, hyphen tolerated, because that is what the plan is
+   *  called in Lodge Ops. Only when no All Inclusive plan prices the stay
+   *  does the old order apply: the cheapest, else the first priced plan.
+   *  Never null for a non-empty list. The "Lowest rate" tag still marks the
+   *  cheapest pill either way — defaulting high must not hide the low. */
   function defaultPlanOption(options) {
     if (!options || !options.length) return null;
+    for (var a = 0; a < options.length; a += 1) {
+      var n = String((options[a] && options[a].name) || '').toLowerCase().replace(/-/g, ' ');
+      if (n.indexOf('all inclusive') !== -1) return options[a];
+    }
     for (var i = 0; i < options.length; i += 1) {
       if (options[i] && options[i].cheapest === true) return options[i];
     }

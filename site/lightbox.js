@@ -309,3 +309,231 @@ window.BKLight = (function () {
 
   return { open: open };
 })();
+
+/* 7 Star Lodges booking — the rate-comparison lightbox (shared by both
+   builds; Dave, 2026-08-26). "Compare these rates" on a suite card opens
+   this: each rate plan is a COLUMN, the inclusions are ROWS grouped under
+   their sub-group names exactly as arranged on the Lodge Ops Rate Plan
+   Support page, and every cell says whether that plan includes the item.
+   This replaces the per-pill hover tip — side by side beats a dozen
+   tooltips. Self-contained like BKLight: injects its own styles, builds
+   its DOM per open, closes on X, backdrop or Escape. */
+window.BKCompare = (function () {
+  'use strict';
+
+  var STYLE = [
+    '.bcx-backdrop{position:fixed;inset:0;z-index:2100;background:rgba(8,10,14,0.72);',
+    'backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);',
+    'display:flex;align-items:center;justify-content:center;padding:18px;animation:bcx-in 0.25s ease}',
+    '@keyframes bcx-in{from{opacity:0}}',
+    '.bcx{position:relative;width:min(820px,100%);max-height:calc(100vh - 36px);overflow-y:auto;',
+    'border-radius:22px;background:rgba(18,21,28,0.97);border:1px solid rgba(255,255,255,0.16);',
+    'box-shadow:0 30px 90px rgba(0,0,0,0.6);color:#f4efe6;padding:22px 24px 24px;',
+    'scrollbar-width:thin;scrollbar-color:rgba(201,168,106,0.5) transparent;animation:bcx-rise 0.3s cubic-bezier(0.2,0.7,0.2,1)}',
+    '@keyframes bcx-rise{from{transform:translateY(18px);opacity:0}}',
+    '.bcx-x{position:absolute;top:12px;right:12px;width:36px;height:36px;border-radius:50%;',
+    'border:1px solid rgba(255,255,255,0.25);background:rgba(12,14,19,0.55);color:#f4efe6;',
+    'font-size:19px;line-height:1;cursor:pointer}',
+    '.bcx-x:hover{background:rgba(255,255,255,0.15)}',
+    '.bcx-title{margin:0;font-family:"Didot","Bodoni MT","Playfair Display","Georgia",serif;font-weight:400;font-size:24px}',
+    '.bcx-sub{margin:4px 0 14px;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#c9a86a}',
+    '.bcx-scroll{overflow-x:auto}',
+    '.bcx-grid{display:grid;gap:0;min-width:100%;border-top:1px solid rgba(255,255,255,0.1)}',
+    '.bcx-cell{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,0.08);font-size:13.5px}',
+    '.bcx-plan{display:flex;flex-direction:column;gap:2px;align-items:flex-start}',
+    '.bcx-plan-name{font-weight:600}',
+    '.bcx-plan-total{font-size:14px;color:#c9a86a}',
+    '.bcx-plan-group{font-size:11px;color:rgba(244,239,230,0.55)}',
+    '.bcx-best{font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:#0e0f13;',
+    'background:#c9a86a;border-radius:999px;padding:2px 7px;font-weight:700}',
+    '.bcx-sec{grid-column:1 / -1;padding:12px 10px 5px;font-size:11px;letter-spacing:0.18em;',
+    'text-transform:uppercase;color:#c9a86a;border-bottom:1px solid rgba(255,255,255,0.08)}',
+    '.bcx-tag{color:rgba(244,239,230,0.9)}',
+    '.bcx-mark{text-align:center;font-size:14px}',
+    '.bcx-in{color:#c9a86a}',
+    '.bcx-out{color:rgba(227,110,95,0.9)}',
+    '.bcx-na{color:rgba(244,239,230,0.3)}',
+    '.bcx-legend{margin:12px 2px 0;font-size:11.5px;color:rgba(244,239,230,0.55)}',
+    '.bcx-empty{margin:14px 2px 4px;font-size:13.5px;color:rgba(244,239,230,0.65)}',
+  ].join('');
+
+  var styled = false;
+  function ensureStyle() {
+    if (styled) return;
+    var el = document.createElement('style');
+    el.textContent = STYLE;
+    document.head.appendChild(el);
+    styled = true;
+  }
+
+  /* One row per inclusion item, grouped under the FIRST sub-group name that
+     mentions it — the same item can sit in different sections on different
+     plans ("Lunch" in Meals on Full Board, in Not included on Half Board),
+     and one honest row beats two half-truthful ones. The cell verdicts come
+     from the flat rollup, so the included-beats-excluded resolution made in
+     Lodge Ops holds here too. Plans replicated before sections existed fall
+     back to two synthetic sections. */
+  function buildGroups(plans) {
+    var groups = [];
+    var byName = {};
+    var seenTag = {};
+    plans.forEach(function (p) {
+      var inc = p.inclusions || {};
+      var secs = inc.sections && inc.sections.length ? inc.sections : [];
+      if (!secs.length) {
+        if ((inc.included || []).length) secs.push({ name: 'Included', negative: false, tags: inc.included });
+        if ((inc.excluded || []).length) secs.push({ name: 'Not included', negative: true, tags: inc.excluded });
+      }
+      secs.forEach(function (s) {
+        if (!s.tags || !s.tags.length) return;
+        var grp = byName[s.name];
+        if (!grp) {
+          grp = { name: s.name, negative: s.negative === true, tags: [] };
+          byName[s.name] = grp;
+          groups.push(grp);
+        }
+        s.tags.forEach(function (t) {
+          if (!seenTag[t]) {
+            seenTag[t] = 1;
+            grp.tags.push(t);
+          }
+        });
+      });
+    });
+    /* Exclusion sections sink to the BOTTOM whatever plan donated them —
+       "what you don't get" read mid-list as if it were another perk. The
+       positive sections keep their first-appearance order. */
+    return groups.filter(function (g) { return !g.negative; })
+      .concat(groups.filter(function (g) { return g.negative; }));
+  }
+
+  function verdict(p, tag) {
+    var inc = p.inclusions || {};
+    if ((inc.included || []).indexOf(tag) !== -1) return 'in';
+    if ((inc.excluded || []).indexOf(tag) !== -1) return 'out';
+    return 'na';
+  }
+
+  function open(opts) {
+    ensureStyle();
+    var plans = (opts && opts.plans) || [];
+    var money = window.BKCore.money;
+
+    var backdrop = document.createElement('div');
+    backdrop.className = 'bcx-backdrop';
+    var box = document.createElement('div');
+    box.className = 'bcx';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', 'Compare these rates');
+
+    var x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'bcx-x';
+    x.textContent = '×';
+    box.appendChild(x);
+
+    var h = document.createElement('h3');
+    h.className = 'bcx-title';
+    h.textContent = 'Compare these rates';
+    box.appendChild(h);
+    var sub = document.createElement('p');
+    sub.className = 'bcx-sub';
+    sub.textContent = opts.suiteName || '';
+    box.appendChild(sub);
+
+    var groups = buildGroups(plans);
+    var scroll = document.createElement('div');
+    scroll.className = 'bcx-scroll';
+    var grid = document.createElement('div');
+    grid.className = 'bcx-grid';
+    grid.style.gridTemplateColumns =
+      'minmax(130px, 1.4fr) repeat(' + plans.length + ', minmax(110px, 1fr))';
+
+    // header row: the plans, each with its stay total for THIS suite
+    var corner = document.createElement('div');
+    corner.className = 'bcx-cell';
+    grid.appendChild(corner);
+    plans.forEach(function (p) {
+      var cell = document.createElement('div');
+      cell.className = 'bcx-cell bcx-plan';
+      var nm = document.createElement('span');
+      nm.className = 'bcx-plan-name';
+      nm.textContent = p.name;
+      cell.appendChild(nm);
+      if (p.grandTotal != null) {
+        var tt = document.createElement('span');
+        tt.className = 'bcx-plan-total';
+        tt.textContent = money(p.grandTotal, opts.currency);
+        cell.appendChild(tt);
+      }
+      if (p.cheapest === true) {
+        var b = document.createElement('span');
+        b.className = 'bcx-best';
+        b.textContent = 'Lowest rate';
+        cell.appendChild(b);
+      }
+      var inc = p.inclusions || {};
+      if (inc.group) {
+        var gname = document.createElement('span');
+        gname.className = 'bcx-plan-group';
+        gname.textContent = inc.group;
+        cell.appendChild(gname);
+      }
+      grid.appendChild(cell);
+    });
+
+    groups.forEach(function (grp) {
+      var sec = document.createElement('div');
+      sec.className = 'bcx-sec';
+      sec.textContent = grp.name;
+      grid.appendChild(sec);
+      grp.tags.forEach(function (tag) {
+        var tcell = document.createElement('div');
+        tcell.className = 'bcx-cell bcx-tag';
+        tcell.textContent = tag;
+        grid.appendChild(tcell);
+        plans.forEach(function (p) {
+          var v = verdict(p, tag);
+          var m = document.createElement('div');
+          m.className = 'bcx-cell bcx-mark bcx-' + v;
+          m.textContent = v === 'in' ? '✓' : v === 'out' ? '✗' : '—';
+          grid.appendChild(m);
+        });
+      });
+    });
+
+    if (groups.length) {
+      scroll.appendChild(grid);
+      box.appendChild(scroll);
+      var legend = document.createElement('p');
+      legend.className = 'bcx-legend';
+      legend.textContent = '✓ included · ✗ not included · — not specified';
+      box.appendChild(legend);
+    } else {
+      var empty = document.createElement('p');
+      empty.className = 'bcx-empty';
+      empty.textContent =
+        'No inclusion details have been set up for these rates yet — the prices above are the whole story.';
+      box.appendChild(empty);
+    }
+
+    function close() {
+      backdrop.remove();
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(ev) {
+      if (ev.key === 'Escape') close();
+    }
+    x.addEventListener('click', close);
+    backdrop.addEventListener('click', function (ev) {
+      if (ev.target === backdrop) close();
+    });
+    box.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    document.addEventListener('keydown', onKey);
+    backdrop.appendChild(box);
+    document.body.appendChild(backdrop);
+    return { close: close };
+  }
+
+  return { open: open };
+})();

@@ -493,4 +493,23 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.37',
+    version: '0.1.37',
+    date: '2026-08-26T06:50:00+02:00',
+    changes: [
+      {
+        headline:
+          'THE CARD NOW DEFAULTS TO THE ALL INCLUSIVE RATE (Dave, 2026-08-26) - the fullest presentation of the stay whenever a plan by that name prices it, matched on the name case-insensitively. The \u0022Lowest rate\u0022 tag still marks the cheapest pill, so defaulting high never hides the low; only when no All Inclusive plan prices the stay does the old cheapest-first default apply.',
+        detail:
+          'One deliberate consequence: the headline price on a card is now usually the HIGHEST of the offered plans, with the cheaper plans one pill-tap away and clearly tagged. The guest sees the lodge at its best first and the saving second.',
+      },
+      {
+        headline:
+          'THE INCLUSIONS HOVER IS GONE; in its place, a \u0022Compare these rates\u0022 button under the price opens a glass lightbox - each rate a COLUMN, the inclusions as ROWS grouped under their sub-group names, every cell a verdict (Dave, 2026-08-26). Needs Lodge Ops 1.2.183, whose push carries the sub-group structure.',
+        detail:
+          'The lightbox shows each plan with its stay total, the Lowest-rate tag and its inclusion group name; below, the sections exactly as arranged on the Rate Plan Support page - MEALS, ACTIVITIES, NOT INCLUDED - with \u2713 included, \u2717 not included, and \u2014 not specified per plan, and a legend saying so. Each item appears ONCE, under the first section that mentions it, because the same item can sit in different sections on different plans (Lunch in Meals on Full Board, in Not included on Half Board) and one honest row beats two half-truthful ones; the verdicts come from the flat rollup so the included-beats-excluded resolution made in Lodge Ops holds here. Exclusion sections sink to the bottom whatever plan donated them - \u0022what you don\u0027t get\u0022 read mid-list as if it were another perk. Plans replicated before sections existed fall back to two synthetic sections; a stay with no inclusion data at all says so in a sentence instead of an empty grid. The button renders only when more than one plan prices the suite - comparing one thing with itself is noise. Shared by both builds (the BKLight pattern: self-contained module, own styles, closes on X, backdrop or Escape). VERIFIED end to end on the real site server with a stub engine in real Chromium, 11 assertions per build \u00d7 both builds: All Inclusive selected while Room Only wears the Lowest-rate tag, the R3,910 headline, no hover tip left anywhere, three columns, sections in order with exclusions last, the Lunch row reading \u2014 \u2717 \u2713 across the three plans, and Escape closing. Nothing here books anything or touches Cloudbeds.',
+      },
+    ],
+  },
 ];

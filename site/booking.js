@@ -563,6 +563,26 @@
         price.appendChild(noteEl);
         if (pp.note.kind === 'plus') attachBreakdown(price, noteEl, room, nights);
       }
+      /* Compare these rates (Dave, 2026-08-26): only when there is more
+         than one priced plan — comparing one thing with itself is noise.
+         Opens the shared BKCompare lightbox; stopPropagation because the
+         whole card is a button that opens the suite lightbox. */
+      if ((room.plans || []).length > 1 && window.BKCompare) {
+        var cmp = document.createElement('button');
+        cmp.type = 'button';
+        cmp.className = 'rate-compare';
+        cmp.textContent = 'Compare these rates';
+        cmp.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          window.BKCompare.open({
+            suiteName: room.name,
+            plans: room.plans,
+            currency: room.currency,
+          });
+          C.track('rates_compared', { roomTypeId: room.roomTypeId });
+        });
+        price.appendChild(cmp);
+      }
       top.appendChild(price);
     } else if (!soldOut) {
       /* Bookable but not priced by the Rate Engine — said plainly, never a
@@ -599,39 +619,10 @@
           tag.textContent = 'Lowest rate';
           pb.appendChild(tag);
         }
+        /* The inclusions moved from a per-pill hover to the Compare
+           lightbox (Dave, 2026-08-26) — side by side beats thirteen
+           tooltips. The pill keeps only the plan's own description. */
         if (opt.description) pb.title = opt.description;
-        /* Hovering (or focusing) the pill lists what the plan includes —
-           and what it explicitly leaves out (Dave, 2026-08-25). Built once
-           per render; CSS shows it on :hover/:focus-visible. When the plan
-           has no linked inclusions there is no tip at all, never an empty
-           box. */
-        var inc = opt.inclusions || {};
-        var incList = inc.included || [];
-        var excList = inc.excluded || [];
-        if (incList.length || excList.length) {
-          pb.title = '';
-          var tip = document.createElement('span');
-          tip.className = 'plan-tip glass';
-          if (inc.group) {
-            var th = document.createElement('span');
-            th.className = 'plan-tip-head';
-            th.textContent = inc.group;
-            tip.appendChild(th);
-          }
-          if (incList.length) {
-            var ti = document.createElement('span');
-            ti.className = 'plan-tip-row';
-            ti.textContent = 'Includes ' + incList.join(', ');
-            tip.appendChild(ti);
-          }
-          if (excList.length) {
-            var tx = document.createElement('span');
-            tx.className = 'plan-tip-row not';
-            tx.textContent = 'Not included: ' + excList.join(', ');
-            tip.appendChild(tx);
-          }
-          pb.appendChild(tip);
-        }
         pb.addEventListener('click', function (ev) {
           ev.stopPropagation();
           if (opt.planId === room.planId) return;

@@ -141,6 +141,13 @@
     /* The native select popup cannot be styled — dress Nights in the site's
        glass language. The select stays as the value holder. */
     window.BKCal.glassSelect(els.nights);
+    /* Adults, Children and Suites wear the same glass dressing as Nights —
+       one look for every dropdown in the bar (Dave, 2026-08-25). The native
+       selects stay in the DOM as the source of truth; the triggers mirror
+       them, exactly as Nights already worked. */
+    window.BKCal.glassSelect(els.adults);
+    window.BKCal.glassSelect(els.children);
+    window.BKCal.glassSelect(els.rooms);
   }
 
   /* Suites list in the order set on Guest Suites settings (replicated as
@@ -593,6 +600,38 @@
           pb.appendChild(tag);
         }
         if (opt.description) pb.title = opt.description;
+        /* Hovering (or focusing) the pill lists what the plan includes —
+           and what it explicitly leaves out (Dave, 2026-08-25). Built once
+           per render; CSS shows it on :hover/:focus-visible. When the plan
+           has no linked inclusions there is no tip at all, never an empty
+           box. */
+        var inc = opt.inclusions || {};
+        var incList = inc.included || [];
+        var excList = inc.excluded || [];
+        if (incList.length || excList.length) {
+          pb.title = '';
+          var tip = document.createElement('span');
+          tip.className = 'plan-tip glass';
+          if (inc.group) {
+            var th = document.createElement('span');
+            th.className = 'plan-tip-head';
+            th.textContent = inc.group;
+            tip.appendChild(th);
+          }
+          if (incList.length) {
+            var ti = document.createElement('span');
+            ti.className = 'plan-tip-row';
+            ti.textContent = 'Includes ' + incList.join(', ');
+            tip.appendChild(ti);
+          }
+          if (excList.length) {
+            var tx = document.createElement('span');
+            tx.className = 'plan-tip-row not';
+            tx.textContent = 'Not included: ' + excList.join(', ');
+            tip.appendChild(tx);
+          }
+          pb.appendChild(tip);
+        }
         pb.addEventListener('click', function (ev) {
           ev.stopPropagation();
           if (opt.planId === room.planId) return;

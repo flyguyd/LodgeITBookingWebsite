@@ -294,6 +294,20 @@ main { z-index: 3; }
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 .room-plan:hover { border-color: rgba(201, 168, 106, 0.55); color: var(--paper); }
+/* What the plan includes, on hover/focus — floats above the pill so it never
+   reflows the card. Pure CSS visibility: the tip is in the DOM either way. */
+.room-plan { position: relative; }
+.plan-tip {
+  position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 30;
+  min-width: 200px; max-width: 280px; padding: 10px 12px; border-radius: 12px;
+  display: none; flex-direction: column; gap: 4px; text-align: left;
+  font-size: 12px; line-height: 1.45; color: var(--paper);
+  pointer-events: none; white-space: normal;
+}
+.room-plan:hover .plan-tip, .room-plan:focus-visible .plan-tip { display: flex; }
+.plan-tip-head { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold, #c9a86a); }
+.plan-tip-row { color: var(--paper); }
+.plan-tip-row.not { color: var(--paper-dim); text-decoration: line-through; }
 .room-plan.on {
   color: var(--gold); border-color: rgba(201, 168, 106, 0.65);
   background: rgba(201, 168, 106, 0.1);

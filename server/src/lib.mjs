@@ -151,9 +151,18 @@ export function stripProviderRates(availability) {
  * and totals) in. A failed or empty quote still strips — the answer then
  * carries no prices at all, visibly.
  */
-export function attachEngineRates(availability, quote) {
+export function attachEngineRates(availability, quote, planInclusions) {
   stripProviderRates(availability);
-  availability.ratePlans = quote && Array.isArray(quote.plans) ? quote.plans : [];
+  const plans = quote && Array.isArray(quote.plans) ? quote.plans : [];
+  // Each plan carries what it includes and excludes (engine 0.1.36,
+  // replicated words from Lodge Ops) so the pills can say what "Half Board"
+  // actually means without another request. Absent data attaches nothing —
+  // the pill then simply has no hover, never an empty one.
+  const inc = planInclusions && typeof planInclusions === 'object' ? planInclusions.plans : null;
+  availability.ratePlans = plans.map((p) => {
+    const forPlan = inc && p && p.id != null ? inc[String(p.id)] : null;
+    return forPlan && typeof forPlan === 'object' ? { ...p, inclusions: forPlan } : p;
+  });
   availability.rateSource = 'rate-engine';
   return availability;
 }

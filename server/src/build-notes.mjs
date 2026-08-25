@@ -474,4 +474,23 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.36',
+    version: '0.1.36',
+    date: '2026-08-26T03:15:00+02:00',
+    changes: [
+      {
+        headline:
+          'HOVERING A RATE PLAN PILL NOW SAYS WHAT THE PLAN INCLUDES - and what it explicitly leaves out (Dave, 2026-08-25). Needs engine 0.1.36 with its migration 017, fed by Lodge Ops.',
+        detail:
+          'The inclusion words are written in Lodge Ops (its Rate Plan Support page), replicated to the engine, and pulled by this server WHEN IT OPENS ITS ENGINE SESSION - plus every heartbeat, and kept on disk like suite content so a restart serves the last good copy at once. Each availability answer then carries the words per plan, and the pills grow a glass tooltip on hover/focus: the group name, \u0022Includes Breakfast, Dinner\u0022, and \u0022Not included: Lunch, Spa treatment\u0022 struck through - the exclusions are what a guest complains about later if nobody wrote them down. A plan Lodge Ops has not linked gets NO tip, never an empty box. On mobile the same tip shows while the pill is pressed or focused, since touch has no hover.',
+      },
+      {
+        headline:
+          'The Adults, Children and Suites dropdowns wear the same glass dressing as Nights (Dave, 2026-08-25).',
+        detail:
+          'Nights was the only select dressed by BKCal.glassSelect - the other three were naked native selects with the browser\u0027s own popup, which is why they looked different and had no chevron. All four now share the one dressing; the native selects stay in the DOM as the value holders, so every existing listener and the form submit read exactly what they always did. VERIFIED in real Chromium: four glass triggers with chevrons, picking Adults=3 through the popover drives the real select and the trigger label follows; and for the inclusions, a full stack test - real site server against a stub engine - proved the availability answer carries inclusions only for linked plans, the pill holds a tip only when there are words for it, and the hover shows them. Nothing here books anything or touches Cloudbeds.',
+      },
+    ],
+  },
 ];

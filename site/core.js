@@ -347,6 +347,9 @@ window.BKCore = (function () {
         planId: String(p.id),
         name: p.name || 'Standard rate',
         description: p.description || null,
+        /* What the plan includes/excludes (engine 0.1.36) — the pill's
+           hover. Null when Lodge Ops has not linked an inclusion group. */
+        inclusions: p.inclusions || null,
         rateTotal: Number(s.rateTotal),
         vatTotal: s.vatTotal != null ? Number(s.vatTotal) : 0,
         grandTotal: Number(s.grandTotal),

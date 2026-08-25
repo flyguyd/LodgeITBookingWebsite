@@ -203,6 +203,39 @@ async function syncSuiteContent() {
   }
 }
 
+// ---- rate plan inclusions (engine 0.1.36) ----
+// Pulled when the engine session opens and on the heartbeat cadence, kept on
+// disk like suite content so a restart serves the last good copy at once.
+let planInclusions = {};
+
+async function loadPlanInclusions() {
+  try {
+    const parsed = JSON.parse(await readFile(join(DATA_DIR, 'plan-inclusions.json'), 'utf8'));
+    if (parsed && typeof parsed === 'object') planInclusions = parsed;
+  } catch {
+    planInclusions = {};
+  }
+}
+
+async function syncPlanInclusions() {
+  const r = await engineCall('GET', '/api/booking/plan-inclusions');
+  if (r.status !== 200 || !r.body) return;
+  try {
+    const parsed = JSON.parse(r.body);
+    if (!parsed || typeof parsed !== 'object') return;
+    if (JSON.stringify(parsed) !== JSON.stringify(planInclusions)) {
+      planInclusions = parsed;
+      await mkdir(DATA_DIR, { recursive: true });
+      await writeFile(join(DATA_DIR, 'plan-inclusions.json'), JSON.stringify(planInclusions));
+      console.log(
+        `[site] plan inclusions synced: ${Object.keys(planInclusions.plans ?? {}).length} plans`,
+      );
+    }
+  } catch {
+    /* keep the last good copy */
+  }
+}
+
 // ---- the suite-media cache ----
 // manifest: id -> { roomTypeId, contentType, sortOrder }; rooms.json is the
 // public view the booking pages read (roomTypeId -> [ids, best first]).
@@ -311,6 +344,9 @@ async function openEngineSession() {
     /* the session is open even if the body surprised us */
   }
   sessionOpenedAt = Date.now();
+  // The session is the natural moment to learn what the plans include
+  // (Dave, 2026-08-25) — the answer changes about as often as the plans do.
+  void syncPlanInclusions().catch(() => {});
   // A third of the TTL: two keepalives may be lost before a session lapses.
   const every = Math.max(15_000, Math.floor((sessionTtlMs ?? 300_000) / 3));
   if (sessionTimer) clearInterval(sessionTimer);
@@ -404,7 +440,7 @@ async function withEngineRates(kind, urlPath, body, ip) {
     // Read from the ORIGINAL guest URL — forwardTargetFor has already
     // stripped it from what the provider endpoint saw.
     const quote = await engineRatesQuote(ids, from, to, ip, false, params.get('code') ?? '');
-    return JSON.stringify(attachEngineRates(parsed, quote));
+    return JSON.stringify(attachEngineRates(parsed, quote, planInclusions));
   }
   if (kind === 'calendar') {
     // One suite when the picker is filtered, otherwise every replicated one.
@@ -792,12 +828,14 @@ server.listen(PORT, () => {
   void loadMediaManifest().then(() => void syncMedia().catch(() => {}));
   void syncConfig().catch(() => {});
   void loadSuiteContent().then(() => void syncSuiteContent().catch(() => {}));
+  void loadPlanInclusions();
   setInterval(() => void syncMedia().catch(() => {}), MEDIA_SYNC_MS).unref();
   // Display config and suite content are light — re-pull on the heartbeat
   // cadence so a change made in Lodge Ops shows on the site within about a
   // minute of the engine having it.
   setInterval(() => void syncConfig().catch(() => {}), HEARTBEAT_MS).unref();
   setInterval(() => void syncSuiteContent().catch(() => {}), HEARTBEAT_MS).unref();
+  setInterval(() => void syncPlanInclusions().catch(() => {}), HEARTBEAT_MS).unref();
 });
 
 /* A clean shutdown closes the engine session (and with it the session's

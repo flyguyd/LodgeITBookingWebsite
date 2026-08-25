@@ -402,6 +402,11 @@ async function engineRatesQuote(roomTypeIds, from, to, ip, scan = false, discoun
   // it, so a coded search and a plain one never share an answer. OMITTED
   // when blank: a rule gated on a code fails closed on "no code".
   const code = String(discountCode ?? '').trim().slice(0, 40);
+  // The visitor's own address rides along (0.1.40): the engine geolocates
+  // it against the table Lodge Ops pushed and tags the quote with the ISO-2
+  // country, which is what lets country-gated rate rules see site guests.
+  // Never a third-party lookup, and omitted when we genuinely don't know.
+  const addr = String(ip ?? '').trim().slice(0, 60);
   const raw = JSON.stringify({
     roomTypeIds: ids,
     from,
@@ -409,6 +414,7 @@ async function engineRatesQuote(roomTypeIds, from, to, ip, scan = false, discoun
     sessionKey: `${SITE_SESSION_KEY}|${siteSessionKey(ip)}`,
     scan,
     ...(code ? { discountCode: code } : {}),
+    ...(addr && addr !== 'unknown' ? { ip: addr } : {}),
   });
   const r = await engineCall('POST', '/api/engine/rates/quote', raw);
   if (r.status !== 200 || !r.body) return null;

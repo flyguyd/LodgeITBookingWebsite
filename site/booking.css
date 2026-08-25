@@ -294,14 +294,22 @@ main { z-index: 3; }
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 .room-plan:hover { border-color: rgba(201, 168, 106, 0.55); color: var(--paper); }
-/* The compare button sits under the price — a quiet text affordance in the
-   site's gold, not a second CTA competing with Add to stay. */
+/* The compare button rides the pill row it compares — dashed so it never
+   reads as another plan, gold so it reads as an invitation. The pulse fires
+   each time the guest switches plans: that is the moment comparing helps. */
 .rate-compare {
-  margin-top: 4px; padding: 0; border: 0; background: none; cursor: pointer;
-  font: 500 12.5px/1.4 var(--sans); color: #c9a86a;
-  border-bottom: 1px dotted rgba(201, 168, 106, 0.55);
+  padding: 7px 14px; cursor: pointer; border-radius: 999px;
+  border: 1px dashed rgba(201, 168, 106, 0.6); background: none;
+  font: 500 12.5px/1.4 var(--sans); color: #c9a86a; white-space: nowrap;
 }
-.rate-compare:hover { color: #e2c583; border-bottom-style: solid; }
+.rate-compare:hover { color: #e2c583; border-color: #e2c583; border-style: solid; }
+@keyframes rc-pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(201, 168, 106, 0.45); }
+  40% { transform: scale(1.09); box-shadow: 0 0 0 7px rgba(201, 168, 106, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(201, 168, 106, 0); }
+}
+.rate-compare.pulse { animation: rc-pulse 0.55s cubic-bezier(0.2, 0.7, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) { .rate-compare.pulse { animation: none; } }
 .room-plan.on {
   color: var(--gold); border-color: rgba(201, 168, 106, 0.65);
   background: rgba(201, 168, 106, 0.1);

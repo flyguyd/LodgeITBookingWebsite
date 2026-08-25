@@ -326,10 +326,10 @@ window.BKCompare = (function () {
     'backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);',
     'display:flex;align-items:center;justify-content:center;padding:18px;animation:bcx-in 0.25s ease}',
     '@keyframes bcx-in{from{opacity:0}}',
-    '.bcx{position:relative;width:min(820px,100%);max-height:calc(100vh - 36px);overflow-y:auto;',
+    '.bcx{position:relative;display:flex;flex-direction:column;width:min(820px,100%);max-height:calc(100vh - 36px);overflow:hidden;',
     'border-radius:22px;background:rgba(18,21,28,0.97);border:1px solid rgba(255,255,255,0.16);',
     'box-shadow:0 30px 90px rgba(0,0,0,0.6);color:#f4efe6;padding:22px 24px 24px;',
-    'scrollbar-width:thin;scrollbar-color:rgba(201,168,106,0.5) transparent;animation:bcx-rise 0.3s cubic-bezier(0.2,0.7,0.2,1)}',
+    'animation:bcx-rise 0.3s cubic-bezier(0.2,0.7,0.2,1)}',
     '@keyframes bcx-rise{from{transform:translateY(18px);opacity:0}}',
     '.bcx-x{position:absolute;top:12px;right:12px;width:36px;height:36px;border-radius:50%;',
     'border:1px solid rgba(255,255,255,0.25);background:rgba(12,14,19,0.55);color:#f4efe6;',
@@ -337,7 +337,11 @@ window.BKCompare = (function () {
     '.bcx-x:hover{background:rgba(255,255,255,0.15)}',
     '.bcx-title{margin:0;font-family:"Didot","Bodoni MT","Playfair Display","Georgia",serif;font-weight:400;font-size:24px}',
     '.bcx-sub{margin:4px 0 14px;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#c9a86a}',
-    '.bcx-scroll{overflow-x:auto}',
+    '.bcx-scroll{overflow:auto;flex:1 1 auto;min-height:0;',
+    'scrollbar-width:thin;scrollbar-color:rgba(201,168,106,0.5) transparent}',
+    '.bcx-scroll::-webkit-scrollbar{width:6px;height:6px}',
+    '.bcx-scroll::-webkit-scrollbar-thumb{background:rgba(201,168,106,0.45);border-radius:999px}',
+    '.bcx-head{position:sticky;top:0;z-index:2;background:rgba(18,21,28,0.99)}',
     '.bcx-grid{display:grid;gap:0;min-width:100%;border-top:1px solid rgba(255,255,255,0.1)}',
     '.bcx-cell{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,0.08);font-size:13.5px}',
     '.bcx-plan{display:flex;flex-direction:column;gap:2px;align-items:flex-start}',
@@ -414,6 +418,28 @@ window.BKCompare = (function () {
     return 'na';
   }
 
+  /** Which of THIS plan's sub-groups holds the tag — for the cell tooltip.
+   *  The row may sit under another plan's section name, so the tooltip is
+   *  where each plan's own filing is still visible. */
+  function sectionOf(p, tag) {
+    var secs = (p.inclusions || {}).sections || [];
+    for (var i = 0; i < secs.length; i += 1) {
+      if ((secs[i].tags || []).indexOf(tag) !== -1) return secs[i].name;
+    }
+    return null;
+  }
+
+  /** The plain-words tooltip for one cell (Dave, 2026-08-26: make it clear
+   *  whether things are included or not). */
+  function cellTitle(p, tag) {
+    var v = verdict(p, tag);
+    var sec = sectionOf(p, tag);
+    var where = sec ? ' (' + sec + ')' : '';
+    if (v === 'in') return tag + ' is included in ' + p.name + where;
+    if (v === 'out') return tag + ' is NOT included in ' + p.name + where;
+    return p.name + ' does not mention ' + tag;
+  }
+
   function open(opts) {
     ensureStyle();
     var plans = (opts && opts.plans) || [];
@@ -449,13 +475,15 @@ window.BKCompare = (function () {
     grid.style.gridTemplateColumns =
       'minmax(130px, 1.4fr) repeat(' + plans.length + ', minmax(110px, 1fr))';
 
-    // header row: the plans, each with its stay total for THIS suite
+    // Header row: the plans, each with its stay total for THIS suite. The
+    // header STAYS PUT while the rows scroll under it (Dave, 2026-08-26) —
+    // a comparison whose column names have scrolled away compares nothing.
     var corner = document.createElement('div');
-    corner.className = 'bcx-cell';
+    corner.className = 'bcx-cell bcx-head';
     grid.appendChild(corner);
     plans.forEach(function (p) {
       var cell = document.createElement('div');
-      cell.className = 'bcx-cell bcx-plan';
+      cell.className = 'bcx-cell bcx-plan bcx-head';
       var nm = document.createElement('span');
       nm.className = 'bcx-plan-name';
       nm.textContent = p.name;
@@ -497,6 +525,7 @@ window.BKCompare = (function () {
           var m = document.createElement('div');
           m.className = 'bcx-cell bcx-mark bcx-' + v;
           m.textContent = v === 'in' ? '✓' : v === 'out' ? '✗' : '—';
+          m.title = cellTitle(p, tag);
           grid.appendChild(m);
         });
       });

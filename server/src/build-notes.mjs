@@ -512,4 +512,23 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.38',
+    version: '0.1.38',
+    date: '2026-08-26T07:50:00+02:00',
+    changes: [
+      {
+        headline:
+          'THE COMPARE BUTTON MOVED INTO THE PILL ROW and pulses when the guest switches plans (Dave, 2026-08-26, with a marked-up screenshot) - under the price it read as part of the price, disjointed from the pills it actually compares.',
+        detail:
+          'It sits after the last rate pill, dashed gold so it never reads as another plan, and gives one soft scale-and-glow pulse each time a different plan is picked - the moment a guest is weighing plans is the moment the comparison is useful. The pulse runs once, cleans itself up, and respects prefers-reduced-motion.',
+      },
+      {
+        headline:
+          'IN THE COMPARE LIGHTBOX the plan header now stays put while the rows scroll, and every verdict cell carries a plain-words tooltip naming the plan\u0027s own sub-group (Dave, 2026-08-26).',
+        detail:
+          'The header - plan names, stay totals, Lowest-rate tag, group names - is sticky over the scrolling rows: a comparison whose column names have scrolled away compares nothing. Each \u2713/\u2717/\u2014 cell explains itself on hover: \u0022Lunch is included in All Inclusive (Meals)\u0022, \u0022Lunch is NOT included in Half Board (Not included)\u0022, \u0022Room Only does not mention Lunch\u0022 - the parenthesised name is that PLAN\u0027s own sub-group for the item, which matters because a row sits under the first section that mentioned it and plans may file the same item differently. The sub-group names already head the row groups (0.1.37); the tooltips now carry them per plan as well. VERIFIED end to end in real Chromium on both builds, 17 assertions per build: the button is the pill row\u0027s last child, the pulse appears on a plan switch and cleans itself up, the rows scroll while the header\u0027s offset inside the scroll container holds to the pixel, and all three tooltip wordings render exactly. Nothing here books anything or touches Cloudbeds.',
+      },
+    ],
+  },
 ];

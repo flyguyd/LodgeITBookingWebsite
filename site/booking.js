@@ -563,26 +563,6 @@
         price.appendChild(noteEl);
         if (pp.note.kind === 'plus') attachBreakdown(price, noteEl, room, nights);
       }
-      /* Compare these rates (Dave, 2026-08-26): only when there is more
-         than one priced plan — comparing one thing with itself is noise.
-         Opens the shared BKCompare lightbox; stopPropagation because the
-         whole card is a button that opens the suite lightbox. */
-      if ((room.plans || []).length > 1 && window.BKCompare) {
-        var cmp = document.createElement('button');
-        cmp.type = 'button';
-        cmp.className = 'rate-compare';
-        cmp.textContent = 'Compare these rates';
-        cmp.addEventListener('click', function (ev) {
-          ev.stopPropagation();
-          window.BKCompare.open({
-            suiteName: room.name,
-            plans: room.plans,
-            currency: room.currency,
-          });
-          C.track('rates_compared', { roomTypeId: room.roomTypeId });
-        });
-        price.appendChild(cmp);
-      }
       top.appendChild(price);
     } else if (!soldOut) {
       /* Bookable but not priced by the Rate Engine — said plainly, never a
@@ -634,11 +614,42 @@
           var fresh = renderRoom(room, nights, index);
           fresh.style.animationDelay = '0s';
           card.parentNode.replaceChild(fresh, card);
+          /* A little nudge on the compare button each time the guest
+             switches plans (Dave, 2026-08-26): the moment they are weighing
+             plans is the moment the comparison is useful. Runs once and
+             cleans itself up. */
+          var cbtn = fresh.querySelector('.rate-compare');
+          if (cbtn) {
+            cbtn.classList.add('pulse');
+            cbtn.addEventListener('animationend', function () {
+              cbtn.classList.remove('pulse');
+            });
+          }
           if (fresh.__refresh) fresh.__refresh();
           updateSummary();
         });
         planRow.appendChild(pb);
       });
+      /* Compare these rates lives WITH the pills it compares (Dave,
+         2026-08-26 — under the price it read as part of the price). Only
+         when there is more than one plan; stopPropagation because the whole
+         card opens the suite lightbox. */
+      if (window.BKCompare) {
+        var cmp = document.createElement('button');
+        cmp.type = 'button';
+        cmp.className = 'rate-compare';
+        cmp.textContent = 'Compare these rates';
+        cmp.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          window.BKCompare.open({
+            suiteName: room.name,
+            plans: room.plans,
+            currency: room.currency,
+          });
+          C.track('rates_compared', { roomTypeId: room.roomTypeId });
+        });
+        planRow.appendChild(cmp);
+      }
       body.appendChild(planRow);
     }
 

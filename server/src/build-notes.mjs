@@ -461,4 +461,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.35',
+    version: '0.1.35',
+    date: '2026-08-26T02:20:00+02:00',
+    changes: [
+      {
+        headline:
+          'The DISCOUNT CODE label no longer wraps onto two lines in the search bar (Dave, 2026-08-25).',
+        detail:
+          'The field had a fixed flex basis narrower than its own label - \u0022DISCOUNT CODE\u0022 with the bar\u0027s 0.22em letter-spacing needs more room than the 130px the other slim fields get - so the label broke after \u0022DISCOUNT\u0022. The field now sizes to its label (flex-basis auto, label nowrap) and the flexible fields either side give up the few pixels. VERIFIED in real Chromium at 1440, 1200 and 1024px: the label measures one line tall at all three widths and the bar does not overflow.',
+      },
+    ],
+  },
 ];

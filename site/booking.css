@@ -177,8 +177,13 @@ main { z-index: 3; }
 }
 .bar-field select option { color: #111; }
 /* The code is read character by character — O vs 0 on a voucher is a support
-   call — so it gets a mono face, tracking, and shows upper-case as typed. */
-.bar-field.code { flex: 0 1 130px; }
+   call — so it gets a mono face, tracking, and shows upper-case as typed.
+   The FIELD SIZES TO ITS LABEL (flex-basis auto, label nowrap): "DISCOUNT
+   CODE" with the bar's letter-spacing is wider than the old fixed basis and
+   was wrapping onto two lines (Dave, 2026-08-25). The flexible fields either
+   side give up the few pixels instead. */
+.bar-field.code { flex: 0 0 auto; }
+.bar-field.code > span { white-space: nowrap; }
 .bar-field.code input {
   text-transform: uppercase; letter-spacing: 0.08em;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;

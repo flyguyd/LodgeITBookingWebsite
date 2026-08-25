@@ -351,7 +351,7 @@ async function closeEngineSession() {
    quote for the OFFERED plans folded in. No fallback by design — an
    unpriced stay is presented as unpriced, never as a provider figure the
    lodge no longer controls. */
-async function engineRatesQuote(roomTypeIds, from, to, ip, scan = false) {
+async function engineRatesQuote(roomTypeIds, from, to, ip, scan = false, discountCode = '') {
   const ids = [...new Set(roomTypeIds.map(String))].slice(0, 20);
   if (!ids.length || !from || !to || to <= from) return null;
   // The per-visitor key hangs off the site's own held session (0.1.27), so
@@ -361,12 +361,18 @@ async function engineRatesQuote(roomTypeIds, from, to, ip, scan = false) {
   // then counts the nights as traffic only, keeps them out of the demand
   // heat map, does not let the sweep evict a guest's held rates, and does
   // not throttle us. Undeclared sweeps get slowed down on purpose.
+  // The code the visitor typed (0.1.34), passed as typed — the engine trims
+  // and upper-cases before any rule sees it, and keys its session cache on
+  // it, so a coded search and a plain one never share an answer. OMITTED
+  // when blank: a rule gated on a code fails closed on "no code".
+  const code = String(discountCode ?? '').trim().slice(0, 40);
   const raw = JSON.stringify({
     roomTypeIds: ids,
     from,
     to,
     sessionKey: `${SITE_SESSION_KEY}|${siteSessionKey(ip)}`,
     scan,
+    ...(code ? { discountCode: code } : {}),
   });
   const r = await engineCall('POST', '/api/engine/rates/quote', raw);
   if (r.status !== 200 || !r.body) return null;
@@ -395,7 +401,9 @@ async function withEngineRates(kind, urlPath, body, ip) {
     const ids = (Array.isArray(parsed.results) ? parsed.results : [])
       .map((room) => room?.roomTypeId)
       .filter((id) => id != null);
-    const quote = await engineRatesQuote(ids, from, to, ip);
+    // Read from the ORIGINAL guest URL — forwardTargetFor has already
+    // stripped it from what the provider endpoint saw.
+    const quote = await engineRatesQuote(ids, from, to, ip, false, params.get('code') ?? '');
     return JSON.stringify(attachEngineRates(parsed, quote));
   }
   if (kind === 'calendar') {

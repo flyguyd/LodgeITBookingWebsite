@@ -448,4 +448,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.34',
+    version: '0.1.34',
+    date: '2026-08-26T01:40:00+02:00',
+    changes: [
+      {
+        headline:
+          'THE AVAILABILITY CARD TAKES A DISCOUNT CODE (Dave, 2026-08-25), on both builds. It upper-cases as typed, rides the search into the Rate Engine, and a rule gated on that code prices the stay for this guest and nobody else. Needs engine 0.1.34.',
+        detail:
+          'The field sits in the search bar beside Suites on desktop and above the button on mobile, monospace with tracking because a voucher code is read character by character. The code travels as ?code= on /api/public/availability and is OMITTED when blank, never sent empty - the engine\u0027s discount_code qualifier fails closed on \u0022no code\u0022, and that distinction is the feature. At the site server the param is split two ways: folded into the ENGINE rate quote as discountCode (the engine trims, upper-cases, matches exactly, and keys its session cache on it, so a coded search and a plain one never share an answer), and STRIPPED from the provider availability call - the engine\u0027s validation rejects query params it does not know, so one stray param would 400 the whole availability answer. VERIFIED with the real site server against a stub engine (the provider call carries no code param, the quote carries discountCode, blank and whitespace codes are omitted) and in real Chromium on both builds (the field renders, shows upper-case, the search URL carries code=WINTER24, and clearing it removes the param). Nothing here books anything or touches Cloudbeds.',
+      },
+    ],
+  },
 ];

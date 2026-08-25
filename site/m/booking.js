@@ -9,7 +9,8 @@
   var form = $('searchForm');
   var els = {
     arrive: $('fArrive'), nights: $('fNights'), nightsCustom: $('fNightsCustom'),
-    adults: $('fAdults'), children: $('fChildren'), rooms: $('fRooms'), btn: $('searchBtn'),
+    adults: $('fAdults'), children: $('fChildren'), rooms: $('fRooms'),
+    code: $('fCode'), btn: $('searchBtn'),
     note: $('formNote'), loading: $('stateLoading'),
     maintenance: $('stateMaintenance'), unavailable: $('stateUnavailable'),
     empty: $('stateEmpty'), results: $('results'), resultsHead: $('resultsHead'),
@@ -184,6 +185,7 @@
       from: from, to: to,
       adults: els.adults.textContent, children: els.children.textContent,
       rooms: els.rooms.textContent,
+      code: els.code ? els.code.value.trim().toUpperCase() : '',
     };
     C.track('search_started', params, { from: from, to: to });
     C.searchAvailability(params)

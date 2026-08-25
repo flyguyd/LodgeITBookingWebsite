@@ -100,7 +100,20 @@ export function forwardTargetFor(method, urlPath) {
   const route = FORWARD_ROUTES[`${method} ${clean}`];
   if (!route) return null;
   const qIdx = urlPath.indexOf('?');
-  const query = qIdx >= 0 ? urlPath.slice(qIdx) : '';
+  let query = qIdx >= 0 ? urlPath.slice(qIdx) : '';
+  // The discount code (0.1.34) is the RATE ENGINE's business, not the
+  // booking provider's: it is read out of the original URL by the rates
+  // fold-in and must NOT travel to the provider endpoint, whose validation
+  // rejects query params it does not know (whitelist + forbidNonWhitelisted
+  // on the engine) — one stray param would 400 the whole availability call.
+  if (query) {
+    const params = new URLSearchParams(query.slice(1));
+    if (params.has('code')) {
+      params.delete('code');
+      const rest = params.toString();
+      query = rest ? '?' + rest : '';
+    }
+  }
   return { method: route.method, path: route.path + query, rates: route.rates ?? null };
 }
 

@@ -458,6 +458,12 @@ window.BKCore = (function () {
     var q = '?from=' + params.from + '&to=' + params.to +
       '&adults=' + params.adults + '&children=' + params.children +
       '&rooms=' + params.rooms;
+    /* The discount code rides the availability request and feeds the Rate
+       Engine's discount_code qualifier (engine 0.1.34). OMITTED when blank,
+       never sent as '': a rule gated on a code fails closed on "no code",
+       and that distinction is the whole feature. The site server strips
+       this param before the provider sees it. */
+    if (params.code) q += '&code=' + encodeURIComponent(params.code);
     return fetch(API + '/availability' + q).then(function (res) {
       return res.json()
         .catch(function () { return null; })

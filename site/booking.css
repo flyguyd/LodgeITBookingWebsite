@@ -176,6 +176,13 @@ main { z-index: 3; }
   color-scheme: dark;
 }
 .bar-field select option { color: #111; }
+/* The code is read character by character — O vs 0 on a voucher is a support
+   call — so it gets a mono face, tracking, and shows upper-case as typed. */
+.bar-field.code { flex: 0 1 130px; }
+.bar-field.code input {
+  text-transform: uppercase; letter-spacing: 0.08em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
+}
 .bar-sep { width: 1px; background: rgba(255, 255, 255, 0.12); margin: 10px 0; }
 
 /* the liquid button */

@@ -84,6 +84,18 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
 .date-arrow { align-self: center; color: var(--paper-dim); }
 
 .steppers { display: flex; gap: 8px; margin-top: 10px; }
+/* Discount code: same glass row as the date fields, mono because a voucher
+   code is read character by character. Upper-cases as typed. */
+.code-field {
+  display: flex; flex-direction: column; gap: 2px; margin-top: 10px;
+  padding: 8px 12px; border-radius: 14px; background: rgba(255,255,255,0.08);
+}
+.code-field > span { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--paper-dim); }
+.code-field input {
+  background: none; border: 0; outline: none; color: var(--paper);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
 .stepper { flex: 1 1 0; min-width: 0; background: rgba(255,255,255,0.06); border-radius: 14px; padding: 8px 4px 6px; text-align: center; }
 .stepper-label { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--paper-dim); }
 .stepper-ctl { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }

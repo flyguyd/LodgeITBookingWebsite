@@ -9,7 +9,8 @@
   var form = $('searchForm');
   var els = {
     arrive: $('fArrive'), nights: $('fNights'), nightsCustom: $('fNightsCustom'),
-    adults: $('fAdults'), children: $('fChildren'), rooms: $('fRooms'), btn: $('searchBtn'),
+    adults: $('fAdults'), children: $('fChildren'), rooms: $('fRooms'),
+    code: $('fCode'), btn: $('searchBtn'),
     note: $('formNote'), loading: $('stateLoading'),
     maintenance: $('stateMaintenance'), unavailable: $('stateUnavailable'),
     empty: $('stateEmpty'), results: $('results'), resultsHead: $('resultsHead'),
@@ -192,6 +193,7 @@
     C.searchAvailability({
       from: from, to: to,
       adults: els.adults.value, children: els.children.value, rooms: els.rooms.value,
+      code: els.code ? els.code.value.trim().toUpperCase() : '',
     })
       .then(function (r) {
         els.btn.disabled = false;

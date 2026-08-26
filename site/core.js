@@ -359,6 +359,68 @@ window.BKCore = (function () {
      the site server strips them — so everything priced on these pages goes
      through the two helpers below. */
 
+  /**
+   * Apply a quote's DYNAMIC inclusion changes (engine 0.1.43) to the plan's
+   * static inclusion list. A rate rule that matched this stay can add or
+   * remove inclusions — "stay 5 nights and breakfast is included" — so what
+   * the guest is shown must be the list FOR THIS QUOTE, not the plan's
+   * standing one. Matching is case-insensitive; the plan's own casing is
+   * kept where it already lists a tag.
+   *
+   * Removed tags leave the list entirely (they are no longer included, not
+   * newly excluded). Added tags join the plan's first positive section, or
+   * a new "Included" one when the plan has no sections at all.
+   */
+  function applyInclusionDeltas(inclusions, added, removed) {
+    var add = (added || []).map(String);
+    var rem = (removed || []).map(String);
+    if (!inclusions && !add.length) return inclusions || null;
+    if (!add.length && !rem.length) return inclusions || null;
+    var src = inclusions || {};
+    var remKeys = {};
+    rem.forEach(function (t) { remKeys[t.toLowerCase()] = 1; });
+    var keep = function (list) {
+      return (list || []).filter(function (t) { return !remKeys[String(t).toLowerCase()]; });
+    };
+    var out = {
+      included: keep(src.included),
+      excluded: keep(src.excluded),
+      sections: (src.sections || []).map(function (sec) {
+        return {
+          name: sec.name,
+          negative: sec.negative === true,
+          tags: keep(sec.tags),
+        };
+      }),
+    };
+    if (add.length) {
+      var has = {};
+      out.included.forEach(function (t) { has[String(t).toLowerCase()] = 1; });
+      var fresh = add.filter(function (t) {
+        var k = t.toLowerCase();
+        if (has[k]) return false;
+        has[k] = 1;
+        return true;
+      });
+      if (fresh.length) {
+        out.included = out.included.concat(fresh);
+        var target = null;
+        for (var i = 0; i < out.sections.length; i += 1) {
+          if (!out.sections[i].negative) { target = out.sections[i]; break; }
+        }
+        if (!target) {
+          target = { name: 'Included', negative: false, tags: [] };
+          out.sections.push(target);
+        }
+        target.tags = target.tags.concat(fresh);
+      }
+    }
+    /* Sections emptied by a removal carry no rows — drop them so the
+       compare table never grows a heading with nothing under it. */
+    out.sections = out.sections.filter(function (sec) { return sec.tags.length; });
+    return out;
+  }
+
   /** The plan options that actually price one suite's stay — engine order
    *  (the offered list's order) preserved, unpriced or LoS-blocked plans
    *  left out. Empty = the suite has no rate to show, honestly. */
@@ -374,7 +436,15 @@ window.BKCore = (function () {
         description: p.description || null,
         /* What the plan includes/excludes (engine 0.1.36) — the pill's
            hover. Null when Lodge Ops has not linked an inclusion group. */
-        inclusions: p.inclusions || null,
+        inclusions: applyInclusionDeltas(p.inclusions, s.inclusionsAdded, s.inclusionsRemoved),
+        /* What a rate rule changed about the inclusions for THIS stay
+           (engine 0.1.43) — kept alongside so the UI can call them out. */
+        inclusionsAdded: (s.inclusionsAdded || []).map(String),
+        inclusionsRemoved: (s.inclusionsRemoved || []).map(String),
+        /* Stay-level messages a rate rule passed through (engine 0.1.43).
+           Several rules may each contribute a line — all are delivered,
+           duplicates already collapsed by the engine. */
+        messages: (s.messages || []).map(String),
         rateTotal: Number(s.rateTotal),
         vatTotal: s.vatTotal != null ? Number(s.vatTotal) : 0,
         grandTotal: Number(s.grandTotal),
@@ -457,6 +527,9 @@ window.BKCore = (function () {
     /* Discount-code figures ride along — and are explicitly CLEARED when
        the guest switches to a plan the code did not touch, or a stale
        discount line would survive the switch. */
+    /* Rate-rule messages for the chosen plan (engine 0.1.43) — CLEARED on
+       every switch so a line from the previous plan never lingers. */
+    room.rateMessages = (opt.messages || []).slice();
     room.discountApplied = opt.discountApplied === true && Number(opt.discountTotal) > 0;
     room.discountTotal = room.discountApplied ? Number(opt.discountTotal) : 0;
     room.preDiscountTotal = room.discountApplied && opt.preDiscountTotal != null
@@ -559,6 +632,7 @@ window.BKCore = (function () {
     levyMathLabel: levyMathLabel,
     stayMath: stayMath,
     planOptionsFor: planOptionsFor,
+    applyInclusionDeltas: applyInclusionDeltas,
     markCheapest: markCheapest,
     defaultPlanOption: defaultPlanOption,
     applyPlanToRoom: applyPlanToRoom,

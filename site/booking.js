@@ -305,7 +305,7 @@
     var tip = document.createElement('div');
     tip.className = 'bk-breakdown';
     tip.hidden = true;
-    function addRow(label, cents, cls, marker) {
+    function addRow(label, cents, cls, marker, msgs) {
       var r = document.createElement('div');
       r.className = 'bk-row' + (cls ? ' ' + cls : '');
       var d = document.createElement('span');
@@ -315,6 +315,17 @@
         f.className = 'bk-free';
         f.textContent = marker;
         d.appendChild(f);
+      }
+      /* Rule messages for this night (engine 0.1.45) ride as their own tag
+         right beside the date they belong to. */
+      if (msgs && msgs.length) {
+        msgs.forEach(function (t) {
+          var tag = document.createElement('em');
+          tag.className = 'bk-msg';
+          tag.textContent = t;
+          tag.title = t;
+          d.appendChild(tag);
+        });
       }
       var v = document.createElement('span');
       v.textContent = C.moneyC(cents / 100, room.currency);
@@ -329,7 +340,7 @@
     bd.rows.forEach(function (row, i) {
       var c = i === bd.rows.length - 1 ? leftC : Math.round(row.base * 100);
       leftC -= c;
-      addRow(C.fmtDate(row.date), c, '', row.free5 ? '5th night free' : null);
+      addRow(C.fmtDate(row.date), c, '', row.free5 ? '5th night free' : null, row.messages);
     });
     var totalC = accC;
     addRow('Accommodation', accC, 'bk-sub', null);
@@ -348,6 +359,26 @@
       addRow(l.label, c, '', null);
     });
     addRow('Total', totalC, 'bk-total', null);
+    /* Whole-stay rule messages (engine 0.1.45) sit under the total, where
+       they read as being about the stay rather than any one night. */
+    if (room.rateMessages && room.rateMessages.length) {
+      var box = document.createElement('div');
+      box.className = 'bk-stay-msgs';
+      room.rateMessages.forEach(function (t) {
+        var line = document.createElement('div');
+        line.className = 'bk-stay-msg';
+        line.textContent = t;
+        box.appendChild(line);
+      });
+      tip.appendChild(box);
+    }
+    /* The refund policy the rules quoted, in plain words. */
+    if (room.refundable && room.refundable.policy) {
+      var rf = document.createElement('div');
+      rf.className = 'bk-refund';
+      rf.textContent = C.refundLabel(room.refundable);
+      tip.appendChild(rf);
+    }
     price.style.position = 'relative';
     price.appendChild(tip);
     noteEl.className += ' has-tip';

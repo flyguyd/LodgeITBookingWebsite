@@ -281,11 +281,15 @@ window.BKCore = (function () {
       var base = promo
         ? (i === 4 ? Number(room.promoCharge5) : Number(room.promoNightly)) * k
         : (nightly ? nightly[i] : accTotal / nights);
+      var rowDate = addDays(from, i);
       rows.push({
-        date: addDays(from, i),
+        date: rowDate,
         base: base,
         extras: perVat ? perVat[i] + restPerNight : extras / nights,
         free5: promo && i === 4,
+        /* Rule messages for THIS night (engine 0.1.45), so the row can
+           carry a tag next to the date it belongs to. */
+        messages: (room.nightMessages && room.nightMessages[rowDate]) || [],
       });
     }
     /* baseTotal is the ACCOMMODATION LINE as displayed — original when a
@@ -421,6 +425,18 @@ window.BKCore = (function () {
     return out;
   }
 
+  /** The refund policy in plain words (engine 0.1.45). Nonrefundable has
+   *  no window; the other two carry how many nights before check-in the
+   *  policy holds good up to. */
+  function refundLabel(r) {
+    if (!r || !r.policy) return '';
+    if (r.policy === 'nonrefundable') return 'Nonrefundable';
+    var name = r.policy === 'partial' ? 'Partially refundable' : 'Fully refundable';
+    var n = Number(r.nightsBefore);
+    if (!isFinite(n) || n < 0) return name;
+    return name + ' up to ' + n + ' night' + (n === 1 ? '' : 's') + ' before check-in';
+  }
+
   /** The plan options that actually price one suite's stay — engine order
    *  (the offered list's order) preserved, unpriced or LoS-blocked plans
    *  left out. Empty = the suite has no rate to show, honestly. */
@@ -445,6 +461,9 @@ window.BKCore = (function () {
            Several rules may each contribute a line — all are delivered,
            duplicates already collapsed by the engine. */
         messages: (s.messages || []).map(String),
+        /* The refund policy for this stay (engine 0.1.45): the strictest
+           policy any night carried, with its notice window. */
+        refundable: s.refundable || null,
         rateTotal: Number(s.rateTotal),
         vatTotal: s.vatTotal != null ? Number(s.vatTotal) : 0,
         grandTotal: Number(s.grandTotal),
@@ -521,6 +540,18 @@ window.BKCore = (function () {
     room.providerExtras = false;
     room.currency = (lodge && lodge.currency) || 'ZAR';
     room.nightlyPrices = (opt.nights || []).map(function (n) { return { rate: n.rate }; });
+    /* NIGHT-SCOPED rule messages, by date (engine 0.1.45) — the breakdown
+       tags the matching night's row with them. Stay-scoped lines are on
+       room.rateMessages and belong to the whole stay. */
+    room.nightMessages = {};
+    (opt.nights || []).forEach(function (n) {
+      var msgs = (n.messages || [])
+        .filter(function (m) { return m && m.scope === 'night' && m.text; })
+        .map(function (m) { return String(m.text); });
+      if (msgs.length && n.date) room.nightMessages[String(n.date)] = msgs;
+    });
+    /* The refund policy the engine quoted for this plan (engine 0.1.45). */
+    room.refundable = opt.refundable || null;
     room.nightlyVat = (opt.nights || []).map(function (n) {
       return n.vatAmount != null ? Number(n.vatAmount) : 0;
     });
@@ -633,6 +664,7 @@ window.BKCore = (function () {
     stayMath: stayMath,
     planOptionsFor: planOptionsFor,
     applyInclusionDeltas: applyInclusionDeltas,
+    refundLabel: refundLabel,
     markCheapest: markCheapest,
     defaultPlanOption: defaultPlanOption,
     applyPlanToRoom: applyPlanToRoom,

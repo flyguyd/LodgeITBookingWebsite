@@ -291,6 +291,11 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
 .bk-disc span { color: var(--gold); }
 
 .bk-free { color: var(--gold); font-style: normal; font-size: 10px; margin-left: 7px; letter-spacing: 0.04em; }
+/* A rate-rule message tag, beside the night it belongs to (0.1.42). */
+.bk-msg { color: var(--gold); font-style: normal; font-size: 10px; margin-left: 7px; letter-spacing: 0.04em; border: 1px solid var(--gold); border-radius: 999px; padding: 0 6px; opacity: 0.85; }
+.bk-stay-msgs { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+.bk-stay-msg { color: var(--gold); font-size: 10.5px; letter-spacing: 0.03em; }
+.bk-refund { font-size: 10.5px; margin-top: 5px; opacity: 0.9; }
 
 /* Sold-out cards: a way in to the suite's own availability calendar. */
 .room-cta-avail {

@@ -635,4 +635,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.51',
+    version: '0.1.51',
+    date: '2026-09-01T05:50:00+02:00',
+    changes: [
+      {
+        headline:
+          'The suite lightbox stops mumbling: \u0022VAT & levy included · Per-guest rate · priced for 2 adults\u0022 was three ideas in one italic line. The note now carries only the tax statement, and the per-guest story is its own gold line — the same \u0022R… per person a night\u0022 the card already shows.',
+        detail:
+          'Dave, 2026-08-31: \u0022this working in the lightbox is confusing: VAT & levy included · Per-guest rate · priced for 2 adults\u0022. The 0.1.43 basis annotation was APPENDED to the tax note with a dot separator, and once the per-person language landed elsewhere (0.1.50) the mashup read as one broken sentence. THE FIX, both builds: openLightbox no longer concatenates rateBasisLabel into the note — the note is purely the tax statement (\u0022VAT & levy included\u0022 / \u0022+ R… VAT & levy\u0022) — and the price block gains a perPerson line (headline ÷ nights ÷ adultsPriced, per-guest suites only) rendered gold under the a-night figure, matching the card\u0027s 0.1.50 line exactly. The priced-for-N-adults arithmetic still reads explicitly in the embedded Cost breakdown (\u0022per-guest rate × 2 adults\u0022), so nothing is lost — it just stopped being squeezed into a sentence. The CARD\u0027s own basis line is untouched. Per-room suites see no change. VERIFIED in real Chromium against the real engine dist under the INCLUSIVE rate display (the mode of Dave\u0027s quote): the per-guest lightbox note reads exactly \u0022VAT & levy included\u0022 with no dot-appended basis, the gold per-person line beneath the nightly figure, the breakdown still carrying the × 2 adults line; the per-room lightbox carries no per-person line. Deploy: static site files only — rsync booking.js, m/booking.js, lightbox.js.',
+      },
+    ],
+  },
 ];

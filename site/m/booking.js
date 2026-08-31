@@ -494,12 +494,19 @@
           ? '+ ' + C.money(pp.note.extras, room.currency) + extrasLabel(room)
           : inclLabel(room))
         : null;
-      /* The pricing basis rides the lightbox note too (2026-08-31). */
-      var lbBasis = C.rateBasisLabel(room);
-      if (lbBasis) lbNote = lbNote ? lbNote + ' · ' + lbBasis : lbBasis;
+      /* The per-guest story gets ITS OWN LINE (Dave, 2026-08-31: the old
+         "VAT & levy included · Per-guest rate · priced for 2 adults" mashup
+         read as one confusing sentence). The note keeps only the tax
+         statement; the gold per-person average matches the card's, and the
+         x-adults arithmetic lives in the Cost breakdown below. */
       price = {
         headline: C.money(pp.headline, room.currency),
         perNight: C.money(pp.headline / nights, room.currency) + ' a night',
+        perPerson:
+          room.rateBasis === 'per_guest_per_night' && Number(room.adultsPriced) >= 1
+            ? C.money(pp.headline / nights / Number(room.adultsPriced), room.currency) +
+              ' per person a night'
+            : null,
         note: lbNote,
       };
     }

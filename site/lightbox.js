@@ -53,6 +53,7 @@ window.BKLight = (function () {
     '.blb-price{text-align:right}',
     '.blb-total{display:block;font-family:"Didot","Bodoni MT","Playfair Display","Georgia",serif;font-size:23px;color:#d8b46a}',
     '.blb-sub{display:block;font-size:12px;color:rgba(244,239,230,0.62);margin-top:2px}',
+    '.blb-pp{display:block;font-size:12px;color:#d8b46a;opacity:0.9;margin-top:2px}',
     '.blb-note{display:block;font-size:11.5px;color:rgba(244,239,230,0.62);font-style:italic;margin-top:3px}',
     '.blb-desc{margin:14px 0 0;color:rgba(244,239,230,0.75);font-size:14.5px;line-height:1.7;white-space:pre-line}',
     '.blb-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}',
@@ -186,6 +187,13 @@ window.BKLight = (function () {
         pn.className = 'blb-sub';
         pn.textContent = opts.price.perNight;
         price.appendChild(pn);
+      }
+      /* The per-person average, gold like the card's (2026-08-31). */
+      if (opts.price.perPerson) {
+        var ppl = document.createElement('span');
+        ppl.className = 'blb-pp';
+        ppl.textContent = opts.price.perPerson;
+        price.appendChild(ppl);
       }
       if (opts.price.note) {
         var nt = document.createElement('span');

@@ -387,9 +387,16 @@ async function closeEngineSession() {
    quote for the OFFERED plans folded in. No fallback by design — an
    unpriced stay is presented as unpriced, never as a provider figure the
    lodge no longer controls. */
-async function engineRatesQuote(roomTypeIds, from, to, ip, scan = false, discountCode = '') {
+async function engineRatesQuote(roomTypeIds, from, to, ip, scan = false, discountCode = '', party = null) {
   const ids = [...new Set(roomTypeIds.map(String))].slice(0, 20);
   if (!ids.length || !from || !to || to <= from) return null;
+  // The party (2026-08-31): adults multiply a per-guest root's nightly at
+  // the ENGINE — this server only relays what the guest searched for.
+  // Children ride along for the rate rules that will price them later.
+  // Omitted when the guest URL carried none; the engine then prices its
+  // own default of 2 adults and says so in the annotation.
+  const adults = Math.round(Number(party && party.adults));
+  const children = Math.round(Number(party && party.children));
   // The per-visitor key hangs off the site's own held session (0.1.27), so
   // the engine sees one open session for the site and still keeps each
   // visitor's answers consistent within it.
@@ -415,6 +422,8 @@ async function engineRatesQuote(roomTypeIds, from, to, ip, scan = false, discoun
     scan,
     ...(code ? { discountCode: code } : {}),
     ...(addr && addr !== 'unknown' ? { ip: addr } : {}),
+    ...(Number.isFinite(adults) && adults >= 1 ? { adults: Math.min(adults, 99) } : {}),
+    ...(Number.isFinite(children) && children >= 0 ? { children: Math.min(children, 99) } : {}),
   });
   const r = await engineCall('POST', '/api/engine/rates/quote', raw);
   if (r.status !== 200 || !r.body) return null;
@@ -445,7 +454,10 @@ async function withEngineRates(kind, urlPath, body, ip) {
       .filter((id) => id != null);
     // Read from the ORIGINAL guest URL — forwardTargetFor has already
     // stripped it from what the provider endpoint saw.
-    const quote = await engineRatesQuote(ids, from, to, ip, false, params.get('code') ?? '');
+    const quote = await engineRatesQuote(ids, from, to, ip, false, params.get('code') ?? '', {
+      adults: params.get('adults'),
+      children: params.get('children'),
+    });
     return JSON.stringify(attachEngineRates(parsed, quote, planInclusions));
   }
   if (kind === 'calendar') {

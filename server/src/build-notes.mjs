@@ -531,4 +531,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.43',
+    version: '0.1.43',
+    date: '2026-08-31T18:40:00+02:00',
+    changes: [
+      {
+        headline:
+          'The guest\u0027s party now rides every rate quote, and each suite says how it was priced (Dave, 2026-08-31): a lodge on per-guest-per-night rates prices 3 adults at three times the per-guest nightly, and the card, hover statement and lightbox all say \u0022Per-guest rate \u00b7 priced for 3 adults\u0022 - a per-suite lodge\u0027s cards say \u0022Per-suite rate\u0022.',
+        detail:
+          'THE OTHER HALF of engine 0.1.51, which taught the Rate Engine to multiply a per-guest root by the adults being priced. THIS SERVER now forwards the adults and children from the guest\u0027s own search URL into the engine quote (engineRatesQuote gains a party; the stay path reads the same URLSearchParams the discount code already rode) - omitted when the URL carries none, and the engine then prices its own default of 2 adults and says so. Children are forwarded but never multiplied - child pricing arrives later as rate rules, Dave\u0027s call. The calendar sweep stays partyless on purpose: its per-day cheapest figures price the engine default, the same 2 adults the search form opens with. THE DISPLAY, both builds: core.js carries the engine\u0027s new rateBasis + adultsPriced through planOptionsFor and applyPlanToRoom onto the room, and a shared rateBasisLabel says it to the guest plainly - a .room-basis line under the card\u0027s price (\u0022Per-guest rate \u00b7 priced for 3 adults\u0022 / \u0022Per-suite rate\u0022), the same words appended to the lightbox\u0027s price note, and the itemised hover\u0027s Accommodation line carrying its own multiplication (\u0022Accommodation \u00b7 per-guest rate \u00d7 3 adults\u0022) exactly as the levy line has always shown its math. An older engine sends no annotation and the site shows nothing rather than guessing - deploy order free in both directions. VERIFIED end to end with the REAL engine 0.1.51 (built dist on a real PostgreSQL 16) behind this real server and real Chromium on the served site, 11 assertions: the forward chain pricing 3 adults x R1000 x 2 nights = R6,000 + R900 VAT beside an untouched R8,000 per-room suite in one answer, both annotated; the same visitor repricing to R4,000 on a 2-adult re-search; the card\u0027s basis line, per-room wording, hover statement math (nights at R3,000.00 to a R6,900.00 total) and the lightbox note all rendering word for word. Nothing here books anything or touches Cloudbeds.',
+      },
+    ],
+  },
 ];

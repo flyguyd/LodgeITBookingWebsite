@@ -343,7 +343,13 @@
       addRow(C.fmtDate(row.date), c, '', row.free5 ? '5th night free' : null, row.messages);
     });
     var totalC = accC;
-    addRow('Accommodation', accC, 'bk-sub', null);
+    /* The Accommodation line carries its own multiplication when the rate
+       is per guest (2026-08-31) — the same honesty the levy line has. */
+    var accBasis = room.rateBasis === 'per_guest_per_night' && Number(room.adultsPriced) >= 1
+      ? ' · per-guest rate × ' + Number(room.adultsPriced) +
+        (Number(room.adultsPriced) === 1 ? ' adult' : ' adults')
+      : '';
+    addRow('Accommodation' + accBasis, accC, 'bk-sub', null);
     /* The discount the guest's code earned, as its own negative line right
        under the (original-amount) Accommodation row — subtracting it lands
        back on the charged figure before VAT and levy stack on. */
@@ -458,14 +464,18 @@
     ((sc && sc.amenities) || []).forEach(function (a) { chips.push({ text: a }); });
     var price = null;
     if (pp.headline != null) {
+      var lbNote = pp.note
+        ? (pp.note.kind === 'plus'
+          ? '+ ' + C.money(pp.note.extras, room.currency) + extrasLabel(room)
+          : inclLabel(room))
+        : null;
+      /* The pricing basis rides the lightbox note too (2026-08-31). */
+      var lbBasis = C.rateBasisLabel(room);
+      if (lbBasis) lbNote = lbNote ? lbNote + ' · ' + lbBasis : lbBasis;
       price = {
         headline: C.money(pp.headline, room.currency),
         perNight: C.money(pp.headline / nights, room.currency) + ' a night',
-        note: pp.note
-          ? (pp.note.kind === 'plus'
-            ? '+ ' + C.money(pp.note.extras, room.currency) + extrasLabel(room)
-            : inclLabel(room))
-          : null,
+        note: lbNote,
       };
     }
     window.BKLight.open({
@@ -602,6 +612,16 @@
           : inclLabel(room);
         price.appendChild(noteEl);
         if (pp.note.kind === 'plus') attachBreakdown(price, noteEl, room, nights);
+      }
+      /* HOW the figures were priced (engine 2026-08-31): a per-guest rate
+         names the adults it multiplied by; a per-suite rate says so too.
+         An older engine sends no annotation and the line simply absent. */
+      var basisS = C.rateBasisLabel(room);
+      if (basisS) {
+        var basisEl = document.createElement('span');
+        basisEl.className = 'room-taxnote room-basis';
+        basisEl.textContent = basisS;
+        price.appendChild(basisEl);
       }
       top.appendChild(price);
     } else if (!soldOut) {

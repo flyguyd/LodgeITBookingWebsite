@@ -467,6 +467,14 @@ window.BKCore = (function () {
         rateTotal: Number(s.rateTotal),
         vatTotal: s.vatTotal != null ? Number(s.vatTotal) : 0,
         grandTotal: Number(s.grandTotal),
+        /* HOW the engine arrived at the figures (engine 2026-08-31): a
+           per-guest root prices nightly x adults, and says which adults it
+           priced. Absent on an older engine — the label then simply does
+           not render, never a guess. */
+        rateBasis: s.rateBasis === 'per_guest_per_night' ? 'per_guest_per_night'
+          : s.rateBasis === 'per_room_per_night' ? 'per_room_per_night' : null,
+        adultsPriced: s.adultsPriced != null && isFinite(Number(s.adultsPriced))
+          ? Number(s.adultsPriced) : null,
         /* A discount code the guest typed took money off this plan's stay
            (engine 0.1.40): the flag plus what it saved and the pre-discount
            accommodation, for the itemised statement. */
@@ -535,6 +543,8 @@ window.BKCore = (function () {
     room.planId = opt.planId;
     room.planName = opt.name;
     room.totalPrice = opt.rateTotal;
+    room.rateBasis = opt.rateBasis || null;
+    room.adultsPriced = opt.adultsPriced != null ? opt.adultsPriced : null;
     room.taxesTotal = opt.vatTotal > 0 ? opt.vatTotal : null;
     room.vatDerived = opt.vatTotal > 0;
     room.providerExtras = false;
@@ -644,9 +654,23 @@ window.BKCore = (function () {
       .catch(function () { return null; });
   }
 
+  /** The rate basis said to the GUEST, plainly: how this suite's figures
+   *  were priced. '' when the engine did not annotate (an older engine) —
+   *  the site then shows nothing rather than guessing. */
+  function rateBasisLabel(room) {
+    if (!room || room.rateBasis == null) return '';
+    if (room.rateBasis === 'per_guest_per_night') {
+      var n = Number(room.adultsPriced);
+      return 'Per-guest rate' +
+        (isFinite(n) && n >= 1 ? ' · priced for ' + n + (n === 1 ? ' adult' : ' adults') : '');
+    }
+    return 'Per-suite rate';
+  }
+
   return {
     nightsBetween: nightsBetween,
     money: money,
+    rateBasisLabel: rateBasisLabel,
     fmtDate: fmtDate,
     isoToday: isoToday,
     addDays: addDays,
@@ -698,4 +722,5 @@ window.__bk = {
   markCheapest: window.BKCore.markCheapest,
   defaultPlanOption: window.BKCore.defaultPlanOption,
   applyPlanToRoom: window.BKCore.applyPlanToRoom,
+  rateBasisLabel: window.BKCore.rateBasisLabel,
 };

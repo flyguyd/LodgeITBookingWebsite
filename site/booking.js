@@ -462,6 +462,11 @@
     if (sc && sc.pool) chips.push({ text: sc.pool });
     if (sc && sc.style) chips.push({ text: sc.style });
     ((sc && sc.amenities) || []).forEach(function (a) { chips.push({ text: a }); });
+    /* What the rate rules said rides the lightbox too (2026-08-31) —
+       messages gold so they read as the lodge speaking, the rest plain. */
+    C.ruleCallouts(room).forEach(function (co) {
+      chips.push({ text: co.text, gold: co.kind === 'msg' || co.kind === 'discount' });
+    });
     var price = null;
     if (pp.headline != null) {
       var lbNote = pp.note
@@ -611,7 +616,12 @@
           ? '+ ' + C.money(pp.note.extras, room.currency) + extrasLabel(room)
           : inclLabel(room);
         price.appendChild(noteEl);
-        if (pp.note.kind === 'plus') attachBreakdown(price, noteEl, room, nights);
+        /* The full statement attaches in BOTH display modes now (Dave,
+           2026-08-31): under the inclusive price it explains what the
+           headline folded in — before this, inclusive mode had no hover at
+           all and the discount line, night messages and refund policy were
+           simply unreachable. */
+        attachBreakdown(price, noteEl, room, nights);
       }
       /* HOW the figures were priced (engine 2026-08-31): a per-guest rate
          names the adults it multiplied by; a per-suite rate says so too.
@@ -711,6 +721,24 @@
         planRow.appendChild(cmp);
       }
       body.appendChild(planRow);
+    }
+
+    /* WHAT THE RATE RULES SAID (Dave, 2026-08-31) — stay messages, an
+       earned discount, inclusion changes and the refund policy, visibly on
+       the card in BOTH display modes. Until now these lived only inside
+       the itemised hover statement, which the inclusive display never
+       attached — a rule's message must never depend on a hover. */
+    var callouts = C.ruleCallouts(room);
+    if (callouts.length) {
+      var coBox = document.createElement('div');
+      coBox.className = 'room-callouts';
+      callouts.forEach(function (co) {
+        var line = document.createElement('span');
+        line.className = 'room-callout room-callout-' + co.kind;
+        line.textContent = co.text;
+        coBox.appendChild(line);
+      });
+      body.appendChild(coBox);
     }
 
     /* The lodge's own words and facts win over the provider's. */

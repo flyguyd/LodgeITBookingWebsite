@@ -431,10 +431,48 @@ window.BKCore = (function () {
   function refundLabel(r) {
     if (!r || !r.policy) return '';
     if (r.policy === 'nonrefundable') return 'Nonrefundable';
-    var name = r.policy === 'partial' ? 'Partially refundable' : 'Fully refundable';
+    /* A partial policy says HOW MUCH comes back when the engine quoted it
+       (engine 0.1.54) — a rule saved before the field existed stays a bare
+       "Partially refundable" rather than gaining an invented figure. */
+    var pct = Number(r.refundPct);
+    var name = r.policy === 'partial'
+      ? 'Partially refundable' + (isFinite(pct) && pct >= 1 ? ' (' + pct + '% refunded)' : '')
+      : 'Fully refundable';
     var n = Number(r.nightsBefore);
     if (!isFinite(n) || n < 0) return name;
     return name + ' up to ' + n + ' night' + (n === 1 ? '' : 's') + ' before check-in';
+  }
+
+  /**
+   * EVERYTHING THE RATE RULES SAID ABOUT THIS STAY, as lines the card shows
+   * WITHOUT a hover (Dave, 2026-08-31: "fix the booking site to show client
+   * messages, discounts and anything else that we can set in the rules") —
+   * until now all of it lived only inside the itemised hover statement,
+   * which the inclusive display never even attached. One list, shared by
+   * both builds and the lightbox, so nothing the rules produce can hide
+   * behind a display mode again: stay-scoped messages, the discount a code
+   * earned, the refund policy, and inclusion changes the rules made.
+   */
+  function ruleCallouts(room) {
+    var out = [];
+    (room.rateMessages || []).forEach(function (t) {
+      if (String(t).trim()) out.push({ kind: 'msg', text: String(t) });
+    });
+    if (room.discountApplied === true && Number(room.discountTotal) > 0) {
+      out.push({
+        kind: 'discount',
+        text: 'Discount applied — you save ' + moneyC(room.discountTotal, room.currency),
+      });
+    }
+    (room.inclusionsAdded || []).forEach(function (t) {
+      if (String(t).trim()) out.push({ kind: 'inc', text: '+ ' + String(t) + ' included' });
+    });
+    (room.inclusionsRemoved || []).forEach(function (t) {
+      if (String(t).trim()) out.push({ kind: 'exc', text: '− ' + String(t) + ' not included' });
+    });
+    var rf = refundLabel(room.refundable);
+    if (rf) out.push({ kind: 'refund', text: rf });
+    return out;
   }
 
   /** The plan options that actually price one suite's stay — engine order
@@ -562,6 +600,10 @@ window.BKCore = (function () {
     });
     /* The refund policy the engine quoted for this plan (engine 0.1.45). */
     room.refundable = opt.refundable || null;
+    /* Inclusion changes the rules made (engine 0.1.43) — onto the room so
+       the card can call them out, not only the compare lightbox. */
+    room.inclusionsAdded = (opt.inclusionsAdded || []).slice();
+    room.inclusionsRemoved = (opt.inclusionsRemoved || []).slice();
     room.nightlyVat = (opt.nights || []).map(function (n) {
       return n.vatAmount != null ? Number(n.vatAmount) : 0;
     });
@@ -689,6 +731,7 @@ window.BKCore = (function () {
     planOptionsFor: planOptionsFor,
     applyInclusionDeltas: applyInclusionDeltas,
     refundLabel: refundLabel,
+    ruleCallouts: ruleCallouts,
     markCheapest: markCheapest,
     defaultPlanOption: defaultPlanOption,
     applyPlanToRoom: applyPlanToRoom,

@@ -544,4 +544,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.44',
+    version: '0.1.44',
+    date: '2026-08-31T21:00:00+02:00',
+    changes: [
+      {
+        headline:
+          'Everything the rate rules can say now SHOWS (Dave, 2026-08-31): client messages, the discount a code earned, inclusion changes and the refund policy \u2014 with its new partial percentage \u2014 appear on every suite card without a hover, in BOTH display modes, and ride the lightbox as chips. The itemised hover statement now attaches under the inclusive display too.',
+        detail:
+          'Dave: \u0022fix the booking site to show client messages, discounts and anything else that we can set in the rules.\u0022 THE GAP WAS THE DISPLAY MODE: stay messages, night message tags, the discount line and the refund policy all lived inside the itemised hover statement \u2014 and that statement only attached when rateDisplay was separate, so under the DEFAULT inclusive display none of it existed anywhere on the page, and inclusion changes rendered nowhere on the card at all. NOW: a shared ruleCallouts() (core.js, one implementation for both builds and the lightbox) lists what the rules said about the stay \u2014 every stay-scoped message (gold, the lodge speaking), \u0022Discount applied \u2014 you save R800.00\u0022 when a code earned one, \u0022+ Sunset Cruise included\u0022 / \u0022\u2212 X not included\u0022 for rule-made inclusion changes, and the refund policy \u2014 rendered as a .room-callouts block on the card under the plan pills, re-rendered with the plan the guest picks, and pushed into the lightbox chips. REFUND PERCENTAGE (engine 0.1.54): refundLabel now reads \u0022Partially refundable (60%% refunded) up to 7 nights before check-in\u0022; a rule saved before the field existed stays bare rather than gaining an invented figure. THE HOVER STATEMENT attaches in both display modes now \u2014 under an inclusive headline it explains what was folded in, and the discount line, per-night message tags and refund footer are reachable again. applyPlanToRoom also carries inclusionsAdded/Removed onto the room (they previously reached only the compare lightbox). VERIFIED end to end with the REAL engine 0.1.54 (built dist on a real PostgreSQL 16) behind this real server and real Chromium, 8 assertions under the INCLUSIVE display deliberately: a set+append combined message showing with no hover, the R800.00 code discount, the added inclusion, the (60%% refunded) policy line, the inclusive note proving the mode, the hover statement opening with the SAVE10 line and refund footer, and the lightbox chips. Nothing here books anything or touches Cloudbeds.',
+      },
+    ],
+  },
 ];

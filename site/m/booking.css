@@ -342,3 +342,14 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
 
 /* Bottom-left of the page, under the full-site link. */
 .foot .foot-copy { display: block; text-align: left; margin-top: 16px; font-size: 11px; color: var(--paper-dim); opacity: 0.75; letter-spacing: 0.04em; }
+
+/* What the rate rules said about the stay (2026-08-31): stay messages,
+   an earned discount, inclusion changes, the refund policy - on the card,
+   visible without the hover statement, in both display modes. */
+.room-callouts { display: flex; flex-direction: column; gap: 3px; margin: 8px 0 2px; }
+.room-callout { font-size: 12px; line-height: 1.45; color: var(--paper-dim); }
+.room-callout-msg { color: var(--gold); }
+.room-callout-discount { color: var(--gold); font-weight: 600; }
+.room-callout-inc { color: var(--paper); }
+.room-callout-exc { color: var(--paper-dim); }
+.room-callout-refund { font-style: italic; }

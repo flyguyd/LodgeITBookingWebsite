@@ -466,3 +466,14 @@ body.has-logo .hero { padding-top: clamp(14px, 3vh, 36px); }
   body.has-logo .hero-sub { margin-top: 16px; }
   body.has-logo .bar-wrap { margin-top: 18px; }
 }
+
+/* What the rate rules said about the stay (2026-08-31): stay messages,
+   an earned discount, inclusion changes, the refund policy - on the card,
+   visible without the hover statement, in both display modes. */
+.room-callouts { display: flex; flex-direction: column; gap: 3px; margin: 8px 0 2px; }
+.room-callout { font-size: 12px; line-height: 1.45; color: var(--paper-dim); }
+.room-callout-msg { color: var(--gold); }
+.room-callout-discount { color: var(--gold); font-weight: 600; }
+.room-callout-inc { color: var(--paper); }
+.room-callout-exc { color: var(--paper-dim); }
+.room-callout-refund { font-style: italic; }

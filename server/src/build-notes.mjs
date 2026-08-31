@@ -557,4 +557,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.45',
+    version: '0.1.45',
+    date: '2026-08-31T23:00:00+02:00',
+    changes: [
+      {
+        headline:
+          'The guest\u0027s party rides the CALENDAR sweep (Dave, 2026-08-31): a party-gated rule \u2014 a couples-only plan, a per-guest rate \u2014 now shapes the date picker\u0027s cheapest-per-day figures exactly as it shapes the search results.',
+        detail:
+          'Dave: \u0022yes pass the party into the calendar scan too.\u0022 Both builds\u0027 calendar fetches (the search bar\u0027s arrival picker and the per-suite availability calendar in the lightbox) now carry the CURRENT adults and children \u2014 the desktop selects by value, the mobile steppers by their output text \u2014 through /api/public/rate-calendar into the engine\u0027s scan quote. Without it the calendar priced the engine\u0027s default party, so a couples-only Honeymoon discount could paint a per-day figure a 3-guest search then could not have. THE FORWARD IS STRIPPED: the engine\u0027s own rate-calendar DTO does not know adults/children (whitelist + forbidNonWhitelisted \u2014 one stray param 400s the whole call), so forwardTargetFor removes both from the provider-bound path exactly as it already removed the discount code; the availability route keeps them, its DTO declares both. Omitted when the site sends none \u2014 the engine then prices its default party, deploy order free. VERIFIED against the real engine 0.1.57 dist on a real PostgreSQL 16 through this real server, in the same run that proved the engine\u0027s party cache-key fix: a 2-guest calendar day at R3,680 (the discounted couples-only Honeymoon incl. VAT), the 3-guest day falling back to Standard\u0027s R4,600, and a partyless request pricing the default with no 400 from the stripped forward \u2014 beside the search sequence 2+1 blocked \u2192 2+0 priced \u2192 2+1 still blocked. Nothing here books anything or touches Cloudbeds.',
+      },
+    ],
+  },
 ];

@@ -688,9 +688,18 @@ window.BKCore = (function () {
   /** Per-day cheapest-rate calendar for the date picker. Resolves to
    *  { days: { iso: { minRate, available } }, currency } or null — the
    *  picker renders without rates rather than failing. */
-  function fetchRateCalendar(from, to, roomTypeId) {
+  function fetchRateCalendar(from, to, roomTypeId, party) {
     var q = '?from=' + from + '&to=' + to +
       (roomTypeId ? '&roomTypeId=' + encodeURIComponent(roomTypeId) : '');
+    /* The party rides the calendar sweep too (Dave, 2026-08-31): a
+       party-gated rule (a couples-only plan, a per-guest rate) shapes the
+       picker's cheapest-per-day figures exactly as it shapes the search
+       results — without it the calendar priced the engine's default party
+       and could show a figure a 3-guest search then cannot have. */
+    var a = party && parseInt(party.adults, 10);
+    var c = party && parseInt(party.children, 10);
+    if (isFinite(a) && a >= 1) q += '&adults=' + a;
+    if (isFinite(c) && c >= 0) q += '&children=' + c;
     return fetch(API + '/rate-calendar' + q)
       .then(function (r) { return r.ok ? r.json() : null; })
       .catch(function () { return null; });

@@ -125,7 +125,12 @@
      (stays open), a later-day click = checkout. */
   if (window.BKCal) {
     window.BKCal.attach(els.arrive, {
-      fetchRates: C.fetchRateCalendar,
+            fetchRates: function (f, t) {
+        /* The picker prices the CURRENT party (2026-08-31) - a couples-only
+           plan must shape these figures exactly as it shapes the search. */
+        return C.fetchRateCalendar(f, t, null,
+          { adults: els.adults.textContent, children: els.children.textContent });
+      },
       minIso: C.isoToday(0),
       maxIso: C.isoToday(365 * 3),
       /* Warm the next 30 days the moment the page loads, so the calendar
@@ -419,7 +424,8 @@
     var holder = document.createElement('div');
     window.BKCal.inline(holder, {
       fetchRates: function (f, t) {
-        return C.fetchRateCalendar(f, t, String(room.roomTypeId));
+        return C.fetchRateCalendar(f, t, String(room.roomTypeId),
+          { adults: els.adults.textContent, children: els.children.textContent });
       },
       minIso: C.isoToday(0),
       maxIso: C.isoToday(365 * 3),

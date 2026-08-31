@@ -108,8 +108,25 @@ export function forwardTargetFor(method, urlPath) {
   // on the engine) — one stray param would 400 the whole availability call.
   if (query) {
     const params = new URLSearchParams(query.slice(1));
+    let dirty = false;
     if (params.has('code')) {
       params.delete('code');
+      dirty = true;
+    }
+    // The PARTY on a calendar request (2026-08-31) is likewise the rates
+    // fold-in's business: the engine's rate-calendar DTO does not know
+    // adults/children and forbidNonWhitelisted would 400 the whole call.
+    // The availability route KEEPS them — its DTO declares both and the
+    // provider fallback prices with them.
+    if (route.path === '/api/booking/rate-calendar') {
+      for (const k of ['adults', 'children']) {
+        if (params.has(k)) {
+          params.delete(k);
+          dirty = true;
+        }
+      }
+    }
+    if (dirty) {
       const rest = params.toString();
       query = rest ? '?' + rest : '';
     }

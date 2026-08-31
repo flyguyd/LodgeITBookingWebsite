@@ -466,7 +466,14 @@ async function withEngineRates(kind, urlPath, body, ip) {
     const ids = one ? [one] : Object.keys(suiteContent.suites ?? {}).filter((id) => id.charAt(0) !== '_');
     // The picker paints up to 45 nights across every suite — a scan, not a
     // guest pricing one stay. Flagged so it never reads as guest demand.
-    const quote = await engineRatesQuote(ids, from, to, ip, true);
+    // The CURRENT party rides the sweep (Dave, 2026-08-31): a party-gated
+    // rule — a couples-only plan, a per-guest rate — shapes the per-day
+    // cheapest figures exactly as it shapes the search results. Omitted
+    // when the site sent none; the engine then prices its default party.
+    const quote = await engineRatesQuote(ids, from, to, ip, true, '', {
+      adults: params.get('adults'),
+      children: params.get('children'),
+    });
     return JSON.stringify(calendarWithEngineRates(parsed, quote));
   }
   return body;

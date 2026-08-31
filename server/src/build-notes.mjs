@@ -622,4 +622,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.50',
+    version: '0.1.50',
+    date: '2026-09-01T03:10:00+02:00',
+    changes: [
+      {
+        headline:
+          'Per-guest rates SPEAK PER PERSON: the card shows the average per person per night under the headline, and the lightbox breakdown prices each night per person — with the Accommodation line still carrying the × adults multiplication back to the full figure.',
+        detail:
+          'Dave, 2026-08-31: \u0022if the rate is per person then under the headline rate show the average per person per night\u0022 and \u0022In the light box cost breakdown show the night rate as per person per night.\u0022 BOTH BUILDS. THE CARD: on a suite the engine annotates per_guest_per_night, a gold line joins the price block right under the existing a-night line — headline ÷ nights ÷ the adults the engine priced, e.g. \u0022R1,000.00 per person a night\u0022 — on the SAME VAT basis as the headline above it, so the two figures never describe different money. Per-room suites gain nothing. THE BREAKDOWN (card hover tip and the lightbox\u0027s embedded statement alike — one builder): each nightly row on a per-guest stay now shows ONE guest\u0027s night, tagged \u0022per person\u0022 in quiet small type, and the Accommodation line below keeps its \u0022per-guest rate × N adults\u0022 label — so the column still explains itself: nightly per-person rows × adults = Accommodation, then discount, VAT and levy to the total, to the cent. Per-cent rounding on the division lands on the per-person figure only; the subtotal and total remain the exact engine figures, never re-derived. Per-room stays render exactly as before. VERIFIED in real Chromium against the real engine dist, two-suite fixture: the per-guest card showing \u0022R1,000.00 per person a night\u0022 under an R4,000 two-night headline for 2 adults with the per-room card clean of it; the lightbox breakdown\u0027s night rows at R1,000.00 tagged per person with Accommodation × 2 adults at R4,000.00 and the R4,600.00 total intact; the per-room suite\u0027s rows untouched at R4,000.00 nightly; mobile matching. Deploy: static site files only — rsync.',
+      },
+    ],
+  },
 ];

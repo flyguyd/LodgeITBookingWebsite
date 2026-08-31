@@ -302,7 +302,7 @@
     var lines = C.stayMath(room, lodge, party, nights);
     var tip = document.createElement('div');
     tip.className = 'bk-breakdown';
-    function addRow(label, cents, cls, marker, msgs) {
+    function addRow(label, cents, cls, marker, msgs, tag) {
       var r = document.createElement('div');
       r.className = 'bk-row' + (cls ? ' ' + cls : '');
       var d = document.createElement('span');
@@ -324,6 +324,13 @@
           d.appendChild(tag);
         });
       }
+      /* The quiet unit tag — 'per person' on a per-guest night. */
+      if (tag) {
+        var tg = document.createElement('em');
+        tg.className = 'bk-pp';
+        tg.textContent = tag;
+        d.appendChild(tg);
+      }
       var v = document.createElement('span');
       v.textContent = C.moneyC(cents / 100, room.currency);
       r.appendChild(d);
@@ -334,10 +341,17 @@
        exactly to the Accommodation line. */
     var accC = Math.round(bd.baseTotal * 100);
     var leftC = accC;
+    /* PER-GUEST NIGHTS READ PER PERSON PER NIGHT (Dave, 2026-08-31):
+       each row shows ONE guest's night, tagged so, and the
+       Accommodation line below carries the x-adults multiplication
+       back to the full figure — the column still explains itself. */
+    var ppAdults = room.rateBasis === 'per_guest_per_night' && Number(room.adultsPriced) >= 1
+      ? Number(room.adultsPriced) : null;
     bd.rows.forEach(function (row, i) {
       var c = i === bd.rows.length - 1 ? leftC : Math.round(row.base * 100);
       leftC -= c;
-      addRow(C.fmtDate(row.date), c, '', row.free5 ? '5th night free' : null, row.messages);
+      addRow(C.fmtDate(row.date), ppAdults ? Math.round(c / ppAdults) : c, '',
+        row.free5 ? '5th night free' : null, row.messages, ppAdults ? 'per person' : null);
     });
     var totalC = accC;
     /* The Accommodation line carries its own multiplication when the rate
@@ -624,6 +638,18 @@
       pn.textContent = C.money(pp.headline / nights, room.currency) + ' a night';
       price.appendChild(total);
       price.appendChild(pn);
+      /* The AVERAGE PER PERSON PER NIGHT under the headline on a
+         per-guest rate (Dave, 2026-08-31): headline / nights / the
+         adults the engine priced — the same VAT basis as the figure
+         right above it, so the two never disagree about what money
+         they describe. */
+      if (room.rateBasis === 'per_guest_per_night' && Number(room.adultsPriced) >= 1) {
+        var ppn = document.createElement('span');
+        ppn.className = 'room-pn room-ppn';
+        ppn.textContent = C.money(
+          pp.headline / nights / Number(room.adultsPriced), room.currency) + ' per person a night';
+        price.appendChild(ppn);
+      }
       if (pp.note) {
         var noteEl = document.createElement('span');
         noteEl.className = 'room-taxnote';

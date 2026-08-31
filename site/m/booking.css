@@ -400,3 +400,7 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
 .dbg-null { color: var(--paper-dim); font-style: italic; }
 .dbg-leaf { word-break: break-word; }
 .foot-build { display: block; text-align: left; margin-top: 6px; font-size: 11px; color: var(--paper-dim); opacity: 0.75; letter-spacing: 0.04em; }
+
+/* Per-guest pricing said per person (2026-08-31). */
+.room-ppn { color: var(--gold); opacity: 0.85; }
+.bk-pp { color: var(--paper-dim); font-style: normal; font-size: 10px; margin-left: 7px; letter-spacing: 0.04em; }

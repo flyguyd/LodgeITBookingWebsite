@@ -570,4 +570,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.46',
+    version: '0.1.46',
+    date: '2026-09-01T00:20:00+02:00',
+    changes: [
+      {
+        headline:
+          'A changed GUEST COUNT is a changed cache identity, on ANY engine: the declared party is folded into the per-visitor session key, so a couple\u0027s search can never be served the answer a 3-guest search cached — whichever engine version sits behind this site.',
+        detail:
+          'Dave, 2026-08-31: \u0022If the booking site query changes in person counts, it should invalidate the cache for the date range. Retrieving from cache for fundamentally different guest counts will always be problematic.\u0022 Agreed — and the guarantee now lives on BOTH sides of the wire. Engine 0.1.57 already keys its per-night cache on the declared party, but that protection depends on which engine is deployed: this site holds ONE engine session open for its whole life, shared by every visitor, and against a pre-0.1.57 engine (whose key ignored children and folded an undeclared party into 2 adults) one family search could poison the couple\u0027s answer for everyone until an engine restart — exactly the live-box symptom. engineRatesQuote now appends p<adults>-<children> AS DECLARED (\u0027x\u0027 for an undeclared component, which never collides with a real 0) to the per-visitor half of the session key, so different guest counts are different cache identities to the engine no matter how it builds its own key. Separation rather than invalidation, deliberately: alternating family and couple searches would thrash an invalidating cache, while separated entries stay warm and each stays correct. Both guest-facing paths ride the same function — the availability search and the calendar sweep — and the loadtest path keeps its own key. The site-held session\u0027s prefix still matches the engine\u0027s dropSession sweep, so closing the session still drops every visitor\u0027s entries. VERIFIED two ways against real dists on a real PostgreSQL 16 with real Chromium: Dave\u0027s honeymoon stack through the CURRENT engine (the 3-guest search first, then 1 person offered the plan with its message, then 2 people offered and defaulted, 8/8); and the poisoning sequence through a REBUILT PRE-FIX engine 0.1.56 dist, where this key change alone keeps 2 adults + 1 child blocked and 2 adults alone priced, in both orders. Deploy: restart the site node; no engine change required — though engine 0.1.58 remains the recommended pair.',
+      },
+    ],
+  },
 ];

@@ -414,11 +414,21 @@ async function engineRatesQuote(roomTypeIds, from, to, ip, scan = false, discoun
   // country, which is what lets country-gated rate rules see site guests.
   // Never a third-party lookup, and omitted when we genuinely don't know.
   const addr = String(ip ?? '').trim().slice(0, 60);
+  // The PARTY IS PART OF THE CACHE IDENTITY (Dave, 2026-08-31: "retrieving
+  // from cache for fundamentally different guest counts will always be
+  // problematic"). Engine 0.1.57+ already keys its cache on the declared
+  // party, but this server must not depend on which engine is behind it —
+  // folding the party into the per-visitor session key makes a changed
+  // guest count a different cache identity on ANY engine, so a couple's
+  // search can never be served the answer a 3-guest search cached, in
+  // either direction. As declared: 'x' when the guest URL carried no
+  // count, which never collides with a real 0.
+  const partyKey = `p${Number.isFinite(adults) && adults >= 1 ? Math.min(adults, 99) : 'x'}-${Number.isFinite(children) && children >= 0 ? Math.min(children, 99) : 'x'}`;
   const raw = JSON.stringify({
     roomTypeIds: ids,
     from,
     to,
-    sessionKey: `${SITE_SESSION_KEY}|${siteSessionKey(ip)}`,
+    sessionKey: `${SITE_SESSION_KEY}|${siteSessionKey(ip)}|${partyKey}`,
     scan,
     ...(code ? { discountCode: code } : {}),
     ...(addr && addr !== 'unknown' ? { ip: addr } : {}),

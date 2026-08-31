@@ -807,6 +807,19 @@
     card.addEventListener('keydown', function (ev) {
       if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); details(); }
     });
+    /* The flashlight (Dave, 2026-08-31) — the search's full raw answer as
+       an expandable tree, on EVERY card, sold out included. */
+    var dbg = document.createElement('button');
+    dbg.type = 'button';
+    dbg.className = 'room-debug';
+    dbg.textContent = '🔦';
+    dbg.title = 'Show the raw rate response for this search';
+    dbg.setAttribute('aria-label', 'Show the raw rate response');
+    dbg.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      C.openQueryDebug(room.roomTypeId);
+    });
+    card.appendChild(dbg);
     if (soldOut) {
       pickMark.remove();
       qtyRow.remove();
@@ -1024,6 +1037,17 @@
   C.fetchStatus()
     .then(function (s) { if (s && s.maintenance) show('maintenance'); })
     .catch(function () {});
+  /* The build in the footer (Dave, 2026-08-31): what is ACTUALLY deployed,
+     both sides of the wire — the first question of every rate hunt. */
+  C.fetchVersion().then(function (v) {
+    if (!v || !v.site) return;
+    var foot = document.querySelector('.foot');
+    if (!foot) return;
+    var b = document.createElement('small');
+    b.className = 'foot-build';
+    b.textContent = 'Build ' + v.site + (v.engine ? ' · engine ' + v.engine : ' · engine unreachable');
+    foot.appendChild(b);
+  });
   fetch('../config.json')
     .then(function (r) { return r.ok ? r.json() : {}; })
     .then(function (c) {

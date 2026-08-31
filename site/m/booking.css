@@ -353,3 +353,50 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
 .room-callout-inc { color: var(--paper); }
 .room-callout-exc { color: var(--paper-dim); }
 .room-callout-refund { font-style: italic; }
+
+/* ---- the flashlight + query-response debugger (2026-08-31) ---- */
+.room-debug {
+  position: absolute; right: 10px; bottom: 10px; z-index: 3;
+  width: 32px; height: 32px; padding: 0; line-height: 1;
+  font-size: 16px; cursor: pointer;
+  background: rgba(0, 0, 0, 0.35); color: var(--paper);
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px;
+  opacity: 0.5;
+}
+.dbg-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex; align-items: center; justify-content: center; padding: 10px;
+}
+.dbg-box {
+  width: 100%; max-height: 90vh;
+  display: flex; flex-direction: column;
+  background: #211d17; color: var(--paper);
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 14px;
+  box-shadow: 0 34px 80px rgba(0, 0, 0, 0.6);
+}
+.dbg-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.dbg-close {
+  background: none; border: none; color: var(--paper); cursor: pointer;
+  font-size: 18px; padding: 4px 8px;
+}
+.dbg-body {
+  overflow: auto; padding: 10px 12px 14px; -webkit-overflow-scrolling: touch;
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.55;
+}
+.dbg-meta {
+  color: var(--paper-dim); margin-bottom: 10px; word-break: break-all;
+  padding-bottom: 8px; border-bottom: 1px dashed rgba(255, 255, 255, 0.12);
+}
+.dbg-kids { margin-left: 14px; border-left: 1px solid rgba(255, 255, 255, 0.08); padding-left: 7px; }
+.dbg-node > summary { cursor: pointer; }
+.dbg-k { color: var(--gold); }
+.dbg-shape { color: var(--paper-dim); }
+.dbg-str { color: #b8d8a8; word-break: break-word; }
+.dbg-num { color: #9fc6e8; }
+.dbg-null { color: var(--paper-dim); font-style: italic; }
+.dbg-leaf { word-break: break-word; }
+.foot-build { display: block; text-align: left; margin-top: 6px; font-size: 11px; color: var(--paper-dim); opacity: 0.75; letter-spacing: 0.04em; }

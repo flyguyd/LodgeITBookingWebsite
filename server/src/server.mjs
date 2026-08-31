@@ -325,6 +325,9 @@ async function syncMedia() {
    RATE_SESSION_TTL_MS on the engine is enough. A lapsed or dropped session
    is simply re-opened on the next keepalive; guests never see it. */
 const SITE_SESSION_KEY = 'site-' + Math.random().toString(36).slice(2, 10) + '-' + process.pid;
+/** Cached /api/public/version answer — the engine half is a minute stale at
+ *  most, which is fine for a footer. */
+let versionInfo = null;
 let sessionTtlMs = null;
 let sessionOpenedAt = null;
 let sessionTimer = null;
@@ -753,6 +756,26 @@ const server = createServer(async (req, res) => {
     }
 
     json(res, 404, { code: 'NOT_FOUND', message: 'No such endpoint.' });
+    return;
+  }
+
+  // ---- build identification (Dave, 2026-08-31: "We need a way to debug
+  // this. Add to the bottom of the page the current build number") ----
+  // What is ACTUALLY running, on both sides of the wire: this server's own
+  // version plus the engine build it is talking to — the exact pair every
+  // deployment hunt in this saga has needed. The engine's answer is cached
+  // for a minute; when it does not answer, engine is null and the footer
+  // says so rather than guessing.
+  if (method === 'GET' && url.split('?')[0] === '/api/public/version') {
+    if (!versionInfo || Date.now() - versionInfo.at > 60_000) {
+      let engineVersion = null;
+      const r = await engineCall('GET', '/api/health');
+      if (r.status === 200 && r.body) {
+        try { engineVersion = String(JSON.parse(r.body).version ?? '') || null; } catch { /* opaque */ }
+      }
+      versionInfo = { at: Date.now(), site: VERSION, engine: engineVersion };
+    }
+    json(res, 200, { site: versionInfo.site, engine: versionInfo.engine });
     return;
   }
 

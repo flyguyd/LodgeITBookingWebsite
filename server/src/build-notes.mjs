@@ -583,4 +583,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.47',
+    version: '0.1.47',
+    date: '2026-09-01T01:10:00+02:00',
+    changes: [
+      {
+        headline:
+          'DEBUGGING FROM THE PAGE ITSELF: the footer now shows the build numbers actually running (site AND engine), and every rate card wears a flashlight — click it and the search\u0027s full raw response opens in a lightbox as an expandable tree.',
+        detail:
+          'Dave, 2026-08-31, still hunting the missing Honeymoon plan on the live box: \u0022We need a way to debug this. Add to the bottom of the page the current build number and add to the bottom right of each rate card a flashlight icon. When clicked, open a light box and show the full query response as an expandable tree.\u0022 THE FOOTER: a new GET /api/public/version answers { site, engine } — this server\u0027s own version plus the version the engine\u0027s /api/health reports (cached a minute; null with \u0022engine unreachable\u0022 shown when it does not answer) — and both builds append \u0022Build x.y.z · engine a.b.c\u0022 to the footer. That pair is the first question of every rate hunt this week, now readable off the page. THE FLASHLIGHT: core.js keeps the last availability search verbatim — the exact URL, HTTP status, timestamp and JSON — and a 🔦 button on the bottom right of EVERY suite card (sold-out cards included, desktop and mobile) opens it as a native details/summary tree, first two levels unfolded, keys gold, strings green, numbers blue: ratePlans → plan → suites → suiteId shows available/rateTotal/messages exactly as the engine said them, so \u0022why is the plan not offered\u0022 is answered by looking. Built with textContent throughout — the response draws itself and never executes — and it only ever shows the visitor their own answer, which the network tab already shows; nothing new is exposed. VERIFIED in real Chromium against the real engine dist through this real server with the honeymoon fixture: the footer naming both builds, the flashlight on every card, the tree opening with the request line and HTTP status, the Honeymoon plan\u0027s suites node readable inside it at 2 guests, and at 3 guests the tree showing available false with rateTotal null — the exact evidence the live hunt needs. Deploy: restart the site node; works against any engine version.',
+      },
+    ],
+  },
 ];

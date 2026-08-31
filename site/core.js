@@ -664,6 +664,12 @@ window.BKCore = (function () {
 
   // ---- the API contract ----
 
+  /* THE LAST SEARCH, VERBATIM (Dave, 2026-08-31: "We need a way to debug
+     this") — the exact URL asked and the exact JSON that came back, held
+     for the flashlight on each rate card. Never sent anywhere; it only
+     shows the guest's own answer back to whoever is looking. */
+  var lastQuery = null;
+
   function searchAvailability(params) {
     var q = '?from=' + params.from + '&to=' + params.to +
       '&adults=' + params.adults + '&children=' + params.children +
@@ -677,8 +683,132 @@ window.BKCore = (function () {
     return fetch(API + '/availability' + q).then(function (res) {
       return res.json()
         .catch(function () { return null; })
-        .then(function (j) { return { status: res.status, json: j }; });
+        .then(function (j) {
+          lastQuery = {
+            url: API + '/availability' + q,
+            status: res.status,
+            at: new Date().toISOString(),
+            json: j,
+          };
+          return { status: res.status, json: j };
+        });
     });
+  }
+
+  /** What is actually deployed, both sides: { site, engine } — engine null
+   *  when it did not answer. Resolves to null rather than failing. */
+  function fetchVersion() {
+    return fetch(API + '/version')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
+  }
+
+  /** One JSON value as a native expandable tree — <details>/<summary> all
+   *  the way down, no state to manage. Objects and arrays fold; the first
+   *  two levels start open so the answer's shape is visible at a glance.
+   *  Built with textContent throughout — the data draws itself, it never
+   *  executes. */
+  function jsonTree(name, value, depth) {
+    var leaf, k, v;
+    if (value !== null && typeof value === 'object') {
+      var isArr = Array.isArray(value);
+      var keys = isArr ? null : Object.keys(value);
+      var count = isArr ? value.length : keys.length;
+      var d = document.createElement('details');
+      d.className = 'dbg-node';
+      /* Three levels unfolded: response → ratePlans → each plan, so the
+         plan NAMES read at a glance — the question this tool exists for
+         is "which plans came back". Deeper detail is a click away. */
+      if (depth < 3) d.open = true;
+      var s = document.createElement('summary');
+      k = document.createElement('span');
+      k.className = 'dbg-k';
+      k.textContent = name;
+      s.appendChild(k);
+      v = document.createElement('span');
+      v.className = 'dbg-shape';
+      v.textContent = isArr ? ' [' + count + ']' : ' {' + count + '}';
+      s.appendChild(v);
+      d.appendChild(s);
+      var kids = document.createElement('div');
+      kids.className = 'dbg-kids';
+      if (isArr) {
+        value.forEach(function (item, i) { kids.appendChild(jsonTree(String(i), item, depth + 1)); });
+      } else {
+        keys.forEach(function (key) { kids.appendChild(jsonTree(key, value[key], depth + 1)); });
+      }
+      if (!count) {
+        var empty = document.createElement('div');
+        empty.className = 'dbg-leaf';
+        empty.textContent = isArr ? '(empty array)' : '(empty object)';
+        kids.appendChild(empty);
+      }
+      d.appendChild(kids);
+      return d;
+    }
+    leaf = document.createElement('div');
+    leaf.className = 'dbg-leaf';
+    k = document.createElement('span');
+    k.className = 'dbg-k';
+    k.textContent = name;
+    leaf.appendChild(k);
+    leaf.appendChild(document.createTextNode(': '));
+    v = document.createElement('span');
+    if (typeof value === 'string') {
+      v.className = 'dbg-str';
+      v.textContent = '"' + value + '"';
+    } else {
+      v.className = value == null ? 'dbg-null' : 'dbg-num';
+      v.textContent = String(value);
+    }
+    leaf.appendChild(v);
+    return leaf;
+  }
+
+  /** The flashlight's lightbox: the full availability answer as a tree,
+   *  headed by the exact request that produced it. Shared by both builds. */
+  function openQueryDebug(roomTypeId) {
+    var overlay = document.createElement('div');
+    overlay.className = 'dbg-overlay';
+    var box = document.createElement('div');
+    box.className = 'dbg-box';
+    var head = document.createElement('div');
+    head.className = 'dbg-head';
+    var title = document.createElement('strong');
+    title.textContent = 'Query response' + (roomTypeId ? ' · ' + roomTypeId : '');
+    head.appendChild(title);
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'dbg-close';
+    close.textContent = '✕';
+    close.setAttribute('aria-label', 'Close');
+    head.appendChild(close);
+    box.appendChild(head);
+    var bodyEl = document.createElement('div');
+    bodyEl.className = 'dbg-body';
+    if (lastQuery) {
+      var meta = document.createElement('div');
+      meta.className = 'dbg-meta';
+      meta.textContent = 'GET ' + lastQuery.url + ' → HTTP ' + lastQuery.status + ' · ' + lastQuery.at;
+      bodyEl.appendChild(meta);
+      bodyEl.appendChild(jsonTree('response', lastQuery.json, 0));
+    } else {
+      var none = document.createElement('div');
+      none.className = 'dbg-meta';
+      none.textContent = 'No search has been made yet.';
+      bodyEl.appendChild(none);
+    }
+    box.appendChild(bodyEl);
+    overlay.appendChild(box);
+    function shut() {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(ev) { if (ev.key === 'Escape') shut(); }
+    close.addEventListener('click', shut);
+    overlay.addEventListener('click', function (ev) { if (ev.target === overlay) shut(); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
   }
 
   function fetchStatus() {
@@ -749,6 +879,8 @@ window.BKCore = (function () {
     searchAvailability: searchAvailability,
     fetchStatus: fetchStatus,
     fetchRateCalendar: fetchRateCalendar,
+    fetchVersion: fetchVersion,
+    openQueryDebug: openQueryDebug,
   };
 })();
 

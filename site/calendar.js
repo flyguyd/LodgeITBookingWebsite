@@ -418,6 +418,12 @@ window.BKCal = (function () {
     trigger.addEventListener('click', function (ev) {
       ev.preventDefault();
       ev.stopPropagation();
+      /* Re-sync on every open (2026-08-31): a bare .value write elsewhere
+         cannot fire 'change', and a trigger that opens a list disagreeing
+         with its own label is exactly the desync that hid a restored
+         party from the search bar. The label corrects itself at the
+         latest here. */
+      sync();
       if (pop.hidden) openList(); else pop.hidden = true;
     });
     document.addEventListener('click', function (ev) {

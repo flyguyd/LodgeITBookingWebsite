@@ -596,4 +596,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.48',
+    version: '0.1.48',
+    date: '2026-09-01T01:55:00+02:00',
+    changes: [
+      {
+        headline:
+          'ROOT CAUSE OF THE VANISHING HONEYMOON PLAN, found by Dave with the new flashlight: the search bar LIED about the party. A deep-linked or restored guest count reached the select — and every query — without ever updating the glass dropdown’s visible label, so the bar said \u00220 children\u0022 while the query said 2 and the 4-guest rule rightly blocked the plan. Fixed both ways.',
+        detail:
+          'Dave, 2026-08-31: \u0022found the problem... totally in the wrong place. The search bar shows 0 children in the search, but when you click on the drop down it shows 2 and the query is showing 2. So the UI for the search controls is the root cause.\u0022 THE MECHANISM: the bar\u0027s dropdowns are native selects dressed in a glass trigger (Dave, 2026-08-25), and the trigger mirrors the select only on a REAL change event. Restoring a search from the URL (restoreFromUrl — and updateUrl writes every search\u0027s party INTO the URL, so any reload replays the last search) set select.value bare, which fires nothing: the select and every quote it fed carried the URL\u0027s children count while the trigger kept showing the default 0. The engine then did exactly as told — 2 adults + 2 children is 4 guests, the more-than-2 rule blocked the plan — and no amount of engine-side hunting could find a bug that lived in a label. Every earlier harness drove the API or the URL directly, so no test ever LOOKED at the closed trigger; the flashlight (0.1.47) put the real query next to the bar and made the lie visible in one glance. THE FIX, both ends: restoreFromUrl now dispatches a real bubbling change after each restored value — the dressing syncs, and anything else listening (the rate calendar\u0027s party-priced prefetch) sees the truth too — and glassSelect additionally re-syncs its label every time the trigger opens, so any future bare .value write self-heals at the latest on interaction. Mobile is untouched: its steppers\u0027 textContent IS the display, so it could never desync. VERIFIED in real Chromium against the real engine dist with the honeymoon fixture: a deep link with children=2 now SHOWS 2 in the bar (label, popup and query all agreeing, the plan rightly absent at 4 guests); picking 0 children in the glass popup and re-searching shows the Honeymoon pill; and the flashlight\u0027s request line matches the bar throughout. Deploy: static site files only — rsync them; guests may hold the old cached JS until a refresh, so bump the cache-busting query if the edge caches aggressively.',
+      },
+    ],
+  },
 ];

@@ -1061,7 +1061,16 @@
       if (arrive < C.isoToday(0)) return; // a stale link keeps the defaults
       var setSel = function (el, v, lo, hi) {
         var x = parseInt(v || '', 10);
-        if (x >= lo && x <= hi) el.value = String(x);
+        if (x >= lo && x <= hi) {
+          el.value = String(x);
+          /* A REAL change event, always (Dave's root cause, 2026-08-31):
+             the glass dressing over these selects syncs its visible label
+             only on 'change'. A bare .value write restored the party
+             SILENTLY — the bar kept showing the default "0 children"
+             while the select, and every query it fed, carried the URL's
+             count. The guest searched for a party they could not see. */
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
       };
       els.arrive.value = arrive;
       setNights(n);

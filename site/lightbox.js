@@ -60,6 +60,15 @@ window.BKLight = (function () {
     'border-radius:999px;padding:5px 12px}',
     '.blb-chip.gold{color:#d8b46a;border-color:rgba(201,168,106,0.55)}',
     '.blb-extra{margin:12px 0 0;font-size:12.5px;color:rgba(244,239,230,0.62);font-style:italic}',
+    /* The embedded cost breakdown (Dave, 2026-08-31): the SAME .bk-breakdown
+       element the card shows as a hover tip, re-seated as a flowing block —
+       so its popover positioning and size caps are neutralised here. */
+    '.blb-bd{margin-top:16px}',
+    '.blb-bd-h{font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;',
+    'color:rgba(244,239,230,0.62);margin:0 0 8px}',
+    '.blb-bd .bk-breakdown{position:static;min-width:0;max-width:none;max-height:none;',
+    'overflow:visible;box-shadow:none;background:rgba(255,255,255,0.04);',
+    'border:1px solid rgba(255,255,255,0.14)}',
     '.blb-soldout{margin:16px 0 0;padding:11px 16px;border-radius:12px;text-align:center;',
     'border:1px solid rgba(201,168,106,0.4);color:#d8b46a;font-size:13px;letter-spacing:0.06em}',
     '.blb-cta{margin-top:18px;width:100%;min-height:52px;border:0;border-radius:14px;cursor:pointer;',
@@ -204,6 +213,19 @@ window.BKLight = (function () {
         chips.appendChild(el);
       });
       body.appendChild(chips);
+    }
+    /* The full cost breakdown, embedded rather than hover-only (Dave,
+       2026-08-31): the caller hands over the ready-built statement element;
+       absent (unpriced room, or the caller withheld it) nothing renders. */
+    if (opts.breakdown) {
+      var bdWrap = document.createElement('div');
+      bdWrap.className = 'blb-bd';
+      var bdHead = document.createElement('div');
+      bdHead.className = 'blb-bd-h';
+      bdHead.textContent = 'Cost breakdown';
+      bdWrap.appendChild(bdHead);
+      bdWrap.appendChild(opts.breakdown);
+      body.appendChild(bdWrap);
     }
     /* The occupancy & extra-cost table (Dave, 2026-08-23): included and
        maximum guests per age group, the total maximum, and what an extra

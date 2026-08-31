@@ -609,4 +609,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.49',
+    version: '0.1.49',
+    date: '2026-09-01T02:40:00+02:00',
+    changes: [
+      {
+        headline:
+          'PER-GUEST SUITES stop advertising extra-guest tariffs — the rate already charges per adult — and the suite lightbox now shows the FULL COST BREAKDOWN inline: every night, the per-guest arithmetic, discounts, VAT and levy, the total.',
+        detail:
+          'Dave, 2026-08-31: \u0022If the rate is per person, then on the rate card do not show the cost of extra guests and on the rate card light box do not show the additional guests grid. On the rate card light box, show the full break down of costs.\u0022 TWO CHANGES, both builds. FIRST: on a suite whose engine annotation says per_guest_per_night, the card\u0027s \u0022Extra guests per night: ...\u0022 line and the lightbox\u0027s occupancy/extra-cost grid (Guests / Included / Maximum / Extra guest) no longer render — the per-guest rate already prices every adult, so an extra-guest tariff on top reads as a double charge, and Included-guest counts stopped being configured for per-guest suites in Lodge Ops 1.2.297 anyway. The Sleeps chip keeps stating the capacity; per-ROOM suites keep the grid and the line untouched. SECOND: the itemised statement that until now existed only as the card\u0027s hover tip is embedded in the suite lightbox under a \u0022Cost breakdown\u0022 heading — the SAME builder (attachBreakdown\u0027s guts extracted as buildBreakdown, hover wiring left behind) produces a detached element, and the lightbox re-seats it as a flowing block (its popover positioning and size caps neutralised by .blb-bd overrides in the lightbox\u0027s own injected styles). Nightly rows with their rule-message tags, the Accommodation subtotal carrying its per-guest multiplication, the discount a code earned, VAT and levy lines, the total, stay messages and the refund policy — all now one scroll down from the photos, on desktop and mobile alike. An unpriced room embeds nothing: the builder still returns null rather than inventing figures. VERIFIED in real Chromium against the real engine dist with a two-suite fixture (one per-guest, one per-room, extra-guest tariffs configured on both): the per-guest card and lightbox clean of extra-guest costs with the breakdown present and multiplying honestly; the per-room suite keeping grid, line AND gaining the same breakdown; mobile matching. Deploy: static site files only — rsync; guests may hold cached JS until a refresh.',
+      },
+    ],
+  },
 ];

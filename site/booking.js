@@ -302,14 +302,20 @@
      and the total, all to the cent so the column visibly adds up (Dave,
      2026-08-23). Hover on desktop, tap on touch — the tap never toggles the
      room pick. */
-  function attachBreakdown(price, noteEl, room, nights) {
+  /* Builds the itemised statement — every night, the accommodation
+     subtotal with its per-guest arithmetic, discount, VAT and levy lines
+     and the total — as a detached element. The card hangs it off the
+     price note as a hover tip; the suite lightbox embeds the SAME element
+     inline (Dave, 2026-08-31: "On the rate card light box, show the full
+     break down of costs"). Null when the room has no itemisation — no
+     breakdown is ever invented. */
+  function buildBreakdown(room, nights) {
     var bd = C.stayBreakdown(room, current.from, nights);
-    if (!bd) return;
+    if (!bd) return null;
     var party = { adults: els.adults.value, children: els.children.value };
     var lines = C.stayMath(room, lodge, party, nights);
     var tip = document.createElement('div');
     tip.className = 'bk-breakdown';
-    tip.hidden = true;
     function addRow(label, cents, cls, marker, msgs) {
       var r = document.createElement('div');
       r.className = 'bk-row' + (cls ? ' ' + cls : '');
@@ -390,6 +396,13 @@
       rf.textContent = C.refundLabel(room.refundable);
       tip.appendChild(rf);
     }
+    return tip;
+  }
+
+  function attachBreakdown(price, noteEl, room, nights) {
+    var tip = buildBreakdown(room, nights);
+    if (!tip) return;
+    tip.hidden = true;
     price.style.position = 'relative';
     price.appendChild(tip);
     noteEl.className += ' has-tip';
@@ -458,6 +471,7 @@
   function openLightbox(room, nights) {
     if (!window.BKLight) { togglePick(room); return; }
     var sc = suites[String(room.roomTypeId)] || null;
+    var perGuest = room.rateBasis === 'per_guest_per_night';
     var pp = C.priceParts(room, config);
     var soldOut = !(room.available > 0) && room.availabilityKnown !== false;
     var availUnknown = room.availabilityKnown === false;
@@ -499,8 +513,15 @@
       price: price,
       description: String((sc && sc.description) || room.description || '').replace(/<[^>]*>/g, ''),
       chips: chips,
-      occupancy: occupancyFor(sc, room.currency),
-      extraLine: C.extraGuestsLine(sc, room.currency),
+      /* A per-guest rate already prices every adult — the additional-
+         guests grid and the extra-cost line would double-say the money,
+         so neither shows (Dave, 2026-08-31). The Sleeps chip keeps
+         saying the capacity. */
+      occupancy: perGuest ? null : occupancyFor(sc, room.currency),
+      extraLine: perGuest ? null : C.extraGuestsLine(sc, room.currency),
+      /* The full statement, embedded (Dave, 2026-08-31) — the same
+         element the card only shows on hover. */
+      breakdown: buildBreakdown(room, nights),
       onToggle: soldOut ? null : function () {
         togglePick(room);
         return !!current.picks[room.roomTypeId];
@@ -785,7 +806,11 @@
       });
       body.appendChild(am);
     }
-    var xg = C.extraGuestsLine(sc, room.currency);
+    /* Extra-guest costs stay OFF a per-guest-priced card (Dave,
+       2026-08-31): the rate already charges per adult, so an extra-guest
+       tariff on top would read as a double charge. */
+    var xg = room.rateBasis === 'per_guest_per_night'
+      ? null : C.extraGuestsLine(sc, room.currency);
     if (xg) {
       var xEl = document.createElement('p');
       xEl.className = 'room-extra';

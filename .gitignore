@@ -1,2 +1,4 @@
 node_modules/
 .env
+# the site server's disk cache of engine-replicated content - runtime, never source
+data/

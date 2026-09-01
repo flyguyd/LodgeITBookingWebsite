@@ -199,3 +199,13 @@
   animation: cal-spin 0.8s linear infinite;
 }
 @keyframes cal-spin { to { transform: rotate(360deg); } }
+
+/* Restrictions (engine 2026-09-02): closed to arrivals wears a gold bar on
+   its left edge, closed to departures on its right; a refused click shakes
+   the cell once so the guest sees WHERE the answer is. */
+.cal-day.cta { box-shadow: inset 3px 0 0 rgba(201, 168, 106, 0.85); }
+.cal-day.ctd { box-shadow: inset -3px 0 0 rgba(201, 168, 106, 0.85); }
+.cal-day.cta.ctd { box-shadow: inset 3px 0 0 rgba(201, 168, 106, 0.85), inset -3px 0 0 rgba(201, 168, 106, 0.85); }
+.cal-day.refused { animation: cal-refuse 0.4s ease; }
+@keyframes cal-refuse { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+@media (prefers-reduced-motion: reduce) { .cal-day.refused { animation: none; } }

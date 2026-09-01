@@ -194,22 +194,42 @@ export function attachEngineRates(availability, quote, planInclusions) {
 export function calendarWithEngineRates(calendar, quote) {
   if (!calendar || typeof calendar.days !== 'object' || calendar.days === null) return calendar;
   const best = {};
+  // Restrictions (engine 2026-09-02): a day is closed to arrivals for the
+  // picker only when EVERY plan on EVERY suite closes it — one suite still
+  // taking arrivals keeps the day open, and the search then says which
+  // suites are closed. Same for departures.
+  const seen = {};
   for (const plan of quote && Array.isArray(quote.plans) ? quote.plans : []) {
     for (const suite of Object.values(plan?.suites ?? {})) {
       const nights = suite && Array.isArray(suite.nights) ? suite.nights : [];
       for (const n of nights) {
-        const v = n && n.totalInclVat != null ? Number(n.totalInclVat) : NaN;
-        if (!Number.isFinite(v) || !n.date) continue;
+        if (!n || !n.date) continue;
+        const rec = (seen[n.date] ??= { n: 0, cta: 0, ctd: 0 });
+        rec.n += 1;
+        if (n.closedToArrival === true) rec.cta += 1;
+        if (n.closedToDeparture === true) rec.ctd += 1;
+        const v = n.totalInclVat != null ? Number(n.totalInclVat) : NaN;
+        if (!Number.isFinite(v)) continue;
         if (best[n.date] == null || v < best[n.date]) best[n.date] = v;
       }
     }
   }
   for (const day of Object.values(calendar.days)) {
-    if (day && typeof day === 'object') day.minRate = null;
+    if (day && typeof day === 'object') {
+      day.minRate = null;
+      delete day.closedToArrival;
+      delete day.closedToDeparture;
+    }
   }
   for (const [iso, v] of Object.entries(best)) {
     const day = calendar.days[iso];
     if (day && typeof day === 'object') day.minRate = v;
+  }
+  for (const [iso, rec] of Object.entries(seen)) {
+    const day = calendar.days[iso];
+    if (!day || typeof day !== 'object' || !rec.n) continue;
+    if (rec.cta === rec.n) day.closedToArrival = true;
+    if (rec.ctd === rec.n) day.closedToDeparture = true;
   }
   return calendar;
 }

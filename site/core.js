@@ -526,6 +526,20 @@ window.BKCore = (function () {
     return markCheapest(out);
   }
 
+  /** Why NO plan prices this suite's stay, when the engine said so (engine
+   *  2026-09-02): the first restriction message any offered plan carries —
+   *  "Closed to arrivals on 15 September 2026". Empty when the suite is
+   *  simply unpriced; never invented. */
+  function planRestriction(roomTypeId, ratePlans) {
+    var out = '';
+    (ratePlans || []).forEach(function (p) {
+      if (out) return;
+      var s = p && p.suites && p.suites[String(roomTypeId)];
+      if (s && s.available !== true && s.restricted) out = String(s.restricted);
+    });
+    return out;
+  }
+
   /**
    * Flag the option that costs the guest least (0.1.29). grandTotal is the
    * engine's all-in figure for the stay; the conservation levy sits on top
@@ -868,6 +882,7 @@ window.BKCore = (function () {
     levyMathLabel: levyMathLabel,
     stayMath: stayMath,
     planOptionsFor: planOptionsFor,
+    planRestriction: planRestriction,
     applyInclusionDeltas: applyInclusionDeltas,
     refundLabel: refundLabel,
     ruleCallouts: ruleCallouts,

@@ -147,8 +147,8 @@
      suites[id].sortOrder); anything unknown keeps its place at the end. */
   function suiteOrdered(list) {
     return list.slice().sort(function (a, b) {
-      var avA = a.available > 0 ? 0 : 1;
-      var avB = b.available > 0 ? 0 : 1;
+      var avA = a.available > 0 && !a.restricted ? 0 : 1;
+      var avB = b.available > 0 && !b.restricted ? 0 : 1;
       if (avA !== avB) return avA - avB; // sold-out suites after the bookable
       var sa = suites[String(a.roomTypeId)];
       var sb = suites[String(b.roomTypeId)];
@@ -220,6 +220,11 @@
         var party = { adults: els.adults.textContent, children: els.children.textContent };
         current.results.forEach(function (room) {
           room.plans = C.planOptionsFor(room.roomTypeId, current.ratePlans);
+          /* Closed to arrivals / departures (engine 2026-09-02): no plan
+             sells the stay and the engine said why — the card says the
+             same words and cannot be picked. */
+          room.restricted = room.plans.length ? null
+            : C.planRestriction(room.roomTypeId, current.ratePlans) || null;
           /* A search lands on the CHEAPEST priced plan (0.1.29), not merely
              the first one offered — the guest sees the best price the lodge
              has for them without having to hunt through the pills. */
@@ -474,8 +479,8 @@
     var sc = suites[String(room.roomTypeId)] || null;
     var perGuest = room.rateBasis === 'per_guest_per_night';
     var pp = C.priceParts(room, config);
-    var soldOut = !(room.available > 0) && room.availabilityKnown !== false;
-    var availUnknown = room.availabilityKnown === false;
+    var soldOut = (!(room.available > 0) && room.availabilityKnown !== false) || !!room.restricted;
+    var availUnknown = room.availabilityKnown === false && !room.restricted;
     var chips = [];
     if (room.promoFree5) chips.push({ text: '5th night\u2019s accommodation free', gold: true });
     var sleeps = (sc && sc.maxTotalGuests) || room.maxGuests;
@@ -516,7 +521,7 @@
       photos: photosFor(room),
       artHue: C.hueFor(room.roomTypeId),
       soldOut: soldOut,
-      soldOutText: 'Unavailable for your dates',
+      soldOutText: room.restricted || 'Unavailable for your dates',
       picked: !!current.picks[room.roomTypeId],
       price: price,
       description: String((sc && sc.description) || room.description || '').replace(/<[^>]*>/g, ''),
@@ -597,13 +602,13 @@
     } else {
       photo.appendChild(art(room));
     }
-    var soldOut = !(room.available > 0) && room.availabilityKnown !== false;
-    var availUnknown = room.availabilityKnown === false;
+    var soldOut = (!(room.available > 0) && room.availabilityKnown !== false) || !!room.restricted;
+    var availUnknown = room.availabilityKnown === false && !room.restricted;
     if (soldOut) {
       card.classList.add('soldout');
       var so = document.createElement('span');
       so.className = 'room-scarce';
-      so.textContent = 'Unavailable for your dates';
+      so.textContent = room.restricted || 'Unavailable for your dates';
       photo.appendChild(so);
     } else if (availUnknown) {
       /* The engine holds no availability for these dates (beyond its synced

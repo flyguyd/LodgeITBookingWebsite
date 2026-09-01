@@ -661,4 +661,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.53',
+    version: '0.1.53',
+    date: '2026-09-02T06:00:00+02:00',
+    changes: [
+      {
+        headline:
+          'Closed to arrivals / closed to departures (engine 0.1.60): a suite the rate rules will not sell for the searched stay now says exactly why on its card \u2014 \u0022Closed to arrivals on 15 September 2026\u0022 \u2014 and cannot be picked; the date picker marks closed days with a gold edge and refuses the click they are closed to. Both builds; site server + static files.',
+        detail:
+          'Dave, 2026-09-02: the Rate Engine gained a Restrictions modifier and Closed to Arrivals / Closed to Departures qualifiers (engine 0.1.60, Lodge Ops 1.2.350). WHAT REACHES THE SITE: the engine\u0027s per-suite stay summary carries available: false with restricted (the sentence) and closedToArrival / closedToDeparture; each night carries the flags it was given. CORE.JS: planRestriction(roomTypeId, ratePlans) \u2014 the first restriction any offered plan carries for the suite, empty when the suite is merely unpriced (never invented). BOOKING.JS (both builds): after the plans are mapped, room.restricted is set when no plan sells the stay and the engine said why; renderRoom and the suite lightbox treat a restricted suite exactly like a sold-out one \u2014 the badge and the lightbox banner carry the engine\u0027s words instead of \u0022Unavailable for your dates\u0022, no price, no Add \u2014 and suiteOrdered sinks it below the bookable suites (the availability calendar button stays, as on any unavailable suite). SERVER (lib.mjs calendarWithEngineRates): a picker day is closedToArrival / closedToDeparture only when EVERY plan on EVERY suite closes it \u2014 one suite still taking arrivals keeps the day open and the search then names the closed suites; stale flags are cleared before the fold. CALENDAR.JS (both paint paths and the picker): a closed-to-arrivals day wears a gold bar on its left edge, closed-to-departures on its right, with a title saying which (the rate stays \u2014 a stay may still pass through the night); clicking a closed-to-arrivals day as check-in, or a closed-to-departures day as checkout, is refused where it is clicked with a one-shake animation (none under reduced motion) and the picker stays open. VERIFIED in headless Chromium against a stub shaped like the new engine answer, 13 assertions across both builds: the closed suite carries the exact sentence, is unpriced and unpickable, and sits after the open suite; 15 Sep wears the arrivals mark with its rate, 25 Sep the departures mark; check-in on 15 Sep refused with no pick and the arrival field untouched; a 22 Sep check-in then 25 Sep checkout refused with the picker open; 26 Sep completes the range as 4 nights; no script errors. lib.mjs fold executed from shipped source (a day closed by only one of two suites stays open). DEPLOY: restart the site server (lib.mjs) and rsync core.js, booking.js, m/booking.js, calendar.js, calendar.css.',
+      },
+    ],
+  },
 ];

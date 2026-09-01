@@ -186,6 +186,25 @@ window.BKCal = (function () {
       return { block: block, cells: cells, y: y, m: m };
     }
 
+    /* Restrictions from the rate rules (engine 2026-09-02): a day closed to
+       arrivals or to departures keeps its rate — the stay may still pass
+       through it — but wears a mark and refuses the click it is closed to. */
+    function markClosed(cell, day) {
+      cell.classList.toggle('cta', day.closedToArrival === true);
+      cell.classList.toggle('ctd', day.closedToDeparture === true);
+      var t = [];
+      if (day.closedToArrival === true) t.push('No arrivals on this day');
+      if (day.closedToDeparture === true) t.push('No departures on this day');
+      if (t.length) cell.title = t.join(' · '); else cell.removeAttribute('title');
+    }
+    function flashClosed(dayIso) {
+      var cell = cellIndex && cellIndex[dayIso];
+      if (!cell) return;
+      cell.classList.remove('refused');
+      void cell.offsetWidth;
+      cell.classList.add('refused');
+    }
+
     function fillRates(built) {
       var paint = function () {
         if (!view) return;
@@ -200,6 +219,7 @@ window.BKCal = (function () {
           } else if (day.minRate != null && isFinite(Number(day.minRate))) {
             el.textContent = fmtShort(Number(day.minRate), currency);
           }
+          markClosed(cell, day);
         });
       };
       paint(); // whatever the prefetch already brought in shows instantly
@@ -307,17 +327,23 @@ window.BKCal = (function () {
     function pickHandler(dayIso) {
       return function (ev) {
         ev.stopPropagation();
+        var day = dayCache[dayIso] || {};
         if (rangeStart) {
           var nights = Math.round(
             (Date.parse(dayIso + 'T00:00:00Z') - Date.parse(rangeStart + 'T00:00:00Z')) /
               86400000);
           if (nights >= 2) {
+            /* A checkout on a day closed to departures is refused where it
+               is clicked (engine 2026-09-02); the mark on the cell says why. */
+            if (day.closedToDeparture === true) { flashClosed(dayIso); return; }
             var from = rangeStart;
             close();
             if (opts.onRange) opts.onRange(from, nights);
             return;
           }
         }
+        /* No stay may START on a day closed to arrivals. */
+        if (day.closedToArrival === true) { flashClosed(dayIso); return; }
         rangeStart = dayIso;
         everPicked = true;
         input.value = dayIso;
@@ -544,6 +570,7 @@ window.BKCal = (function () {
           } else if (day.minRate != null && isFinite(Number(day.minRate))) {
             el.textContent = fmtShort(Number(day.minRate), data.currency);
           }
+          markClosed(cell, day);
         });
       });
       return block;

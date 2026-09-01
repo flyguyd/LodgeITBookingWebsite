@@ -8,6 +8,7 @@
   <link rel="icon" id="favicon" href="data:," />
   <link rel="stylesheet" href="booking.css" />
   <link rel="stylesheet" href="../calendar.css" />
+  <link rel="stylesheet" href="../review.css" />
 </head>
 <body>
   <div class="aura" aria-hidden="true">
@@ -93,6 +94,31 @@
       <p id="stayNote" class="stay-note" hidden></p>
       <div id="roomList"></div>
     </section>
+    <!-- The stay summary (../review.js): the same page the full site shows,
+         in this build's skin. Filled on Continue. -->
+    <section id="review" class="review" hidden>
+      <div class="rv-head">
+        <p class="kicker">Your stay</p>
+        <h2 id="reviewHead" class="results-title"></h2>
+        <p id="reviewMeta" class="rv-meta"></p>
+      </div>
+      <div id="reviewRooms" class="rv-rooms"></div>
+      <div id="reviewTotals"></div>
+      <section class="glass rv-agree">
+        <label class="agree">
+          <input id="agreeBox" type="checkbox" />
+          <span id="txtAgree">I agree that all of the information above is correct and satisfactory.</span>
+        </label>
+        <div class="rv-actions">
+          <button id="backBtn" type="button" class="rv-back">← Change your suites</button>
+          <button id="payBtn" type="button" class="cta big" disabled>Continue to payment</button>
+        </div>
+        <p id="payNote" class="rv-note" hidden>
+          Secure checkout is almost ready — your selection is saved, and the
+          reservations team can confirm it today if you contact the lodge.
+        </p>
+      </section>
+    </section>
 
     <footer class="foot">
       <small class="foot-copy">Copyright 2026 Lodge IT Pty Ltd</small>
@@ -118,6 +144,7 @@
   <script src="../core.js"></script>
   <script src="../calendar.js"></script>
   <script src="../lightbox.js"></script>
+  <script src="../review.js"></script>
   <script src="booking.js"></script>
 
   <!-- The website chat client (see the full build for the rationale). -->

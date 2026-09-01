@@ -7,6 +7,7 @@
   <meta name="description" content="Private luxury lodges on the water's edge. Check live availability and reserve your suite." />
   <link rel="icon" id="favicon" href="data:," />
   <link rel="stylesheet" href="booking.css" />
+  <link rel="stylesheet" href="review.css" />
   <link rel="stylesheet" href="calendar.css" />
 </head>
 <body>
@@ -114,6 +115,34 @@
       </div>
       <div id="roomList" class="room-grid"></div>
     </section>
+
+    <!-- The stay summary (review.js): everything the guest chose, itemised,
+         with their agreement before the payment step. Filled on Continue. -->
+    <section id="review" class="review" hidden>
+      <div class="rv-head">
+        <p class="kicker">Your stay</p>
+        <h2 id="reviewHead" class="results-title"></h2>
+        <p id="reviewMeta" class="rv-meta"></p>
+      </div>
+      <div id="reviewRooms" class="rv-rooms"></div>
+      <div id="reviewTotals"></div>
+      <section class="glass rv-agree">
+        <label class="agree">
+          <input id="agreeBox" type="checkbox" />
+          <span id="txtAgree">I agree that all of the information above is correct and satisfactory.</span>
+        </label>
+        <div class="rv-actions">
+          <button id="backBtn" type="button" class="rv-back">← Change your suites</button>
+          <button id="payBtn" type="button" class="cta" disabled>
+            <span class="cta-label">Continue to payment</span>
+          </button>
+        </div>
+        <p id="payNote" class="rv-note" hidden>
+          Secure checkout is almost ready — we have saved your selection, and the
+          reservations team can confirm it today if you contact the lodge.
+        </p>
+      </section>
+    </section>
   </main>
 
   <aside id="summary" class="glass summary" hidden>
@@ -145,6 +174,7 @@
   <script src="core.js"></script>
   <script src="calendar.js"></script>
   <script src="lightbox.js"></script>
+  <script src="review.js"></script>
   <script src="booking.js"></script>
   <!-- The hidden Rate Engine load harness (0.1.30): type "load" to open it.
        Inert unless the server has it switched on — LOAD_TEST=0 makes its

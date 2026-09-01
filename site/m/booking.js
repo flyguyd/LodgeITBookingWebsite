@@ -184,6 +184,7 @@
     current.from = from;
     current.to = to;
     current.picks = {};
+    if (window.BKReview) window.BKReview.close();
     show('loading');
     els.btn.disabled = true;
     var params = {
@@ -995,9 +996,14 @@
     showSummary();
   }
 
-  els.continueBtn.addEventListener('click', function () {
+  /* Continue opens the STAY SUMMARY (Dave, 2026-09-02): every suite chosen,
+     the rate and its inclusions, the full statement per suite, every charge
+     and the grand total — and the guest's agreement that it is all correct
+     before the payment step. The results and the bar step aside; "Change
+     your suites" brings them straight back with every pick intact. */
+  function openReview() {
     var picks = pickedRooms();
-    if (!picks.length) return;
+    if (!picks.length || !window.BKReview) return;
     var total = selectionTotal();
     C.track('checkout_started', {
       rooms: picks.map(function (p) {
@@ -1005,8 +1011,45 @@
       }),
       total: total ? total.sum.toFixed(2) : null,
     }, stateCheckpoint());
-    els.continueNote.hidden = false;
+    var party = { adults: els.adults.value, children: els.children.value };
+    hideSummary();
+    els.results.hidden = true;
+    window.BKReview.open({
+      picks: picks, from: current.from, to: current.to, nights: current.nights,
+      party: party, lodge: lodge, config: config,
+      photosFor: photosFor, art: art, buildBreakdown: buildBreakdown,
+      extrasLabel: extrasLabel, inclLabel: inclLabel,
+      track: function (name, detail) { C.track(name, detail, stateCheckpoint()); },
+      onBack: function () { closeReview(true); },
+      onPay: function (totals) {
+        /* Honest state: the payment step ships in its own certified batch;
+           the intent — every suite, quantity and the agreed total — is
+           recorded so the team can follow up. */
+        C.track('payment_started', {
+          rooms: picks.map(function (p) {
+            return { roomTypeId: p.room.roomTypeId, qty: p.qty, planId: p.room.planId || null };
+          }),
+          total: totals && totals.grand != null ? totals.grand.toFixed(2) : null,
+          agreed: true,
+        }, stateCheckpoint());
+        var note = document.getElementById('payNote');
+        if (note) note.hidden = false;
+      },
+    });
+    try { history.pushState({ view: 'review' }, '', location.href); } catch (e) { /* fine */ }
+  }
+  function closeReview(pop) {
+    if (!window.BKReview || !window.BKReview.isOpen()) return;
+    window.BKReview.close();
+    els.results.hidden = false;
+    updateSummary();
+    try { els.results.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
+    if (pop) { try { if (history.state && history.state.view === 'review') history.back(); } catch (e) { /* fine */ } }
+  }
+  window.addEventListener('popstate', function () {
+    if (window.BKReview && window.BKReview.isOpen()) closeReview(false);
   });
+  els.continueBtn.addEventListener('click', openReview);
 
 
   /* Lodge Ops-managed copy: every guest-facing string can be overridden from
@@ -1028,6 +1071,8 @@
     setText('txtEmptyTitle', t.emptyTitle);
     setText('txtEmptyBody', t.emptyBody);
     setText('continueNote', t.continueNote);
+    setText('payNote', t.continueNote);
+    setText('txtAgree', t.agreementText);
     if (t.heroLine2) {
       var el = document.getElementById('txtLine2');
       if (el) {

@@ -111,7 +111,10 @@
         </label>
         <div class="rv-actions">
           <button id="backBtn" type="button" class="rv-back">← Change your suites</button>
-          <button id="payBtn" type="button" class="cta big" disabled>Continue to payment</button>
+          <div class="rv-actions-right">
+            <button id="holdBtn" type="button" class="cta big cta-ghost" disabled>Hold my booking</button>
+            <button id="payBtn" type="button" class="cta big" disabled>Continue to payment</button>
+          </div>
         </div>
         <p id="payNote" class="rv-note" hidden>
           Secure checkout is almost ready — your selection is saved, and the
@@ -119,6 +122,49 @@
         </p>
       </section>
     </section>
+
+    <!-- The Hold page (review.js): opened once the emailed code is verified. -->
+    <section id="hold" class="hold-page" hidden>
+      <div class="rv-head">
+        <p class="kicker">Your booking</p>
+        <h2 id="holdTitle" class="results-title">Your booking is on hold</h2>
+      </div>
+      <section class="glass hold-card">
+        <p id="holdBody"></p>
+        <dl class="hold-meta">
+          <dt>Reference</dt><dd id="holdRef" class="hold-ref"></dd>
+          <dt>Email</dt><dd id="holdPageEmail"></dd>
+          <dt>Stay</dt><dd id="holdWhen"></dd>
+        </dl>
+        <div id="holdSuites"></div>
+        <div class="rv-grand"><span>Grand total</span><strong id="holdGrand"></strong></div>
+      </section>
+    </section>
+
+    <!-- Hold my booking: a valid email, a code, the Hold page. -->
+    <div id="holdModal" class="hold-modal" hidden role="dialog" aria-modal="true" aria-labelledby="holdHeading">
+      <div class="glass hold-box">
+        <button id="holdClose" type="button" class="hold-close" aria-label="Close">×</button>
+        <h2 id="holdHeading">Hold my booking</h2>
+        <div id="holdEmailStep">
+          <p id="txtHoldIntro"></p>
+          <div class="hold-row">
+            <input id="holdEmail" class="hold-input" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" />
+            <button id="holdSend" type="button" class="cta"><span class="cta-label">Send</span></button>
+          </div>
+          <p id="holdNote" class="hold-note" hidden></p>
+        </div>
+        <div id="holdCodeStep" hidden>
+          <p><span id="txtHoldSent"></span> <strong id="holdSentTo"></strong></p>
+          <div class="hold-row">
+            <input id="holdCode" class="hold-input hold-code" type="text" inputmode="text" autocomplete="one-time-code" maxlength="8" placeholder="Verification ID" />
+            <button id="holdVerify" type="button" class="cta"><span class="cta-label">Verify</span></button>
+          </div>
+          <p id="holdCodeNote" class="hold-note" hidden></p>
+          <button id="holdAgain" type="button" class="hold-again">Use a different email address</button>
+        </div>
+      </div>
+    </div>
 
     <footer class="foot">
       <small class="foot-copy">Copyright 2026 Lodge IT Pty Ltd</small>

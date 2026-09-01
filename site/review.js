@@ -15,6 +15,15 @@ window.BKReview = (function () {
   var $ = function (id) { return document.getElementById(id); };
 
   var DEFAULT_AGREE = 'I agree that all of the information above is correct and satisfactory.';
+  var DEFAULT_HOLD_INTRO = 'To hold your booking we need a valid email address. We will send a short code to it \u2014 type the code back here and your hold page opens.';
+  var DEFAULT_HOLD_SENT = 'We have sent a code to your email address. It is good for 30 minutes.';
+  var DEFAULT_HOLD_TITLE = 'Your booking is on hold';
+  var DEFAULT_HOLD_BODY = 'Thank you \u2014 your email address is verified and the stay below is noted. The reservations team will be in touch to confirm your hold.';
+  /* The hold verification lives on the Lodge Ops API, served from the same
+     origin as this page on the live host (as the chat widget is). */
+  var HOLD_API = window.BK_HOLD_API || '/api/web/booking-hold';
+  /* Inclusion rows shown before "Show all" (Dave, 2026-09-02). */
+  var INCLUSION_ROWS = 2;
 
   function el(tag, cls, text) {
     var n = document.createElement(tag);
@@ -130,14 +139,32 @@ window.BKReview = (function () {
     var secs = inclusionSections(plan && plan.inclusions);
     if (secs) {
       var incl = el('div', 'rv-inclusions');
-      secs.forEach(function (s) {
+      var hiddenRows = 0;
+      secs.forEach(function (s, si) {
         var grp = el('div', 'rv-inc-group' + (s.negative ? ' negative' : ''));
         grp.appendChild(el('span', 'rv-inc-name', s.name));
         var chips = el('div', 'rv-inc-chips');
         s.tags.forEach(function (t) { chips.appendChild(el('span', 'rv-inc', String(t))); });
         grp.appendChild(chips);
+        /* Two rows by default; the rest fold away behind one button. */
+        if (si >= INCLUSION_ROWS) { grp.hidden = true; grp.classList.add('rv-inc-more'); hiddenRows += 1; }
         incl.appendChild(grp);
       });
+      if (hiddenRows > 0) {
+        var more = el('button', 'rv-inc-toggle');
+        more.type = 'button';
+        more.setAttribute('aria-expanded', 'false');
+        var openLabel = 'Show all inclusions \u00b7 ' + hiddenRows + ' more';
+        more.textContent = openLabel;
+        more.addEventListener('click', function () {
+          var open = more.getAttribute('aria-expanded') !== 'true';
+          incl.querySelectorAll('.rv-inc-more').forEach(function (g) { g.hidden = !open; });
+          more.setAttribute('aria-expanded', open ? 'true' : 'false');
+          more.textContent = open ? 'Show fewer' : openLabel;
+          if (ctx.track) ctx.track(open ? 'inclusions_expanded' : 'inclusions_collapsed', { roomTypeId: room.roomTypeId });
+        });
+        incl.appendChild(more);
+      }
       rate.appendChild(incl);
     } else {
       rate.appendChild(el('p', 'rv-plan-desc rv-muted', 'Inclusions as described for this rate.'));
@@ -219,7 +246,138 @@ window.BKReview = (function () {
     return { box: box, grand: grandC / 100, currency: currency };
   }
 
-  var state = { open: false, ctx: null };
+  var state = { open: false, ctx: null, hold: null };
+
+  /* ---- Hold my booking: email → code → the Hold page (Dave, 2026-09-02) ---- */
+  function staySnapshot(ctx, totals) {
+    return {
+      from: ctx.from, to: ctx.to, nights: ctx.nights,
+      currency: totals && totals.currency || null,
+      total: totals && totals.grand != null ? Math.round(totals.grand * 100) / 100 : null,
+      suites: ctx.picks.map(function (p) {
+        var pp = C.priceParts(p.room, ctx.config);
+        var one = pp.headline != null ? pp.headline + (pp.note && pp.note.kind === 'plus' ? pp.note.extras : 0) : null;
+        return { name: p.room.name, qty: p.qty || 1, plan: p.room.planName || null,
+          total: one != null ? Math.round(one * (p.qty || 1) * 100) / 100 : null };
+      }),
+    };
+  }
+  function postJson(url, body) {
+    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); });
+  }
+  function validEmail(v) { return v.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); }
+
+  function openHoldModal(ctx, totals) {
+    var modal = $('holdModal');
+    if (!modal) return;
+    var t = (ctx.config && ctx.config.text) || {};
+    var intro = $('txtHoldIntro'); if (intro) intro.textContent = t.holdIntro || DEFAULT_HOLD_INTRO;
+    var sent = $('txtHoldSent'); if (sent) sent.textContent = t.holdSent || DEFAULT_HOLD_SENT;
+    var email = $('holdEmail'), send = $('holdSend'), note = $('holdNote');
+    var codeStep = $('holdCodeStep'), code = $('holdCode'), verify = $('holdVerify'), codeNote = $('holdCodeNote');
+    var emailStep = $('holdEmailStep');
+    state.hold = { id: null, email: '', totals: totals };
+    email.value = ''; code.value = '';
+    note.hidden = true; note.textContent = ''; codeNote.hidden = true; codeNote.textContent = '';
+    emailStep.hidden = false; codeStep.hidden = true;
+    send.disabled = false; verify.disabled = false;
+    modal.hidden = false;
+    document.body.classList.add('hold-open');
+    if (ctx.track) ctx.track('hold_started', { total: totals && totals.grand != null ? totals.grand.toFixed(2) : null });
+    setTimeout(function () { try { email.focus(); } catch (e) { /* fine */ } }, 50);
+
+    function fail(el, msg) { el.textContent = msg; el.hidden = false; }
+
+    send.onclick = function () {
+      var v = String(email.value || '').trim().toLowerCase();
+      if (!validEmail(v)) { fail(note, 'Please enter a valid email address.'); email.focus(); return; }
+      note.hidden = true;
+      send.disabled = true;
+      send.textContent = 'Sending\u2026';
+      postJson(HOLD_API + '/start', { email: v, stay: staySnapshot(ctx, totals) })
+        .then(function (j) {
+          send.disabled = false; send.textContent = 'Send';
+          if (!j || j.ok !== true) { fail(note, (j && j.message) || 'We could not send the code just now \u2014 please try again.'); if (ctx.track) ctx.track('hold_send_failed', {}); return; }
+          state.hold.id = j.id; state.hold.email = j.email || v;
+          emailStep.hidden = true; codeStep.hidden = false;
+          var to = $('holdSentTo'); if (to) to.textContent = state.hold.email;
+          if (ctx.track) ctx.track('hold_code_sent', {});
+          setTimeout(function () { try { code.focus(); } catch (e) { /* fine */ } }, 50);
+        })
+        .catch(function () { send.disabled = false; send.textContent = 'Send'; fail(note, 'We could not reach the lodge \u2014 check your connection and try again.'); });
+    };
+    email.onkeydown = function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); send.click(); } };
+    verify.onclick = function () {
+      var v = String(code.value || '').trim().toUpperCase();
+      if (v.length < 4) { fail(codeNote, 'Type the code from the email.'); code.focus(); return; }
+      codeNote.hidden = true;
+      verify.disabled = true;
+      postJson(HOLD_API + '/verify', { id: state.hold.id, code: v })
+        .then(function (j) {
+          verify.disabled = false;
+          if (!j || j.ok !== true) {
+            fail(codeNote, (j && j.message) || 'That code does not match.');
+            if (ctx.track) ctx.track('hold_code_rejected', {});
+            if (j && j.attemptsLeft === 0) { emailStep.hidden = false; codeStep.hidden = true; fail(note, j.message || 'Please send a new code.'); }
+            return;
+          }
+          if (ctx.track) ctx.track('hold_verified', {});
+          closeHoldModal();
+          openHoldPage(ctx, totals, j.holdId, state.hold.email);
+        })
+        .catch(function () { verify.disabled = false; fail(codeNote, 'We could not reach the lodge \u2014 check your connection and try again.'); });
+    };
+    code.onkeydown = function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); verify.click(); } };
+    var again = $('holdAgain');
+    if (again) again.onclick = function () { emailStep.hidden = false; codeStep.hidden = true; codeNote.hidden = true; };
+    var close = $('holdClose');
+    if (close) close.onclick = closeHoldModal;
+    modal.onclick = function (ev) { if (ev.target === modal) closeHoldModal(); };
+  }
+  function closeHoldModal() {
+    var modal = $('holdModal');
+    if (modal) modal.hidden = true;
+    document.body.classList.remove('hold-open');
+  }
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { var m = $('holdModal'); if (m && !m.hidden) closeHoldModal(); }
+  });
+
+  /* The Hold page: the verified address, the stay as it was agreed, a
+     reference \u2014 and nothing else (Dave, 2026-09-02: "do nothing else"). */
+  function openHoldPage(ctx, totals, holdId, email) {
+    var host = $('hold');
+    if (!host) return;
+    var t = (ctx.config && ctx.config.text) || {};
+    var title = $('holdTitle'); if (title) title.textContent = t.holdPageTitle || DEFAULT_HOLD_TITLE;
+    var body = $('holdBody'); if (body) body.textContent = t.holdPageBody || DEFAULT_HOLD_BODY;
+    var ref = $('holdRef'); if (ref) ref.textContent = String(holdId || '').replace(/-/g, '').slice(0, 8).toUpperCase();
+    var em = $('holdPageEmail'); if (em) em.textContent = email || '';
+    var when = $('holdWhen');
+    var suites = ctx.picks.reduce(function (n, p) { return n + (p.qty || 1); }, 0);
+    if (when) when.textContent = C.fmtDate(ctx.from) + ' \u2014 ' + C.fmtDate(ctx.to) + ' \u00b7 ' +
+      ctx.nights + (ctx.nights === 1 ? ' night' : ' nights') + ' \u00b7 ' + suites + (suites === 1 ? ' suite' : ' suites') + ' \u00b7 ' + partyLabel(ctx.party);
+    var list = $('holdSuites');
+    if (list) {
+      list.textContent = '';
+      ctx.picks.forEach(function (p) {
+        var row = el('div', 'rv-row');
+        row.appendChild(el('span', null, p.room.name + ((p.qty || 1) > 1 ? ' \u00d7 ' + p.qty : '') + (p.room.planName ? ' \u00b7 ' + p.room.planName : '')));
+        var pp = C.priceParts(p.room, ctx.config);
+        var one = pp.headline != null ? pp.headline + (pp.note && pp.note.kind === 'plus' ? pp.note.extras : 0) : null;
+        row.appendChild(el('span', null, one != null ? C.moneyC(one * (p.qty || 1), p.room.currency) : 'on request'));
+        list.appendChild(row);
+      });
+    }
+    var grand = $('holdGrand');
+    if (grand) grand.textContent = totals && totals.grand != null ? C.moneyC(totals.grand, totals.currency) : '';
+    var review = $('review'); if (review) review.hidden = true;
+    host.hidden = false;
+    state.open = false;
+    if (ctx.track) ctx.track('hold_page_opened', { holdId: holdId });
+    try { host.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
+  }
 
   /* Open the summary. ctx: { picks, from, to, nights, party, lodge, config,
      photosFor, art, buildBreakdown, extrasLabel, inclLabel, onBack, onPay,
@@ -246,17 +404,23 @@ window.BKReview = (function () {
     var t = (ctx.config && ctx.config.text) || {};
     var agree = $('txtAgree');
     if (agree) agree.textContent = t.agreementText || DEFAULT_AGREE;
-    var box = $('agreeBox'), pay = $('payBtn'), note = $('payNote');
+    var box = $('agreeBox'), pay = $('payBtn'), hold = $('holdBtn'), note = $('payNote');
     box.checked = false;
     pay.disabled = true;
+    if (hold) hold.disabled = true;
     if (note) { note.hidden = true; if (t.continueNote) note.textContent = t.continueNote; }
     box.onchange = function () {
       pay.disabled = !box.checked;
+      if (hold) hold.disabled = !box.checked;
       if (ctx.track) ctx.track(box.checked ? 'summary_agreed' : 'summary_unagreed', {});
     };
     pay.onclick = function () {
       if (!box.checked) return;
       if (ctx.onPay) ctx.onPay(totals);
+    };
+    if (hold) hold.onclick = function () {
+      if (!box.checked) return;
+      openHoldModal(ctx, totals);
     };
     var back = $('backBtn');
     if (back) back.onclick = function () { if (ctx.onBack) ctx.onBack(); };
@@ -274,6 +438,9 @@ window.BKReview = (function () {
   function close() {
     var host = $('review');
     if (host) host.hidden = true;
+    var hold = $('hold');
+    if (hold) hold.hidden = true;
+    closeHoldModal();
     state.open = false;
   }
 

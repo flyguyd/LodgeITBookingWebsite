@@ -113,8 +113,15 @@
         <div class="rv-actions">
           <button id="backBtn" type="button" class="rv-back">← Change your suites</button>
           <div class="rv-actions-right">
-            <button id="holdBtn" type="button" class="cta big cta-ghost" disabled>Hold my booking</button>
-            <button id="payBtn" type="button" class="cta big" disabled>Continue to payment</button>
+            <div id="holdCol" class="rv-hold-col">
+              <span class="rv-tip" data-tip="You must agree first">
+                <button id="holdBtn" type="button" class="cta big cta-ghost" disabled>Hold my booking</button>
+              </span>
+              <button id="holdWhat" type="button" class="rv-what">What's this?</button>
+            </div>
+            <span class="rv-tip" data-tip="You must agree first">
+              <button id="payBtn" type="button" class="cta big" disabled>Continue to payment</button>
+            </span>
           </div>
         </div>
         <p id="payNote" class="rv-note" hidden>
@@ -152,6 +159,16 @@
       </div>
       <section id="heldCard" class="glass hold-card"></section>
     </section>
+
+
+    <!-- What's a hold? Text from Lodge Ops (Settings → Booking Website). -->
+    <div id="whatModal" class="hold-modal" hidden role="dialog" aria-modal="true" aria-labelledby="whatHeading">
+      <div class="glass hold-box">
+        <button id="whatClose" type="button" class="hold-close" aria-label="Close">×</button>
+        <h2 id="whatHeading">What is a booking hold?</h2>
+        <p id="txtHoldWhat"></p>
+      </div>
+    </div>
 
     <!-- Retrieve booking: the reference number from the hold email. -->
     <div id="retrieveModal" class="hold-modal" hidden role="dialog" aria-modal="true" aria-labelledby="retrieveHeading">

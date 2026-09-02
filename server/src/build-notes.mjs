@@ -765,4 +765,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.61',
+    version: '0.1.61',
+    date: '2026-09-02T16:40:00+02:00',
+    changes: [
+      {
+        headline:
+          'Your stay: a \u201cWhat\u2019s this?\u201d link under Hold my booking opens a modal explaining a hold (text from Lodge Ops); a disabled Hold or Continue button says \u201cYou must agree first\u201d when hovered; each suite card carries a Refunds line under its rate.',
+        detail:
+          'Dave, 2026-09-02, three asks. WHAT\u2019S THIS: #holdWhat sits centred under Hold my booking in .rv-hold-col (both builds) and lives and dies with the button (hidden when the hold is not offered); it opens #whatModal, \u201cWhat is a booking hold?\u201d, with text.holdWhatsThis from Settings \u2192 Booking Website or the built-in wording (\u201cA booking hold is a way for you to hold this booking, without obligation\u2026\u201d); \u00d7, a click outside or Escape closes it. YOU MUST AGREE FIRST: each of the two buttons is wrapped in .rv-tip with the words in data-tip; the wrapper\u2019s ::after shows on hover only while the button inside is disabled (:has(> .cta:disabled):hover), the disabled button lets the pointer through to the wrapper, and the buttons also carry the words as a title while disabled; agreeing removes both. REFUNDS: renderPick adds a labelled \u201cRefunds\u201d line under the rate head with C.refundLabel (Fully / Partially refundable up to N nights before check-in, Nonrefundable) or, when the rate carries no policy, \u201cRefund terms for this rate are available from the lodge on request.\u201d in muted italics; the refund callout chip is no longer repeated on the summary. VERIFIED in real Chromium against the config stub, 61 assertions: the link sits directly under the button and opens the modal with the Lodge Ops text, Escape closes it, no link when the hold is not offered; hovering the disabled Continue button shows the tooltip with both titles set and agreeing clears them (an instant scroll before the hover \u2014 smooth scrolling had moved the button under the pointer mid-measure); the Refunds line reads \u201cFully refundable up to 7 nights before check-in\u201d under the rate with no duplicate chip; both builds, no script errors. PAIRS WITH Lodge Ops 1.2.357 (the holdWhatsThis text field). DEPLOY: rsync index.html, m/index.html, review.js, review.css.',
+      },
+    ],
+  },
 ];

@@ -19,6 +19,8 @@ window.BKReview = (function () {
   var DEFAULT_HOLD_SENT = 'We have sent a code to your email address. It is good for 30 minutes.';
   var DEFAULT_HOLD_TITLE = 'Your booking is on hold';
   var DEFAULT_HOLD_BODY = 'Thank you \u2014 your email address is verified and the stay below is noted. The reservations team will be in touch to confirm your hold.';
+  /* "What's this?" under Hold my booking (Dave, 2026-09-02). */
+  var DEFAULT_HOLD_WHAT = 'A booking hold is a way for you to hold this booking, without obligation, for a chosen amount of time. It lets you share the details with your travelling partners, book flights and make other arrangements without fear of losing your booking. The only requirement is an email address to send the hold information to.';
   /* The hold verification lives on the Lodge Ops API, served from the same
      origin as this page on the live host (as the chat widget is). */
   var HOLD_API = window.BK_HOLD_API || '/api/web/booking-hold';
@@ -197,7 +199,16 @@ window.BKReview = (function () {
     rate.appendChild(rateHead);
     /* The plan's description line is not shown here (Dave, 2026-09-02:
        remove "This is the Oase Standard Rack Rate."); the cards keep it. */
-    var callouts = C.ruleCallouts(room);
+    /* Refund terms get their own labelled line (Dave, 2026-09-02: add
+       refundable information to the Your stay suite cards), so the same
+       words are not repeated as a callout chip below it. */
+    var refund = el('div', 'rv-refund');
+    refund.appendChild(el('span', 'rv-kicker', 'Refunds'));
+    var rfLabel = C.refundLabel ? C.refundLabel(room.refundable) : '';
+    refund.appendChild(el('span', 'rv-refund-text' + (rfLabel ? '' : ' rv-muted'),
+      rfLabel || 'Refund terms for this rate are available from the lodge on request.'));
+    rate.appendChild(refund);
+    var callouts = C.ruleCallouts(room).filter(function (c) { return c.kind !== 'refund'; });
     if (callouts.length) {
       var co = el('div', 'rv-callouts');
       callouts.forEach(function (c) {
@@ -493,13 +504,29 @@ window.BKReview = (function () {
     if (close) close.onclick = closeHoldModal;
     modal.onclick = function (ev) { if (ev.target === modal) closeHoldModal(); };
   }
+  function openWhatModal(ctx) {
+    var modal = $('whatModal'), body = $('txtHoldWhat');
+    if (!modal) return;
+    var t = (ctx && ctx.config && ctx.config.text) || {};
+    if (body) body.textContent = t.holdWhatsThis || DEFAULT_HOLD_WHAT;
+    modal.hidden = false;
+    document.body.classList.add('hold-open');
+    if (ctx && ctx.track) ctx.track('hold_explained', {});
+    function closeWhat() { modal.hidden = true; document.body.classList.remove('hold-open'); }
+    var x = $('whatClose'); if (x) x.onclick = closeWhat;
+    modal.onclick = function (ev) { if (ev.target === modal) closeWhat(); };
+    setTimeout(function () { try { if (x) x.focus(); } catch (e) { /* fine */ } }, 50);
+  }
   function closeHoldModal() {
     var modal = $('holdModal');
     if (modal) modal.hidden = true;
     document.body.classList.remove('hold-open');
   }
   document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape') { var m = $('holdModal'); if (m && !m.hidden) closeHoldModal(); }
+    if (ev.key === 'Escape') {
+      var m = $('holdModal'); if (m && !m.hidden) closeHoldModal();
+      var w = $('whatModal'); if (w && !w.hidden) { w.hidden = true; document.body.classList.remove('hold-open'); }
+    }
   });
 
   /* The Hold section: the verified address, the stay as it was agreed, a
@@ -880,14 +907,27 @@ window.BKReview = (function () {
     if (agree) agree.textContent = t.agreementText || DEFAULT_AGREE;
     var box = $('agreeBox'), pay = $('payBtn'), hold = $('holdBtn'), note = $('payNote');
     box.checked = false;
-    pay.disabled = true;
+    /* Disabled until agreed; hovering a disabled button says why (Dave,
+       2026-09-02: "You must agree first") — the wrapper's CSS tooltip,
+       and a title for browsers that show one on a disabled control. */
+    var MUST_AGREE = 'You must agree first';
+    function gate(btn, on) {
+      if (!btn) return;
+      btn.disabled = !on;
+      if (on) btn.removeAttribute('title'); else btn.setAttribute('title', MUST_AGREE);
+    }
+    gate(pay, false);
     /* Hold my booking exists only when holds are on in Lodge Ops AND
        check-in is more than the configured distance away (two weeks). */
-    if (hold) { hold.disabled = true; hold.hidden = !holdOffered(ctx.config, ctx.from); }
+    if (hold) { gate(hold, false); hold.hidden = !holdOffered(ctx.config, ctx.from); }
+    /* "What's this?" lives and dies with the button. */
+    var what = $('holdWhat'), holdCol = $('holdCol');
+    if (holdCol) holdCol.hidden = !!(hold && hold.hidden);
+    if (what) what.onclick = function () { openWhatModal(ctx); };
     if (note) { note.hidden = true; if (t.continueNote) note.textContent = t.continueNote; }
     box.onchange = function () {
-      pay.disabled = !box.checked;
-      if (hold) hold.disabled = !box.checked;
+      gate(pay, box.checked);
+      if (hold) gate(hold, box.checked);
       if (ctx.track) ctx.track(box.checked ? 'summary_agreed' : 'summary_unagreed', {});
     };
     pay.onclick = function () {

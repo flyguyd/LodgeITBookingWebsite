@@ -363,7 +363,10 @@ window.BKReview = (function () {
         var pp = C.priceParts(p.room, ctx.config);
         var one = pp.headline != null ? pp.headline + (pp.note && pp.note.kind === 'plus' ? pp.note.extras : 0) : null;
         return { roomTypeId: String(p.room.roomTypeId), name: p.room.name, qty: p.qty || 1, plan: p.room.planName || null,
-          total: one != null ? Math.round(one * (p.qty || 1) * 100) / 100 : null };
+          total: one != null ? Math.round(one * (p.qty || 1) * 100) / 100 : null,
+          /* The plan's refund terms travel with the hold (Dave, 2026-09-02):
+             the hold cards and the hold emails say them per suite. */
+          refund: (C.refundLabel ? C.refundLabel(p.room.refundable) : '') || null };
       }),
     };
   }
@@ -554,6 +557,8 @@ window.BKReview = (function () {
         var one = pp.headline != null ? pp.headline + (pp.note && pp.note.kind === 'plus' ? pp.note.extras : 0) : null;
         row.appendChild(el('span', null, one != null ? C.moneyC(one * (p.qty || 1), p.room.currency) : 'on request'));
         list.appendChild(row);
+        var rf = C.refundLabel ? C.refundLabel(p.room.refundable) : '';
+        if (rf) list.appendChild(el('div', 'hold-refund', rf));
       });
     }
     var grand = $('holdGrand');
@@ -718,6 +723,17 @@ window.BKReview = (function () {
     var host = $('held'), card = $('heldCard');
     if (!host || !card || !hold) return;
     stopHeldTimer();
+    /* The agreement stands while the hold does (Dave, 2026-09-02): ticked
+       and locked, the buttons awake; cancelling unlocks it for the next
+       search. */
+    var agreeBox = $('agreeBox');
+    if (agreeBox && hold.status === 'held') {
+      agreeBox.checked = true;
+      agreeBox.disabled = true;
+      var pb = $('payBtn'), hb = $('holdBtn');
+      if (pb) { pb.disabled = false; pb.removeAttribute('title'); }
+      if (hb) { hb.disabled = false; hb.removeAttribute('title'); }
+    }
     card.textContent = '';
     var stay = hold.stay || {};
     var active = hold.active !== false && hold.status === 'held' && Date.parse(hold.holdUntil) > Date.now();
@@ -746,6 +762,7 @@ window.BKReview = (function () {
       r.appendChild(el('span', null, (s.name || 'Suite') + ((s.qty || 1) > 1 ? ' \u00d7 ' + s.qty : '') + (s.plan ? ' \u00b7 ' + s.plan : '')));
       r.appendChild(el('span', null, s.total != null ? C.moneyC(s.total, stay.currency) : 'on request'));
       list.appendChild(r);
+      if (s.refund) list.appendChild(el('div', 'hold-refund', s.refund));
     });
     card.appendChild(list);
     if (stay.total != null) {
@@ -812,6 +829,8 @@ window.BKReview = (function () {
     };
     function finishCancel() {
       stopHeldTimer();
+      var ab = $('agreeBox');
+      if (ab) { ab.disabled = false; ab.checked = false; }
       host.hidden = true;
       var h = $('hold'); if (h) h.hidden = true;
       close();
@@ -907,6 +926,7 @@ window.BKReview = (function () {
     if (agree) agree.textContent = t.agreementText || DEFAULT_AGREE;
     var box = $('agreeBox'), pay = $('payBtn'), hold = $('holdBtn'), note = $('payNote');
     box.checked = false;
+    box.disabled = false;
     /* Disabled until agreed; hovering a disabled button says why (Dave,
        2026-09-02: "You must agree first") — the wrapper's CSS tooltip,
        and a title for browsers that show one on a disabled control. */

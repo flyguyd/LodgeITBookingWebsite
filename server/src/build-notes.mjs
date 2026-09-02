@@ -778,4 +778,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.62',
+    version: '0.1.62',
+    date: '2026-09-02T18:15:00+02:00',
+    changes: [
+      {
+        headline:
+          'Refund terms now say the processing fee and whether dates may change after the refundable date, and for what fee; each suite on the hold cards carries its refund terms and they travel with the hold to Lodge Ops for the emails. Hold my booking and Continue to payment are top-aligned. A retrieved hold remembers the agreement (ticked and locked) until the hold is cancelled.',
+        detail:
+          'Dave, 2026-09-02, four asks. REFUND WORDING (engine 0.1.62): BKCore.refundLabel appends \u201c, less a R250 processing fee\u201d when the quote carries processingFee and \u201c. Date changes allowed after that for a R100 change fee\u201d (or \u201cat no charge\u201d) when allowDateChanges is set \u2014 nonrefundable reads \u201cNonrefundable. Date changes allowed \u2026\u201d; used everywhere the label is (suite cards, the compare lightbox, the Your stay Refunds line, the hold cards). HOLD CARDS: the stay snapshot\u2019s suites carry refund (the same sentence), the Hold section and the hold page list it under each suite in a thin gold-ruled line, and Lodge Ops lists it per suite in the confirmation and reminder emails. TOP ALIGN: .rv-actions-right aligns to the top so \u201cWhat\u2019s this?\u201d under Hold no longer pushes Continue to payment down. AGREEMENT: showHeld ticks and locks \u201cI agree\u201d while a hold is active and wakes both buttons (a retrieved hold arrives agreed); Cancel the hold and search again unlocks and clears it; a fresh summary always starts unlocked. VERIFIED in real Chromium against the config stub, 68 assertions: the Refunds line reads the full sentence with fee and change fee; nonrefundable-with-changes, partial-with-free-changes and a plain policy each read right; the two buttons share a top edge; the hold cards say the refund terms and the stay posted to Lodge Ops carries them; the retrieved hold has the box ticked and locked with both buttons awake, and cancelling unlocks and clears it; no script errors. PAIRS WITH Lodge Ops 1.2.359 and engine 0.1.62. DEPLOY: rsync core.js, review.js, review.css.',
+      },
+    ],
+  },
 ];

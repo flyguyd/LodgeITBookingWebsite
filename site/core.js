@@ -430,7 +430,16 @@ window.BKCore = (function () {
    *  policy holds good up to. */
   function refundLabel(r) {
     if (!r || !r.policy) return '';
-    if (r.policy === 'nonrefundable') return 'Nonrefundable';
+    /* Fees and date changes (engine 0.1.62, Dave 2026-09-02): a processing
+       fee taken off a refund, and whether dates may still move after the
+       refundable date — for a fee or not. Said only when the rule set them. */
+    var fee = Number(r.processingFee), changeFee = Number(r.changeFee);
+    var changes = r.allowDateChanges === true
+      ? 'Date changes allowed after that' + (isFinite(changeFee) && changeFee > 0 ? ' for a ' + money(changeFee, 'ZAR') + ' change fee' : ' at no charge')
+      : '';
+    if (r.policy === 'nonrefundable') {
+      return 'Nonrefundable' + (changes ? '. ' + changes.replace('after that', '') .replace(/\s+/g, ' ').trim() : '');
+    }
     /* A partial policy says HOW MUCH comes back when the engine quoted it
        (engine 0.1.54) — a rule saved before the field existed stays a bare
        "Partially refundable" rather than gaining an invented figure. */
@@ -439,8 +448,10 @@ window.BKCore = (function () {
       ? 'Partially refundable' + (isFinite(pct) && pct >= 1 ? ' (' + pct + '% refunded)' : '')
       : 'Fully refundable';
     var n = Number(r.nightsBefore);
-    if (!isFinite(n) || n < 0) return name;
-    return name + ' up to ' + n + ' night' + (n === 1 ? '' : 's') + ' before check-in';
+    var out = (!isFinite(n) || n < 0) ? name : name + ' up to ' + n + ' night' + (n === 1 ? '' : 's') + ' before check-in';
+    if (isFinite(fee) && fee > 0) out += ', less a ' + money(fee, 'ZAR') + ' processing fee';
+    if (changes) out += '. ' + changes;
+    return out;
   }
 
   /**

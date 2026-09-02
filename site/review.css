@@ -152,6 +152,36 @@ body.hold-open { overflow: hidden; }
 .hold-logo-paypal .hold-logo-b { color: #0070e0; }
 .hold-logo-turnstay { background: #0e5e6f; color: #fff; font-size: 15px; }
 .hold-logo-turnstay .hold-logo-b { color: #9fe3d9; }
+/* A gateway square chosen (Dave, 2026-09-02): highlighted; the others grey
+   out until it is pressed again. */
+.hold-payer.on { border-color: var(--gold); background: rgba(216, 180, 106, 0.14); box-shadow: 0 0 0 1px var(--gold) inset, 0 12px 28px rgba(0, 0, 0, 0.35); color: var(--paper); }
+.hold-payer.dim { opacity: 0.38; filter: grayscale(1); transform: none; box-shadow: none; }
+.hold-payer.dim:hover { border-color: rgba(255, 255, 255, 0.16); }
+/* The panel below the squares: the card form (card gateways) or the
+   hosted-page button (redirect gateways). */
+.hold-paypanel { margin: 14px 0 6px; padding: 18px; border: 1px solid rgba(216, 180, 106, 0.35); border-radius: 16px; background: rgba(0, 0, 0, 0.18); }
+.hold-paypanel[hidden] { display: none; }
+.hold-paypanel .hold-kicker { margin-bottom: 10px; }
+.hold-cardform label { display: block; margin-bottom: 12px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--paper-dim); }
+.hold-cardform input { display: block; width: 100%; margin-top: 6px; padding: 12px 14px; font: inherit; font-size: 16px; letter-spacing: 0.04em; color: var(--paper); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 10px; outline: none; box-sizing: border-box; }
+.hold-cardform input:focus { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(216, 180, 106, 0.25); }
+.hold-cardform input.bad { border-color: #e8a58a; }
+.hold-cardrow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.hold-cardnum { font-family: "SFMono-Regular", Menlo, Consolas, monospace; }
+.hold-secure { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 6px 0 14px; font-size: 11.5px; letter-spacing: 0.06em; color: var(--paper-dim); }
+.hold-secure svg { width: 16px; height: 16px; fill: none; stroke: var(--gold); stroke-width: 1.8; flex: none; }
+.hold-secure-item { display: inline-flex; align-items: center; gap: 6px; }
+.hold-brands { display: inline-flex; gap: 6px; margin-left: auto; }
+.hold-brand { display: inline-block; padding: 3px 7px; border-radius: 5px; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; line-height: 1; }
+.hold-brand-visa { background: #1a1f71; color: #fff; font-style: italic; }
+.hold-brand-mc { background: #eb001b; color: #fff; }
+.hold-brand-amex { background: #2e77bc; color: #fff; }
+.hold-redirect p { margin: 0 0 12px; font-size: 14px; line-height: 1.6; color: var(--paper); }
+.hold-paynow { margin-top: 4px; }
+.hold-paynow:disabled { opacity: 0.55; cursor: default; }
+.hold-paywait { margin: 8px 0 0; font-size: 13px; color: var(--paper-dim); }
+.hold-paywait a { color: var(--gold); }
+.held-fee-paid { color: var(--paper); }
 .hold-confirm { margin-bottom: 6px; }
 .hold-choice-note { margin: 10px 0 0; font-size: 14px; line-height: 1.6; }
 .hold-choice-ok { color: var(--paper); }
@@ -159,6 +189,8 @@ body.hold-open { overflow: hidden; }
 @media (max-width: 760px) {
   .hold-options { grid-template-columns: 1fr 1fr; }
   .hold-payer { width: calc(50% - 7px); height: 104px; }
+  .hold-cardrow { grid-template-columns: 1fr 1fr; }
+  .hold-brands { margin-left: 0; }
 }
 
 /* The summary and the hold are SECTIONS below the results (Dave, 2026-09-02). */

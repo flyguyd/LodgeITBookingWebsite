@@ -602,8 +602,54 @@ window.BKReview = (function () {
 
   /* The Hold page's choices (Dave, 2026-09-02): the options the distance
      to check-in allows, then a square button per enabled payment provider
-     for a paid one. The choice is recorded on the hold in Lodge Ops and the
-     reservations team is told; they arrange the payment. */
+     for a paid one. Pressing a square SELECTS it (highlighted, the others
+     greyed) and opens the way to pay below it: a card form on our page for
+     a gateway that takes the card here, or a "Click here to make payment"
+     button for one that takes it on its own page. Pressing the same square
+     again puts everything back. The card details go to the RATE ENGINE
+     (through the site server, signed) — never to Lodge Ops, never kept:
+     the fields are wiped the moment the request is built. */
+  var PAY_API = window.BK_PAY_API || '/api/public/payments';
+  var STATIC_MODES = { stripe: 'card', yoco: 'redirect', paypal: 'redirect', turnstay: 'redirect' };
+  var PAY_KEY = 'bk-hold-pay';
+  function rememberPayment(holdId, reference, paymentId) {
+    try { localStorage.setItem(PAY_KEY, JSON.stringify({ holdId: holdId, reference: reference, paymentId: paymentId, at: Date.now() })); } catch (e) { /* private mode */ }
+  }
+  function forgetPayment() { try { localStorage.removeItem(PAY_KEY); } catch (e) { /* fine */ } }
+  function readPayment() { try { var v = JSON.parse(localStorage.getItem(PAY_KEY) || 'null'); return v && v.paymentId ? v : null; } catch (e) { return null; } }
+  function getJson(url) { return fetch(url, { headers: { Accept: 'application/json' } }).then(function (r) { return r.json(); }); }
+  function luhn(n) {
+    if (!/^\d{12,19}$/.test(n)) return false;
+    var sum = 0, alt = false;
+    for (var i = n.length - 1; i >= 0; i--) { var d = +n[i]; if (alt) { d *= 2; if (d > 9) d -= 9; } sum += d; alt = !alt; }
+    return sum % 10 === 0;
+  }
+  function secureRow() {
+    var row = el('div', 'hold-secure');
+    var lock = el('span', 'hold-secure-item');
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
+    var r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    r.setAttribute('x', '4'); r.setAttribute('y', '10'); r.setAttribute('width', '16'); r.setAttribute('height', '11'); r.setAttribute('rx', '2');
+    var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', 'M8 10V7a4 4 0 0 1 8 0v3');
+    svg.appendChild(r); svg.appendChild(p);
+    lock.appendChild(svg); lock.appendChild(document.createTextNode('Secure payment · encrypted'));
+    row.appendChild(lock);
+    var pci = el('span', 'hold-secure-item');
+    var svg2 = svg.cloneNode(true); svg2.textContent = '';
+    var c = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    c.setAttribute('d', 'M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z');
+    svg2.appendChild(c);
+    pci.appendChild(svg2); pci.appendChild(document.createTextNode('PCI DSS compliant gateway'));
+    row.appendChild(pci);
+    var brands = el('span', 'hold-brands');
+    brands.appendChild(el('span', 'hold-brand hold-brand-visa', 'VISA'));
+    brands.appendChild(el('span', 'hold-brand hold-brand-mc', 'Mastercard'));
+    brands.appendChild(el('span', 'hold-brand hold-brand-amex', 'AMEX'));
+    row.appendChild(brands);
+    return row;
+  }
   function renderHoldChoices(ctx, holdId) {
     var host = $('holdChoice');
     if (!host) return;
@@ -614,7 +660,7 @@ window.BKReview = (function () {
     var providers = enabledProviders(ctx.config);
     if (!holds.enabled || !options.length) { host.hidden = true; return; }
     host.hidden = false;
-    var chosen = null, done = false;
+    var chosen = null, done = false, payer = null, modes = null, fees = {};
 
     host.appendChild(el('p', 'kicker hold-kicker', 'How long shall we hold it?'));
     var list = el('div', 'hold-options');
@@ -639,15 +685,20 @@ window.BKReview = (function () {
       var b = el('button', 'hold-payer');
       b.type = 'button';
       b.setAttribute('data-provider', p.key);
+      b.setAttribute('aria-pressed', 'false');
       b.setAttribute('aria-label', 'Pay with ' + p.name);
       b.title = 'Pay with ' + p.name;
       b.appendChild(providerMark(p));
       b.appendChild(el('span', 'hold-payer-name', p.name));
-      b.addEventListener('click', function () { if (chosen && !done) commit(chosen, p); });
+      b.addEventListener('click', function () { if (chosen && !done) togglePayer(p); });
       pay.appendChild(b);
       return b;
     });
     payWrap.appendChild(pay);
+    var panel = el('div', 'hold-paypanel');
+    panel.id = 'holdPayPanel';
+    panel.hidden = true;
+    payWrap.appendChild(panel);
     host.appendChild(payWrap);
 
     var confirmWrap = el('div', 'hold-confirm');
@@ -656,7 +707,7 @@ window.BKReview = (function () {
     confirm.type = 'button';
     confirm.id = 'holdConfirm';
     confirm.appendChild(el('span', 'cta-label', 'Confirm'));
-    confirm.addEventListener('click', function () { if (chosen && !done) commit(chosen, null); });
+    confirm.addEventListener('click', function () { if (chosen && !done) commit(chosen, null, null); });
     confirmWrap.appendChild(confirm);
     host.appendChild(confirmWrap);
     var note = el('p', 'hold-choice-note');
@@ -664,50 +715,211 @@ window.BKReview = (function () {
     note.hidden = true;
     host.appendChild(note);
 
+    /* Which gateways the engine will actually take, and how each takes the
+       card. Asked once; a square the engine does not list is hidden, and
+       if the engine cannot be asked the usual modes stand. */
+    function loadModes() {
+      if (modes) return Promise.resolve(modes);
+      return getJson(PAY_API + '/gateways').then(function (j) {
+        var list = (j && Array.isArray(j.gateways)) ? j.gateways : null;
+        modes = {};
+        if (list) {
+          list.forEach(function (g) { if (g && g.key) modes[g.key] = g.mode === 'card' ? 'card' : 'redirect'; });
+          payButtons.forEach(function (b) { b.hidden = !modes[b.getAttribute('data-provider')]; });
+        } else {
+          modes = STATIC_MODES;
+        }
+        return modes;
+      }).catch(function () { modes = STATIC_MODES; return modes; });
+    }
+    function loadFee(o) {
+      if (fees[o.hours]) return Promise.resolve(fees[o.hours]);
+      return getJson(PAY_API + '/fee?hours=' + o.hours).then(function (j) {
+        fees[o.hours] = (j && j.ok && j.total > 0) ? j : { total: null };
+        return fees[o.hours];
+      }).catch(function () { return { total: null }; });
+    }
+    function feeLabel(o) {
+      var f = fees[o.hours];
+      return f && f.total > 0 ? C.moneyC(f.total, f.currency) + ' incl. VAT' : exVat(o.price);
+    }
+
     function select(o) {
       chosen = o;
       optionButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-hours') === String(o.hours) ? 'true' : 'false'); });
       note.hidden = true;
       if (o.price > 0 && providers.length) {
         payWrap.hidden = false; confirmWrap.hidden = true;
+        loadModes(); loadFee(o).then(function () { if (payer) renderPanel(payer); });
+        if (payer) renderPanel(payer);
       } else {
         payWrap.hidden = true; confirmWrap.hidden = false;
+        clearPayer();
         confirm.querySelector('.cta-label').textContent = o.price > 0
-          ? 'Request a ' + o.hours + '-hour hold \u00b7 ' + exVat(o.price)
-          : 'Hold it for ' + o.hours + ' hours \u00b7 free';
+          ? 'Request a ' + o.hours + '-hour hold · ' + exVat(o.price)
+          : 'Hold it for ' + o.hours + ' hours · free';
       }
       if (ctx.track) ctx.track('hold_option_selected', { hours: o.hours, price: o.price });
+    }
+    function clearPayer() {
+      payer = null;
+      payButtons.forEach(function (b) { b.classList.remove('on'); b.classList.remove('dim'); b.setAttribute('aria-pressed', 'false'); });
+      panel.textContent = ''; panel.hidden = true;
+    }
+    function togglePayer(p) {
+      if (payer && payer.key === p.key) { clearPayer(); return; }
+      payer = p;
+      payButtons.forEach(function (b) {
+        var mine = b.getAttribute('data-provider') === p.key;
+        b.classList.toggle('on', mine); b.classList.toggle('dim', !mine);
+        b.setAttribute('aria-pressed', mine ? 'true' : 'false');
+      });
+      if (ctx.track) ctx.track('hold_gateway_selected', { provider: p.key });
+      loadModes().then(function () { if (payer && payer.key === p.key) renderPanel(p); });
+    }
+    function renderPanel(p) {
+      panel.textContent = '';
+      panel.hidden = false;
+      var mode = (modes || STATIC_MODES)[p.key] || 'redirect';
+      panel.className = 'hold-paypanel ' + (mode === 'card' ? 'hold-cardform' : 'hold-redirect');
+      panel.setAttribute('data-mode', mode);
+      var err = el('p', 'hold-choice-note hold-choice-err'); err.id = 'holdPayNote'; err.hidden = true;
+      if (mode === 'card') {
+        panel.appendChild(el('p', 'kicker hold-kicker', 'Card details · ' + p.name));
+        var form = document.createElement('form');
+        form.setAttribute('autocomplete', 'on');
+        form.addEventListener('submit', function (ev) { ev.preventDefault(); payCard(); });
+        function field(label, name, extra) {
+          var l = el('label', null, label);
+          var i = document.createElement('input');
+          i.name = name; i.id = 'cc-' + name; i.type = 'text'; i.required = true;
+          Object.keys(extra || {}).forEach(function (k) { i.setAttribute(k, extra[k]); });
+          l.appendChild(i); return { l: l, i: i };
+        }
+        var name = field('Name on card', 'ccName', { autocomplete: 'cc-name', maxlength: '80', placeholder: 'As printed on the card' });
+        var num = field('Card number', 'ccNumber', { autocomplete: 'cc-number', inputmode: 'numeric', maxlength: '23', placeholder: '1234 5678 9012 3456', 'class': 'hold-cardnum' });
+        num.i.addEventListener('input', function () {
+          var digits = num.i.value.replace(/\D/g, '').slice(0, 19);
+          num.i.value = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+          num.i.classList.remove('bad');
+        });
+        var exp = field('Expiry (MM/YY)', 'ccExp', { autocomplete: 'cc-exp', inputmode: 'numeric', maxlength: '5', placeholder: 'MM/YY' });
+        exp.i.addEventListener('input', function () {
+          var d = exp.i.value.replace(/\D/g, '').slice(0, 4);
+          exp.i.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+          exp.i.classList.remove('bad');
+        });
+        var cvc = field('CVC', 'ccCvc', { autocomplete: 'cc-csc', inputmode: 'numeric', maxlength: '4', placeholder: '123' });
+        cvc.i.addEventListener('input', function () { cvc.i.value = cvc.i.value.replace(/\D/g, '').slice(0, 4); cvc.i.classList.remove('bad'); });
+        form.appendChild(name.l); form.appendChild(num.l);
+        var row = el('div', 'hold-cardrow'); row.appendChild(exp.l); row.appendChild(cvc.l); form.appendChild(row);
+        form.appendChild(secureRow());
+        var go = el('button', 'cta hold-paynow'); go.type = 'submit'; go.id = 'holdPayNow';
+        go.appendChild(el('span', 'cta-label', 'Pay ' + feeLabel(chosen) + ' and hold it'));
+        form.appendChild(go);
+        form.appendChild(err);
+        panel.appendChild(form);
+        function payCard() {
+          err.hidden = true;
+          var n = num.i.value.replace(/\D/g, '');
+          var e = exp.i.value.replace(/\D/g, '');
+          var mm = +e.slice(0, 2), yy = +e.slice(2, 4);
+          var now = new Date(), yNow = now.getFullYear() % 100, mNow = now.getMonth() + 1;
+          var bad = null;
+          if (!name.i.value.trim()) { bad = name.i; err.textContent = 'Please enter the name on the card.'; }
+          else if (!luhn(n)) { bad = num.i; err.textContent = 'Please check the card number.'; }
+          else if (e.length !== 4 || mm < 1 || mm > 12 || yy < yNow || (yy === yNow && mm < mNow)) { bad = exp.i; err.textContent = e.length === 4 && mm >= 1 && mm <= 12 ? 'That card has expired.' : 'Please check the expiry date (MM/YY).'; }
+          else if (!/^\d{3,4}$/.test(cvc.i.value)) { bad = cvc.i; err.textContent = 'Please check the security code (CVC).'; }
+          if (bad) { bad.classList.add('bad'); err.hidden = false; try { bad.focus(); } catch (x) { /* fine */ } return; }
+          /* Build the payload, then WIPE the fields before anything is
+             sent — the numbers live only inside this request. */
+          var card = { number: n, expMonth: mm, expYear: 2000 + yy, cvc: cvc.i.value, name: name.i.value.trim().slice(0, 80) };
+          commit(chosen, p, card);
+        }
+      } else {
+        panel.appendChild(el('p', 'kicker hold-kicker', 'Pay with ' + p.name));
+        panel.appendChild(el('p', null, 'You will be taken to ' + p.name + '’s secure page to pay ' + feeLabel(chosen) + '. This page keeps your hold and updates itself once the payment is done.'));
+        panel.appendChild(secureRow());
+        var go2 = el('button', 'cta hold-paynow'); go2.type = 'button'; go2.id = 'holdPayNow';
+        go2.appendChild(el('span', 'cta-label', 'Click here to make payment'));
+        go2.addEventListener('click', function () { commit(chosen, p, null); });
+        panel.appendChild(go2);
+        panel.appendChild(err);
+      }
     }
     function busy(on) {
       optionButtons.concat(payButtons).forEach(function (b) { b.disabled = on; });
       confirm.disabled = on;
+      var go = panel.querySelector('#holdPayNow'); if (go) go.disabled = on;
+      panel.querySelectorAll('input').forEach(function (i) { i.disabled = on; });
     }
-    function commit(o, p) {
+    function fail(msg) {
+      busy(false);
+      var target = panel.hidden ? note : (panel.querySelector('#holdPayNote') || note);
+      target.className = 'hold-choice-note hold-choice-err';
+      target.textContent = msg;
+      target.hidden = false;
+    }
+    /* Card payment: the hold first (its reference is what the payment is
+       for), then the charge on the engine, then Lodge Ops told — which
+       checks with the engine before it believes it. */
+    function chargeCard(hold, p, card) {
+      var f = fees[hold.hours] || {};
+      return postJson(PAY_API + '/charge', { gateway: p.key, reference: hold.reference, hours: hold.hours, email: hold.email, card: card })
+        .then(function (j) {
+          card = null;
+          if (!j || j.ok !== true) throw new Error((j && j.message) || 'The payment was not accepted — please check the card details or try another card.');
+          if (ctx.track) ctx.track('hold_fee_paid', { reference: hold.reference, provider: p.key, amount: j.amount });
+          return postJson(HOLD_API + '/paid', { id: hold.holdId, reference: hold.reference, paymentId: j.paymentId })
+            .then(function (k) { return (k && k.ok === true) ? k : hold; });
+        });
+    }
+    /* Hosted page: the hold, then the checkout on the engine, then the
+       gateway's page in a new tab; this page waits and asks the engine
+       until the payment is done. */
+    function openCheckout(hold, p) {
+      var w = null;
+      try { w = window.open('', '_blank'); } catch (e) { w = null; }
+      var here = location.href.split('#')[0].split('?')[0];
+      return postJson(PAY_API + '/checkout', { gateway: p.key, reference: hold.reference, hours: hold.hours, email: hold.email, returnUrl: here, cancelUrl: here })
+        .then(function (j) {
+          if (!j || j.ok !== true || !j.url) { if (w) w.close(); throw new Error((j && j.message) || 'The payment page could not be opened — please try again or choose another payment method.'); }
+          rememberPayment(hold.holdId, hold.reference, j.paymentId);
+          if (w) { try { w.location = j.url; } catch (e) { w = null; } }
+          if (!w) { try { window.open(j.url, '_blank'); } catch (e) { location.href = j.url; } }
+          if (ctx.track) ctx.track('hold_payment_started', { reference: hold.reference, provider: p.key });
+          return { hold: hold, paymentId: j.paymentId, url: j.url, gateway: p };
+        });
+    }
+    function commit(o, p, card) {
       busy(true);
       note.hidden = true;
+      var payNote = panel.querySelector('#holdPayNote'); if (payNote) payNote.hidden = true;
+      /* Wipe the card fields now: the payload is built, the form need not
+         remember anything. */
+      if (card) panel.querySelectorAll('input').forEach(function (i) { i.value = ''; });
       postJson(HOLD_API + '/choose', { id: holdId, hours: o.hours, provider: p ? p.key : null,
         snapshot: ctx.snapshot ? ctx.snapshot() : null })
         .then(function (j) {
           if (!j || j.ok !== true) {
-            busy(false);
-            note.className = 'hold-choice-note hold-choice-err';
-            note.textContent = (j && j.message) || 'Your choice could not be saved just now \u2014 please try again.';
-            note.hidden = false;
             if (ctx.track) ctx.track('hold_choice_failed', { hours: o.hours });
-            return;
+            throw new Error((j && j.message) || 'Your choice could not be saved just now — please try again.');
           }
+          if (ctx.track) ctx.track('hold_chosen', { hours: o.hours, price: o.price, provider: p ? p.key : null, reference: j.reference });
+          if (!p || j.feePaid) return { hold: j };
+          var mode = (modes || STATIC_MODES)[p.key] || 'redirect';
+          return mode === 'card' ? chargeCard(j, p, card).then(function (h) { return { hold: h }; }) : openCheckout(j, p);
+        })
+        .then(function (r) {
           done = true;
           host.classList.add('hold-chosen');
           payWrap.hidden = true; confirmWrap.hidden = true;
-          if (ctx.track) ctx.track('hold_chosen', { hours: o.hours, price: o.price, provider: p ? p.key : null, reference: j.reference });
           /* The hold is real: its own section below, with the clock. */
-          showHeld(j, ctx);
+          showHeld(r.hold, ctx, r.paymentId ? { paymentId: r.paymentId, url: r.url, gateway: r.gateway } : null);
         })
-        .catch(function () {
-          busy(false);
-          note.className = 'hold-choice-note hold-choice-err';
-          note.textContent = 'We could not reach the lodge \u2014 check your connection and try again.';
-          note.hidden = false;
+        .catch(function (e) {
+          card = null;
+          fail(e && e.message && !/fetch|network/i.test(e.message) ? e.message : 'We could not reach the lodge — check your connection and try again.');
         });
     }
   }
@@ -732,11 +944,24 @@ window.BKReview = (function () {
       return d.toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
     } catch (e) { return d.toString(); }
   }
-  function showHeld(hold, ctx) {
+  var payPoll = null;
+  function stopPayPoll() { if (payPoll) { clearInterval(payPoll); payPoll = null; } }
+  /* The fee line on the held card: paid (how, with what card), owed, or
+     nothing for a free hold. */
+  function feeLine(hold) {
+    if (!(hold.price > 0)) return null;
+    if (hold.feePaid) {
+      return 'Paid ' + C.moneyC(hold.feeAmount != null ? hold.feeAmount : hold.feeTotal, hold.feeCurrency || 'ZAR') + ' incl. VAT' +
+        (hold.feeGateway ? ' via ' + providerNameOf(hold.feeGateway) : '') +
+        (hold.cardLast4 ? ' \u00b7 ' + (hold.cardBrand || 'card') + ' \u2022\u2022\u2022\u2022 ' + hold.cardLast4 : '');
+    }
+    return (hold.feeTotal > 0 ? C.moneyC(hold.feeTotal, 'ZAR') + ' incl. VAT' : exVat(hold.price)) + ' \u2014 not yet paid';
+  }
+  function showHeld(hold, ctx, pending) {
     ctx = ctx || state.ctx;
     var host = $('held'), card = $('heldCard');
     if (!host || !card || !hold) return;
-    stopHeldTimer();
+    stopHeldTimer(); stopPayPoll();
     /* The agreement stands while the hold does (Dave, 2026-09-02): ticked
        and locked, the buttons awake; cancelling unlocks it for the next
        search. */
@@ -768,7 +993,33 @@ window.BKReview = (function () {
     var nights = stay.nights || 0;
     if (stay.from && stay.to) row('Stay', C.fmtDate(stay.from) + ' \u2014 ' + C.fmtDate(stay.to) + ' \u00b7 ' + nights + (nights === 1 ? ' night' : ' nights'));
     row('Hold', hold.hours + ' hours \u00b7 ' + (hold.price > 0 ? exVat(hold.price) : 'free') + (hold.provider ? ' \u00b7 ' + providerNameOf(hold.provider) : ''));
+    var feeText = feeLine(hold);
+    if (feeText) row('Fee', feeText, 'heldFee');
     card.appendChild(meta);
+    var feeEl = $('heldFee');
+    if (feeEl && hold.feePaid) feeEl.className = 'held-fee-paid';
+    /* A hosted-page payment under way (Dave, 2026-09-02): say so, keep the
+       page open, and ask the engine every few seconds until it is done. */
+    if (pending && pending.paymentId && !hold.feePaid && active) {
+      var wait = el('p', 'hold-paywait'); wait.id = 'heldPayWait';
+      wait.appendChild(document.createTextNode('Waiting for your payment on ' + (pending.gateway ? pending.gateway.name : 'the payment page') + '\u2026 '));
+      if (pending.url) { var a = el('a', null, 'Open the payment page again'); a.href = pending.url; a.target = '_blank'; a.rel = 'noopener'; wait.appendChild(a); }
+      card.appendChild(wait);
+      var tries = 0;
+      payPoll = setInterval(function () {
+        if (++tries > 450) { stopPayPoll(); return; }
+        postJson(PAY_API + '/status', { paymentId: pending.paymentId }).then(function (j) {
+          if (!j || j.status === 'pending') return;
+          stopPayPoll();
+          if (j.status !== 'paid') { wait.textContent = 'The payment did not go through (' + (j.error || j.status) + '). You can retrieve this hold with its reference number and pay again.'; return; }
+          postJson(HOLD_API + '/paid', { id: hold.holdId, reference: hold.reference, paymentId: pending.paymentId }).then(function (k) {
+            forgetPayment();
+            if (ctx && ctx.track) ctx.track('hold_fee_paid', { reference: hold.reference, provider: pending.gateway ? pending.gateway.key : null, amount: j.amount });
+            showHeld((k && k.ok === true) ? k : hold, ctx, null);
+          }).catch(function () { /* next poll tick is gone; the retrieve flow shows it paid */ });
+        }).catch(function () { /* try again on the next tick */ });
+      }, 4000);
+    }
 
     var list = el('div', 'held-suites');
     (stay.suites || []).forEach(function (s) {
@@ -848,7 +1099,7 @@ window.BKReview = (function () {
         .catch(function () { cancel.disabled = false; note.className = 'hold-choice-note hold-choice-err'; note.textContent = 'We could not reach the lodge \u2014 check your connection and try again.'; note.hidden = false; });
     };
     function finishCancel() {
-      stopHeldTimer();
+      stopHeldTimer(); stopPayPoll(); forgetPayment();
       var ab = $('agreeBox');
       if (ab) { ab.disabled = false; ab.checked = false; }
       host.hidden = true;
@@ -875,10 +1126,10 @@ window.BKReview = (function () {
 
   /* ---- Retrieve booking (Dave, 2026-09-02): the reference number from the
      hold email rebuilds the page from the hold's snapshot. ---- */
-  function openRetrieve() {
+  function openRetrieve(prefill) {
     var modal = $('retrieveModal'), input = $('retrieveRef'), go = $('retrieveGo'), note = $('retrieveNote');
     if (!modal) return;
-    input.value = ''; note.hidden = true; note.textContent = ''; go.disabled = false;
+    input.value = typeof prefill === 'string' ? prefill : ''; note.hidden = true; note.textContent = ''; go.disabled = false;
     modal.hidden = false;
     document.body.classList.add('hold-open');
     setTimeout(function () { try { input.focus(); } catch (e) { /* fine */ } }, 50);
@@ -907,7 +1158,27 @@ window.BKReview = (function () {
   }
   document.addEventListener('DOMContentLoaded', function () {
     var link = $('retrieveLink');
-    if (link) link.addEventListener('click', openRetrieve);
+    if (link) link.addEventListener('click', function () { openRetrieve(); });
+    /* Back from a gateway's page (Dave, 2026-09-02): ?pay=<engine payment
+       id>&r=success|cancel|failure. The engine is asked how it went; a paid
+       one is recorded on the hold (Lodge Ops checks with the engine before
+       it believes it) and the hold is brought back on screen through
+       Retrieve booking with its reference filled in. */
+    var m = /[?&]pay=([0-9a-f-]{36})/i.exec(location.search);
+    if (!m) return;
+    var paymentId = m[1], back = /[?&]r=([a-z]+)/.exec(location.search), remembered = readPayment();
+    try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* fine */ }
+    var ref = remembered && remembered.paymentId === paymentId ? remembered.reference : null;
+    if (back && back[1] !== 'success') { if (ref) openRetrieve(ref); return; }
+    postJson(PAY_API + '/status', { paymentId: paymentId }).then(function (j) {
+      if (j && j.status === 'paid') {
+        var body = { paymentId: paymentId };
+        if (remembered && remembered.paymentId === paymentId) { body.id = remembered.holdId; body.reference = remembered.reference; }
+        else if (j.reference) { body.reference = j.reference; }
+        return postJson(HOLD_API + '/paid', body).then(function () { forgetPayment(); openRetrieve(ref || j.reference || ''); });
+      }
+      if (ref) openRetrieve(ref);
+    }).catch(function () { if (ref) openRetrieve(ref); });
   });
   document.addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape') { var m = $('retrieveModal'); if (m && !m.hidden) { m.hidden = true; document.body.classList.remove('hold-open'); } }

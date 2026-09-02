@@ -93,6 +93,15 @@ export const FORWARD_ROUTES = {
   'GET /api/public/rate-calendar': { method: 'GET', path: '/api/booking/rate-calendar', rates: 'calendar' },
   'POST /api/public/sessions': { method: 'POST', path: '/api/booking/sessions' },
   'POST /api/public/events': { method: 'POST', path: '/api/booking/events' },
+  // Hold-fee payments (Dave, 2026-09-02): the card details or the hosted-page
+  // request go THROUGH this server to the engine, signed — never to Lodge
+  // Ops, never logged here (the forwarder records method, path, status and
+  // time; the body is passed as bytes).
+  'GET /api/public/payments/gateways': { method: 'GET', path: '/api/booking/payments/gateways' },
+  'GET /api/public/payments/fee': { method: 'GET', path: '/api/booking/payments/fee' },
+  'POST /api/public/payments/charge': { method: 'POST', path: '/api/booking/payments/charge' },
+  'POST /api/public/payments/checkout': { method: 'POST', path: '/api/booking/payments/checkout' },
+  'POST /api/public/payments/status': { method: 'POST', path: '/api/booking/payments/status' },
 };
 
 export function forwardTargetFor(method, urlPath) {

@@ -619,6 +619,9 @@ window.BKReview = (function () {
   /* Stripe.js, loaded once when first needed (never on a page that does not
      take a card). A test rig may set window.Stripe itself. */
   function loadStripe(publishableKey) {
+    if (publishableKey && !/^pk_/.test(publishableKey)) {
+      return Promise.reject(new Error('the key Lodge Ops passed for Stripe is not a publishable key (they start with pk_) \u2014 in Lodge Ops, Settings \u2192 Stripe, put the publishable key in its own field'));
+    }
     if (!publishableKey) {
       return Promise.reject(new Error('Stripe\u2019s publishable key has not reached this site \u2014 in Lodge Ops, Settings \u2192 Stripe, fill in the publishable key (pk_live_\u2026 or pk_test_\u2026) and save; the Booking Engine page shows whether the engine offers Stripe.'));
     }

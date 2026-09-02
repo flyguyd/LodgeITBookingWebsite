@@ -856,4 +856,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.68',
+    version: '0.1.68',
+    date: '2026-09-02T16:57:16+02:00',
+    changes: [
+      {
+        headline:
+          'If the key passed for Stripe is not a publishable key, the hold card says so before Stripe.js is even asked \u2014 and points to the right field in Lodge Ops.',
+        detail:
+          'Dave, 2026-09-02: \u201cStripe would not start: You should not use your secret key with Stripe.js.\u201d review.js loadStripe(): a key not starting pk_ \u2192 \u201cthe key Lodge Ops passed for Stripe is not a publishable key (they start with pk_) \u2014 in Lodge Ops, Settings \u2192 Stripe, put the publishable key in its own field\u201d. Belt and braces: engine 0.1.68 no longer lists Stripe with a key of the wrong kind, and Lodge Ops 1.3.6 refuses one on the Stripe page, so this line should not be seen again. DEPLOY: rsync review.js.',
+      },
+    ],
+  },
 ];

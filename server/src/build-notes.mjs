@@ -804,4 +804,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.64',
+    version: '0.1.64',
+    date: '2026-09-02T20:35:00+02:00',
+    changes: [
+      {
+        headline:
+          'Your stay: each suite card carries a bin that removes that suite from the stay. With suites left the summary re-renders in place; when the last one goes the summary closes and the page scrolls back to the availability widget.',
+        detail:
+          'Dave, 2026-09-02: on the your stay section add to each card a bin icon that removes the selection; if there are no more selected rooms scroll back to the availability widget at the top. review.js renderPick adds .rv-bin (a stroked bin glyph, top right of the card) calling ctx.onRemove(roomTypeId); booking.js (both builds) removePick drops the pick, refreshes the cards and either re-opens the summary in place (openReview(true), no extra history entry) or, with nothing left, closes the summary, hides the bar and scrolls to #searchForm. VERIFIED in real Chromium against the config stub, 73 assertions: two suites picked give two cards with two bins, the first bin leaves one card and the summary open with \u201c1 suite\u201d in the meta line, the second closes the summary, hides the bar and lands near the widget; the hold flow is unchanged. DEPLOY: rsync booking.js, m/booking.js, review.js, review.css.',
+      },
+    ],
+  },
 ];

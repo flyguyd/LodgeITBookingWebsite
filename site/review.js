@@ -167,6 +167,20 @@ window.BKReview = (function () {
     var name = el('h3', 'rv-name', room.name);
     if (qty > 1) name.appendChild(el('span', 'rv-qty', ' × ' + qty));
     top.appendChild(name);
+    /* The bin (Dave, 2026-09-02): remove this suite from the stay. */
+    if (ctx.onRemove) {
+      var bin = el('button', 'rv-bin');
+      bin.type = 'button';
+      bin.setAttribute('aria-label', 'Remove ' + room.name + ' from your stay');
+      bin.title = 'Remove from your stay';
+      bin.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+      bin.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        if (ctx.track) ctx.track('summary_suite_removed', { roomTypeId: room.roomTypeId });
+        ctx.onRemove(room.roomTypeId);
+      });
+      top.appendChild(bin);
+    }
     var pp = C.priceParts(room, ctx.config);
     if (pp.headline != null) {
       var price = el('div', 'rv-price');

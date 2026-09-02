@@ -1024,7 +1024,7 @@
      and the grand total — and the guest's agreement that it is all correct
      before the payment step, rendered BELOW the results (not a new page);
      "Change your suites" scrolls back up with every pick intact. */
-  function openReview() {
+  function openReview(rerender) {
     var picks = pickedRooms();
     if (!picks.length || !window.BKReview) return;
     var total = selectionTotal();
@@ -1054,6 +1054,10 @@
         try { document.getElementById('searchForm').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
       },
       onBack: function () { closeReview(true); },
+      /* The bin on a summary card (Dave, 2026-09-02): drop that suite. With
+         suites left the summary re-renders in place; with none, back to
+         the availability widget at the top. */
+      onRemove: function (roomTypeId) { removePick(roomTypeId); },
       onPay: function (totals) {
         /* Honest state: the payment step ships in its own certified batch;
            the intent — every suite, quantity and the agreed total — is
@@ -1069,7 +1073,23 @@
         if (note) note.hidden = false;
       },
     });
-    try { history.pushState({ view: 'review' }, '', location.href); } catch (e) { /* fine */ }
+    if (!rerender) { try { history.pushState({ view: 'review' }, '', location.href); } catch (e) { /* fine */ } }
+  }
+  function removePick(roomTypeId) {
+    var pick = current.picks[roomTypeId];
+    if (!pick) return;
+    delete current.picks[roomTypeId];
+    C.track('room_selected', { roomTypeId: roomTypeId, action: 'removed', from: 'summary' }, stateCheckpoint());
+    refreshCards();
+    if (pickedRooms().length) {
+      updateSummary();
+      openReview(true);
+      return;
+    }
+    if (window.BKReview) window.BKReview.close();
+    hideSummary();
+    var top = document.getElementById('searchForm');
+    try { (top || els.results).scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
   }
   /* Everything the page needs to rebuild itself from a hold (Dave,
      2026-09-02): the form, the raw search answer the rates came from, and

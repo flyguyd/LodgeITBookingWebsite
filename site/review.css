@@ -159,3 +159,24 @@ body.hold-open { overflow: hidden; }
 /* The summary and the hold are SECTIONS below the results (Dave, 2026-09-02). */
 .review, .hold-page { border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 34px; }
 .hold-known { margin: 10px 0 0 !important; color: var(--gold) !important; font-size: 13px !important; }
+
+/* Retrieve booking: the link under Check availability, its modal. */
+.retrieve-row { margin: 10px 0 0; text-align: right; }
+.retrieve-link { background: none; border: none; color: var(--paper-dim); font: inherit; font-size: 13px; letter-spacing: 0.06em; text-decoration: underline; cursor: pointer; padding: 4px 0; }
+.retrieve-link:hover { color: var(--gold); }
+/* The hold section: reference, clock, the way back, the two ways on. */
+.held-refblock { margin-bottom: 16px; }
+.held-ref { font-family: var(--serif); font-size: 40px; line-height: 1.1; color: var(--gold); letter-spacing: 0.18em; margin-top: 4px; }
+.held-suites { margin-top: 12px; }
+.held-clock { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.16); }
+.held-timer { font-family: var(--serif); font-size: 36px; line-height: 1.1; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.held-until { color: var(--paper-dim); font-size: 14px; margin-top: 6px; }
+.held-msg { margin: 18px 0 0; color: var(--paper); font-size: 14.5px; line-height: 1.6; padding: 12px 14px; border: 1px dashed rgba(216, 180, 106, 0.45); border-radius: 12px; }
+.held-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+@media (max-width: 760px) {
+  .held-ref { font-size: 30px; }
+  .held-timer { font-size: 30px; }
+  .held-actions { flex-direction: column; }
+  .held-actions .cta { width: 100%; }
+  .retrieve-row { text-align: center; }
+}

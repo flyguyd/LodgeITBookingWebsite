@@ -78,6 +78,7 @@
         </button>
       </form>
       <p id="formNote" class="form-note" hidden></p>
+      <p class="retrieve-row"><button id="retrieveLink" type="button" class="retrieve-link">Retrieve booking</button></p>
     </section>
 
     <section id="stateLoading" class="state" hidden>
@@ -169,6 +170,28 @@
         <div id="holdChoice" class="hold-choice" hidden></div>
       </section>
     </section>
+
+    <section id="held" class="hold-page" hidden>
+      <div class="rv-head">
+        <p class="kicker">Your hold</p>
+        <h2 id="heldTitle" class="results-title">Your booking is held</h2>
+      </div>
+      <section id="heldCard" class="glass hold-card"></section>
+    </section>
+
+    <!-- Retrieve booking: the reference number from the hold email. -->
+    <div id="retrieveModal" class="hold-modal" hidden role="dialog" aria-modal="true" aria-labelledby="retrieveHeading">
+      <div class="glass hold-box">
+        <button id="retrieveClose" type="button" class="hold-close" aria-label="Close">×</button>
+        <h2 id="retrieveHeading">Retrieve booking</h2>
+        <p>Enter the reference number from your hold email and we will bring your booking back exactly as you left it.</p>
+        <div class="hold-row">
+          <input id="retrieveRef" class="hold-input hold-code" type="text" inputmode="text" autocomplete="off" maxlength="12" placeholder="Reference" />
+          <button id="retrieveGo" type="button" class="cta"><span class="cta-label">Retrieve</span></button>
+        </div>
+        <p id="retrieveNote" class="hold-note" hidden></p>
+      </div>
+    </div>
 
     <!-- Hold my booking: a valid email, a code, the Hold page. -->
     <div id="holdModal" class="hold-modal" hidden role="dialog" aria-modal="true" aria-labelledby="holdHeading">

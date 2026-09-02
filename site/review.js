@@ -322,7 +322,7 @@ window.BKReview = (function () {
       suites: ctx.picks.map(function (p) {
         var pp = C.priceParts(p.room, ctx.config);
         var one = pp.headline != null ? pp.headline + (pp.note && pp.note.kind === 'plus' ? pp.note.extras : 0) : null;
-        return { name: p.room.name, qty: p.qty || 1, plan: p.room.planName || null,
+        return { roomTypeId: String(p.room.roomTypeId), name: p.room.name, qty: p.qty || 1, plan: p.room.planName || null,
           total: one != null ? Math.round(one * (p.qty || 1) * 100) / 100 : null };
       }),
     };
@@ -610,7 +610,8 @@ window.BKReview = (function () {
     function commit(o, p) {
       busy(true);
       note.hidden = true;
-      postJson(HOLD_API + '/choose', { id: holdId, hours: o.hours, provider: p ? p.key : null })
+      postJson(HOLD_API + '/choose', { id: holdId, hours: o.hours, provider: p ? p.key : null,
+        snapshot: ctx.snapshot ? ctx.snapshot() : null })
         .then(function (j) {
           if (!j || j.ok !== true) {
             busy(false);
@@ -623,15 +624,9 @@ window.BKReview = (function () {
           done = true;
           host.classList.add('hold-chosen');
           payWrap.hidden = true; confirmWrap.hidden = true;
-          note.className = 'hold-choice-note hold-choice-ok';
-          var until = fmtUntil(j.holdUntil);
-          note.textContent = o.price > 0
-            ? 'Your ' + o.hours + '-hour hold is noted' + (until ? ' until ' + until : '') + '. ' +
-              (p ? 'The reservations team has been told and will send you a secure ' + p.name + ' link for ' + exVat(o.price) + '.'
-                 : 'The reservations team has been told and will arrange the ' + exVat(o.price) + ' fee with you.')
-            : 'Your booking is held for ' + o.hours + ' hours' + (until ? ', until ' + until : '') + '. The reservations team has been told.';
-          note.hidden = false;
-          if (ctx.track) ctx.track('hold_chosen', { hours: o.hours, price: o.price, provider: p ? p.key : null });
+          if (ctx.track) ctx.track('hold_chosen', { hours: o.hours, price: o.price, provider: p ? p.key : null, reference: j.reference });
+          /* The hold is real: its own section below, with the clock. */
+          showHeld(j, ctx);
         })
         .catch(function () {
           busy(false);
@@ -642,6 +637,187 @@ window.BKReview = (function () {
     }
   }
 
+  /* ---- The hold section (Dave, 2026-09-02): every detail of the hold, its
+     reference number, a running clock until it ends, the end time in the
+     guest's own time zone, how to come back to it, and the two ways on:
+     cancel and search again, or make the reservation. Shown after "Hold
+     it" and again after Retrieve booking. ---- */
+  var heldTimer = null;
+  function stopHeldTimer() { if (heldTimer) { clearInterval(heldTimer); heldTimer = null; } }
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function countdown(untilMs) {
+    var left = Math.max(0, Math.floor((untilMs - Date.now()) / 1000));
+    var d = Math.floor(left / 86400), h = Math.floor((left % 86400) / 3600), m = Math.floor((left % 3600) / 60), s = left % 60;
+    return (d > 0 ? d + (d === 1 ? ' day ' : ' days ') : '') + pad2(h) + ':' + pad2(m) + ':' + pad2(s);
+  }
+  function localUntil(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    try {
+      return d.toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+    } catch (e) { return d.toString(); }
+  }
+  function showHeld(hold, ctx) {
+    ctx = ctx || state.ctx;
+    var host = $('held'), card = $('heldCard');
+    if (!host || !card || !hold) return;
+    stopHeldTimer();
+    card.textContent = '';
+    var stay = hold.stay || {};
+    var active = hold.active !== false && hold.status === 'held' && Date.parse(hold.holdUntil) > Date.now();
+    var title = $('heldTitle');
+    if (title) title.textContent = active ? 'Your booking is held' : hold.status === 'cancelled' ? 'This hold was cancelled' : 'This hold has run out';
+
+    var refBlock = el('div', 'held-refblock');
+    refBlock.appendChild(el('span', 'rv-kicker', 'Reference number'));
+    var ref = el('div', 'held-ref', hold.reference || '');
+    ref.id = 'heldRef';
+    refBlock.appendChild(ref);
+    card.appendChild(refBlock);
+
+    var meta = document.createElement('dl');
+    meta.className = 'hold-meta';
+    function row(k, v, id) { var dt = el('dt', null, k); var dd = el('dd', null, v); if (id) dd.id = id; meta.appendChild(dt); meta.appendChild(dd); }
+    row('Email', hold.email || '');
+    var nights = stay.nights || 0;
+    if (stay.from && stay.to) row('Stay', C.fmtDate(stay.from) + ' \u2014 ' + C.fmtDate(stay.to) + ' \u00b7 ' + nights + (nights === 1 ? ' night' : ' nights'));
+    row('Hold', hold.hours + ' hours \u00b7 ' + (hold.price > 0 ? exVat(hold.price) : 'free') + (hold.provider ? ' \u00b7 ' + providerNameOf(hold.provider) : ''));
+    card.appendChild(meta);
+
+    var list = el('div', 'held-suites');
+    (stay.suites || []).forEach(function (s) {
+      var r = el('div', 'rv-row');
+      r.appendChild(el('span', null, (s.name || 'Suite') + ((s.qty || 1) > 1 ? ' \u00d7 ' + s.qty : '') + (s.plan ? ' \u00b7 ' + s.plan : '')));
+      r.appendChild(el('span', null, s.total != null ? C.moneyC(s.total, stay.currency) : 'on request'));
+      list.appendChild(r);
+    });
+    card.appendChild(list);
+    if (stay.total != null) {
+      var grand = el('div', 'rv-grand');
+      grand.appendChild(el('span', null, 'Grand total'));
+      grand.appendChild(el('strong', null, C.moneyC(stay.total, stay.currency)));
+      card.appendChild(grand);
+    }
+
+    var clock = el('div', 'held-clock');
+    clock.appendChild(el('span', 'rv-kicker', active ? 'Time left on this hold' : 'This hold'));
+    var timer = el('div', 'held-timer'); timer.id = 'heldTimer';
+    clock.appendChild(timer);
+    var until = el('div', 'held-until'); until.id = 'heldUntil';
+    var untilMs = Date.parse(hold.holdUntil);
+    until.textContent = (active ? 'Runs out on ' : (hold.status === 'cancelled' ? 'Cancelled; it would have run out on ' : 'Ran out on ')) + localUntil(hold.holdUntil) + ' (your local time)';
+    clock.appendChild(until);
+    card.appendChild(clock);
+
+    var msg = el('p', 'held-msg', 'When you come back to this page, click \u201cRetrieve booking\u201d under the Check availability button and enter your reference number ' + (hold.reference || '') + '.');
+    msg.id = 'heldMsg';
+    card.appendChild(msg);
+
+    var actions = el('div', 'held-actions');
+    var cancel = el('button', 'cta cta-ghost'); cancel.type = 'button'; cancel.id = 'heldCancel';
+    cancel.appendChild(el('span', 'cta-label', active ? 'Cancel the hold and search again' : 'Search again'));
+    var reserve = el('button', 'cta'); reserve.type = 'button'; reserve.id = 'heldReserve';
+    reserve.appendChild(el('span', 'cta-label', 'Make the reservation'));
+    reserve.hidden = !active;
+    actions.appendChild(cancel); actions.appendChild(reserve);
+    card.appendChild(actions);
+    var note = el('p', 'hold-choice-note'); note.id = 'heldNote'; note.hidden = true;
+    card.appendChild(note);
+
+    function expire() {
+      timer.textContent = '00:00:00';
+      until.textContent = 'This hold ran out on ' + localUntil(hold.holdUntil) + ' (your local time)';
+      reserve.hidden = true;
+      cancel.querySelector('.cta-label').textContent = 'Search again';
+      if (title) title.textContent = 'This hold has run out';
+      stopHeldTimer();
+    }
+    if (active) {
+      timer.textContent = countdown(untilMs);
+      heldTimer = setInterval(function () {
+        if (untilMs - Date.now() <= 0) { expire(); return; }
+        timer.textContent = countdown(untilMs);
+      }, 1000);
+    } else {
+      timer.textContent = '00:00:00';
+    }
+
+    cancel.onclick = function () {
+      if (!active) { finishCancel(); return; }
+      cancel.disabled = true;
+      postJson(HOLD_API + '/cancel', { reference: hold.reference })
+        .then(function (j) {
+          cancel.disabled = false;
+          if (!j || j.ok !== true) { note.className = 'hold-choice-note hold-choice-err'; note.textContent = (j && j.message) || 'The hold could not be cancelled just now \u2014 please try again.'; note.hidden = false; return; }
+          if (ctx && ctx.track) ctx.track('hold_cancelled', { reference: hold.reference });
+          finishCancel();
+        })
+        .catch(function () { cancel.disabled = false; note.className = 'hold-choice-note hold-choice-err'; note.textContent = 'We could not reach the lodge \u2014 check your connection and try again.'; note.hidden = false; });
+    };
+    function finishCancel() {
+      stopHeldTimer();
+      host.hidden = true;
+      var h = $('hold'); if (h) h.hidden = true;
+      close();
+      if (ctx && ctx.onCancelHold) ctx.onCancelHold();
+    }
+    reserve.onclick = function () {
+      if (ctx && ctx.track) ctx.track('reservation_started', { reference: hold.reference });
+      if (ctx && ctx.onPay) ctx.onPay(ctx.totals || null);
+      var t = (ctx && ctx.config && ctx.config.text) || {};
+      note.className = 'hold-choice-note hold-choice-ok';
+      note.textContent = t.continueNote || 'Secure checkout is almost ready \u2014 we have saved your selection, and the reservations team can confirm it today if you contact the lodge.';
+      note.hidden = false;
+    };
+
+    host.hidden = false;
+    try { host.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
+  }
+  function providerNameOf(key) {
+    for (var i = 0; i < PROVIDERS.length; i++) if (PROVIDERS[i].key === key) return PROVIDERS[i].name;
+    return key;
+  }
+
+  /* ---- Retrieve booking (Dave, 2026-09-02): the reference number from the
+     hold email rebuilds the page from the hold's snapshot. ---- */
+  function openRetrieve() {
+    var modal = $('retrieveModal'), input = $('retrieveRef'), go = $('retrieveGo'), note = $('retrieveNote');
+    if (!modal) return;
+    input.value = ''; note.hidden = true; note.textContent = ''; go.disabled = false;
+    modal.hidden = false;
+    document.body.classList.add('hold-open');
+    setTimeout(function () { try { input.focus(); } catch (e) { /* fine */ } }, 50);
+    function closeRetrieve() { modal.hidden = true; document.body.classList.remove('hold-open'); }
+    go.onclick = function () {
+      var ref = String(input.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (ref.length < 6) { note.textContent = 'Type the reference number from your hold email.'; note.hidden = false; input.focus(); return; }
+      go.disabled = true; note.hidden = true;
+      postJson(HOLD_API + '/retrieve', { reference: ref })
+        .then(function (j) {
+          go.disabled = false;
+          if (!j || j.ok !== true || !j.hold) { note.textContent = (j && j.message) || 'No hold with that reference number was found.'; note.hidden = false; return; }
+          if (!window.BKBooking || !window.BKBooking.restoreHold(j.hold)) {
+            note.textContent = 'That hold was found but cannot be rebuilt here \u2014 please contact the lodge with reference ' + ref + '.';
+            note.hidden = false;
+            return;
+          }
+          closeRetrieve();
+          if (window.BKCore && window.BKCore.track) window.BKCore.track('hold_retrieved', { reference: ref });
+        })
+        .catch(function () { go.disabled = false; note.textContent = 'We could not reach the lodge \u2014 check your connection and try again.'; note.hidden = false; });
+    };
+    input.onkeydown = function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); go.click(); } };
+    var x = $('retrieveClose'); if (x) x.onclick = closeRetrieve;
+    modal.onclick = function (ev) { if (ev.target === modal) closeRetrieve(); };
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    var link = $('retrieveLink');
+    if (link) link.addEventListener('click', openRetrieve);
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { var m = $('retrieveModal'); if (m && !m.hidden) { m.hidden = true; document.body.classList.remove('hold-open'); } }
+  });
+
   /* Open the summary as a section below the results (the results stay;
      the page scrolls down to it). ctx: { picks, from, to, nights, party, lodge, config,
      photosFor, art, buildBreakdown, extrasLabel, inclLabel, onBack, onPay,
@@ -651,6 +827,7 @@ window.BKReview = (function () {
     if (!host || !ctx.picks || !ctx.picks.length) return null;
     state.ctx = ctx;
     var prevHold = $('hold'); if (prevHold) prevHold.hidden = true; // a fresh summary retires an earlier hold section
+    var prevHeld = $('held'); if (prevHeld) prevHeld.hidden = true; stopHeldTimer();
     var head = $('reviewHead'), meta = $('reviewMeta');
     var suites = ctx.picks.reduce(function (n, p) { return n + (p.qty || 1); }, 0);
     if (head) head.textContent = C.fmtDate(ctx.from) + ' — ' + C.fmtDate(ctx.to);
@@ -662,6 +839,7 @@ window.BKReview = (function () {
     var totalsHost = $('reviewTotals');
     totalsHost.textContent = '';
     var totals = renderTotals(ctx, ctx.picks);
+    ctx.totals = totals;
     totalsHost.appendChild(totals.box);
 
     /* The guest's own word. Text from Lodge Ops (Settings → Booking
@@ -709,6 +887,9 @@ window.BKReview = (function () {
     if (host) host.hidden = true;
     var hold = $('hold');
     if (hold) hold.hidden = true;
+    var held = $('held');
+    if (held) held.hidden = true;
+    stopHeldTimer();
     closeHoldModal();
     state.open = false;
   }
@@ -716,5 +897,6 @@ window.BKReview = (function () {
   function isOpen() { return state.open; }
 
   return { open: open, close: close, isOpen: isOpen, DEFAULT_AGREE: DEFAULT_AGREE,
-    holdsConfig: holdsConfig, holdOffered: holdOffered, daysUntil: daysUntil };
+    holdsConfig: holdsConfig, holdOffered: holdOffered, daysUntil: daysUntil,
+    showHeld: showHeld, openRetrieve: openRetrieve };
 })();

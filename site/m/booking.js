@@ -159,6 +159,71 @@
   }
 
   // ---- search ----
+  /* The search answer applied to the page — shared by a live search and
+     by Retrieve booking, which replays the answer a hold was taken from
+     (Dave, 2026-09-02). planFor: roomTypeId → planId to land on. */
+  function applySearchResult(json, planFor) {
+    current.raw = json;
+      current.results = json.results || [];
+      current.nights = json.nights;
+      current.ratePlans = json.ratePlans || [];
+      /* Prices come from the Rate Engine ONLY (0.1.26): the server strips
+         the provider's figures and attaches the offered plans' quotes.
+         Each suite maps its first priced plan onto the card; further
+         plans become pills the guest can switch between. A suite the
+         engine does not price shows "Rates on request" — never a number
+         from anywhere else. (The old site-side 5th-night promotion is
+         retired with this: pricing rules live in the Rate Engine now.)
+         The conservation levy still comes from the replicated lodge
+         settings — the engine knows nothing of it. */
+      var party = { adults: els.adults.textContent, children: els.children.textContent };
+      current.results.forEach(function (room) {
+        room.plans = C.planOptionsFor(room.roomTypeId, current.ratePlans);
+        /* Closed to arrivals / departures (engine 2026-09-02): no plan
+           sells the stay and the engine said why — the card says the
+           same words and cannot be picked. */
+        room.restricted = room.plans.length ? null
+          : C.planRestriction(room.roomTypeId, current.ratePlans) || null;
+        /* A search lands on the CHEAPEST priced plan (0.1.29), not merely
+           the first one offered — the guest sees the best price the lodge
+           has for them without having to hunt through the pills. */
+        var wanted = planFor && planFor[String(room.roomTypeId)];
+      var pick = null;
+      if (wanted) {
+        for (var pi = 0; pi < room.plans.length; pi++) {
+          if (String(room.plans[pi].planId) === String(wanted)) { pick = room.plans[pi]; break; }
+        }
+      }
+      if (!pick) pick = C.defaultPlanOption(room.plans);
+        if (pick) C.applyPlanToRoom(room, pick, lodge, party, json.nights);
+      });
+      /* The provider omits fully booked room types entirely — when Lodge
+         Ops says to show them, the replicated suite list fills the gaps. */
+      if (config.showUnavailable === true) {
+        var present = {};
+        current.results.forEach(function (room) { present[String(room.roomTypeId)] = true; });
+        Object.keys(suites).forEach(function (id) {
+          if (present[id] || id.charAt(0) === '_') return;
+          if (!suites[id] || !suites[id].name) return;
+          current.results.push({
+            roomTypeId: id, name: suites[id].name, available: 0,
+            totalPrice: null, currency: null, photos: [],
+          });
+        });
+      }
+      C.track('availability_viewed', { count: current.results.length });
+      /* Fully-booked suites appear only when Lodge Ops says so
+         (site_config.showUnavailable); the empty state judges what is
+         actually shown. */
+      var visible = current.results.filter(function (room) {
+        return room.available > 0 || config.showUnavailable === true;
+      });
+      if (!visible.length) { show('empty'); return; }
+      renderResults({ from: json.from, to: json.to, nights: json.nights, results: suiteOrdered(visible) });
+      show('results');
+      els.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   form.addEventListener('submit', function (ev) {
     ev.preventDefault();
     var from = els.arrive.value;
@@ -205,57 +270,7 @@
           hideStates();
           return;
         }
-        current.results = r.json.results || [];
-        current.nights = r.json.nights;
-        current.ratePlans = r.json.ratePlans || [];
-        /* Prices come from the Rate Engine ONLY (0.1.26): the server strips
-           the provider's figures and attaches the offered plans' quotes.
-           Each suite maps its first priced plan onto the card; further
-           plans become pills the guest can switch between. A suite the
-           engine does not price shows "Rates on request" — never a number
-           from anywhere else. (The old site-side 5th-night promotion is
-           retired with this: pricing rules live in the Rate Engine now.)
-           The conservation levy still comes from the replicated lodge
-           settings — the engine knows nothing of it. */
-        var party = { adults: els.adults.textContent, children: els.children.textContent };
-        current.results.forEach(function (room) {
-          room.plans = C.planOptionsFor(room.roomTypeId, current.ratePlans);
-          /* Closed to arrivals / departures (engine 2026-09-02): no plan
-             sells the stay and the engine said why — the card says the
-             same words and cannot be picked. */
-          room.restricted = room.plans.length ? null
-            : C.planRestriction(room.roomTypeId, current.ratePlans) || null;
-          /* A search lands on the CHEAPEST priced plan (0.1.29), not merely
-             the first one offered — the guest sees the best price the lodge
-             has for them without having to hunt through the pills. */
-          var pick = C.defaultPlanOption(room.plans);
-          if (pick) C.applyPlanToRoom(room, pick, lodge, party, r.json.nights);
-        });
-        /* The provider omits fully booked room types entirely — when Lodge
-           Ops says to show them, the replicated suite list fills the gaps. */
-        if (config.showUnavailable === true) {
-          var present = {};
-          current.results.forEach(function (room) { present[String(room.roomTypeId)] = true; });
-          Object.keys(suites).forEach(function (id) {
-            if (present[id] || id.charAt(0) === '_') return;
-            if (!suites[id] || !suites[id].name) return;
-            current.results.push({
-              roomTypeId: id, name: suites[id].name, available: 0,
-              totalPrice: null, currency: null, photos: [],
-            });
-          });
-        }
-        C.track('availability_viewed', { count: current.results.length });
-        /* Fully-booked suites appear only when Lodge Ops says so
-           (site_config.showUnavailable); the empty state judges what is
-           actually shown. */
-        var visible = current.results.filter(function (room) {
-          return room.available > 0 || config.showUnavailable === true;
-        });
-        if (!visible.length) { show('empty'); return; }
-        renderResults({ from: r.json.from, to: r.json.to, nights: r.json.nights, results: suiteOrdered(visible) });
-        show('results');
-        els.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        applySearchResult(r.json, null);
       })
       .catch(function () {
         els.btn.disabled = false;
@@ -1030,6 +1045,14 @@
       photosFor: photosFor, art: art, buildBreakdown: buildBreakdown,
       extrasLabel: extrasLabel, inclLabel: inclLabel,
       track: function (name, detail) { C.track(name, detail, stateCheckpoint()); },
+      snapshot: snapshotState,
+      onCancelHold: function () {
+        /* Cancel the hold and search again: the picks go, the form is back. */
+        current.picks = {};
+        refreshCards();
+        updateSummary();
+        try { document.getElementById('searchForm').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
+      },
       onBack: function () { closeReview(true); },
       onPay: function (totals) {
         /* Honest state: the payment step ships in its own certified batch;
@@ -1048,6 +1071,63 @@
     });
     try { history.pushState({ view: 'review' }, '', location.href); } catch (e) { /* fine */ }
   }
+  /* Everything the page needs to rebuild itself from a hold (Dave,
+     2026-09-02): the form, the raw search answer the rates came from, and
+     the picks with their plans. Kept on the hold in Lodge Ops. */
+  function snapshotState() {
+    return {
+      form: {
+        arrive: current.from, nights: current.nights,
+        adults: String(els.adults.value), children: String(els.children.value), rooms: String(els.rooms.value),
+        code: els.code ? String(els.code.value || '').trim().toUpperCase() : '',
+      },
+      json: current.raw || null,
+      picks: stateCheckpoint().rooms,
+    };
+  }
+  /* Retrieve booking: the page as it was when the hold was taken — the
+     form, the results with the same suites picked on the same plans, the
+     summary — then the hold section with its clock. */
+  function restoreHold(hold) {
+    var snap = hold && hold.snapshot;
+    if (!snap || !snap.json || !snap.form || !snap.form.arrive) return false;
+    var n = Number(snap.form.nights) || 0;
+    if (!(n >= 2)) return false;
+    if (window.BKReview) window.BKReview.close();
+    els.arrive.value = snap.form.arrive;
+    setNights(n);
+    function setSel(el, v) {
+      if (!el) return;
+      el.value = String(v);
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    setSel(els.adults, snap.form.adults); setSel(els.children, snap.form.children); setSel(els.rooms, snap.form.rooms);
+    if (els.code) els.code.value = snap.form.code || '';
+    current.from = snap.form.arrive;
+    current.to = C.addDays(current.from, n);
+    current.picks = {};
+    updateUrl(current.from, n);
+    var planFor = {};
+    (snap.picks || []).forEach(function (p) { if (p.planId) planFor[String(p.roomTypeId)] = p.planId; });
+    applySearchResult(snap.json, planFor);
+    (snap.picks || []).forEach(function (p) {
+      for (var i = 0; i < current.results.length; i++) {
+        var room = current.results[i];
+        if (String(room.roomTypeId) === String(p.roomTypeId)) {
+          current.picks[room.roomTypeId] = { room: room, qty: Math.max(1, Number(p.qty) || 1) };
+          break;
+        }
+      }
+    });
+    refreshCards();
+    if (!pickedRooms().length) return false;
+    updateSummary();
+    openReview();
+    if (window.BKReview && window.BKReview.showHeld) window.BKReview.showHeld(hold);
+    return true;
+  }
+  window.BKBooking = { snapshot: snapshotState, restoreHold: restoreHold };
+
   function closeReview(pop) {
     if (!window.BKReview || !window.BKReview.isOpen()) return;
     window.BKReview.close();

@@ -713,4 +713,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.57',
+    version: '0.1.57',
+    date: '2026-09-02T13:50:00+02:00',
+    changes: [
+      {
+        headline:
+          'Hold my booking with an address this browser already verified opens no modal at all: the earlier hold is cited to Lodge Ops and the Hold section opens straight away. The reference number is no longer shown on the hold card (kept in the markup for later).',
+        detail:
+          'Dave, 2026-09-02: if the email address has already been verified then do not send a new verification, just close the modal and continue; do not show the reference number on the hold card, we will add it back later. review.js: the Hold button checks localStorage bk-hold-verified first \u2014 with a remembered address, holdWithPrior posts {email, stay, priorHoldId} while the button reads \u201cOne moment\u2026\u201d, and a verified: true reply opens the Hold section with the new id remembered; the 0.1.56 modal path (address offered back, Send reading Continue) remains only as the fallback: if Lodge Ops will not take the earlier hold (older than 90 days, another address) it has sent a code, so the modal opens straight at the code step for that address with the code field focused; a network failure or a refusal opens the modal at the email step with the reason. The Reference row in .hold-meta is hidden in both builds; #holdRef is still filled so it can return with one attribute. VERIFIED in real Chromium against the config stub, 37 assertions: a verified address presses Hold and gets the Hold section with no modal, one start post carrying the prior id, no verify call, the button restored; a stale remembered id lands in the modal at the code step and the code verifies as usual; the reference is not visible on the hold card in either build; no script errors. PAIRS WITH Lodge Ops 1.2.355. DEPLOY: rsync index.html, m/index.html, review.js.',
+      },
+    ],
+  },
 ];

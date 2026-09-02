@@ -752,4 +752,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.60',
+    version: '0.1.60',
+    date: '2026-09-02T16:00:00+02:00',
+    changes: [
+      {
+        headline:
+          'Your stay: the inclusions now sit under an \u201cIncluded in this rate\u201d heading and fold to the first two ROWS of chips as laid out on the screen (not the first two sections), with \u201cShow all inclusions \u00b7 N more\u201d for the rest; the plan\u2019s description line (\u201cThis is the Oase Standard Rack Rate.\u201d) is gone from the summary.',
+        detail:
+          'Dave, 2026-09-02 (screenshot): show less inclusions in the Your stay section and add a heading Included in this rate; remove the text This is the Oase Standard Rack Rate. review.js: renderPick builds every section unfolded under the new rv-kicker heading; open() shows the section first (so it has a width) and then foldInclusions measures each chip\u2019s top, keeps the chips on the first INCLUSION_ROWS (2) distinct rows, hides the rest chip by chip (a section left with nothing showing hides too) and adds the toggle with the hidden COUNT \u2014 a wide screen simply shows more per row. The plan description paragraph is no longer rendered on the summary; the suite cards keep it. VERIFIED in real Chromium against the config stub, 48 assertions: on desktop and phone the heading is first, exactly two chip rows show, the toggle names the hidden count, the toggle reveals every chip and offers to fold again, and the description text is absent; the hold flow is unchanged. DEPLOY: rsync review.js, review.css.',
+      },
+    ],
+  },
 ];

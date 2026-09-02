@@ -39,6 +39,8 @@
 .rv-callout-msg, .rv-callout-discount { color: var(--gold); border-color: rgba(201, 168, 106, 0.55); }
 .rv-callout-exc { text-decoration: line-through; opacity: 0.7; }
 .rv-inclusions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.rv-inc-head { margin-bottom: 2px; }
+.rv-inc[hidden] { display: none; }
 .rv-inc-group { display: grid; grid-template-columns: 130px 1fr; gap: 8px 14px; align-items: start; }
 .rv-inc-name { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--paper-dim); padding-top: 5px; }
 .rv-inc-chips { display: flex; flex-wrap: wrap; gap: 6px; }

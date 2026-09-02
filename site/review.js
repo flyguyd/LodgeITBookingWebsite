@@ -22,7 +22,10 @@ window.BKReview = (function () {
   /* The hold verification lives on the Lodge Ops API, served from the same
      origin as this page on the live host (as the chat widget is). */
   var HOLD_API = window.BK_HOLD_API || '/api/web/booking-hold';
-  /* Inclusion rows shown before "Show all" (Dave, 2026-09-02). */
+  /* Inclusion CHIP ROWS shown before "Show all" (Dave, 2026-09-02, from
+     his screenshot: the first two rows of chips, not the first two
+     sections). Measured after layout, so it is rows as the guest sees
+     them on that screen. */
   var INCLUSION_ROWS = 2;
   /* An address this browser verified is not asked for a code again (Dave,
      2026-09-02): the earlier hold's id is the proof Lodge Ops checks. */
@@ -192,7 +195,8 @@ window.BKReview = (function () {
     var basis = C.rateBasisLabel(room);
     if (basis) rateHead.appendChild(el('span', 'rv-basis', basis));
     rate.appendChild(rateHead);
-    if (plan && plan.description) rate.appendChild(el('p', 'rv-plan-desc', plan.description));
+    /* The plan's description line is not shown here (Dave, 2026-09-02:
+       remove "This is the Oase Standard Rack Rate."); the cards keep it. */
     var callouts = C.ruleCallouts(room);
     if (callouts.length) {
       var co = el('div', 'rv-callouts');
@@ -204,32 +208,18 @@ window.BKReview = (function () {
     var secs = inclusionSections(plan && plan.inclusions);
     if (secs) {
       var incl = el('div', 'rv-inclusions');
-      var hiddenRows = 0;
-      secs.forEach(function (s, si) {
+      incl.appendChild(el('span', 'rv-kicker rv-inc-head', 'Included in this rate'));
+      secs.forEach(function (s) {
         var grp = el('div', 'rv-inc-group' + (s.negative ? ' negative' : ''));
         grp.appendChild(el('span', 'rv-inc-name', s.name));
         var chips = el('div', 'rv-inc-chips');
         s.tags.forEach(function (t) { chips.appendChild(el('span', 'rv-inc', String(t))); });
         grp.appendChild(chips);
-        /* Two rows by default; the rest fold away behind one button. */
-        if (si >= INCLUSION_ROWS) { grp.hidden = true; grp.classList.add('rv-inc-more'); hiddenRows += 1; }
         incl.appendChild(grp);
       });
-      if (hiddenRows > 0) {
-        var more = el('button', 'rv-inc-toggle');
-        more.type = 'button';
-        more.setAttribute('aria-expanded', 'false');
-        var openLabel = 'Show all inclusions \u00b7 ' + hiddenRows + ' more';
-        more.textContent = openLabel;
-        more.addEventListener('click', function () {
-          var open = more.getAttribute('aria-expanded') !== 'true';
-          incl.querySelectorAll('.rv-inc-more').forEach(function (g) { g.hidden = !open; });
-          more.setAttribute('aria-expanded', open ? 'true' : 'false');
-          more.textContent = open ? 'Show fewer' : openLabel;
-          if (ctx.track) ctx.track(open ? 'inclusions_expanded' : 'inclusions_collapsed', { roomTypeId: room.roomTypeId });
-        });
-        incl.appendChild(more);
-      }
+      /* Folded to INCLUSION_ROWS chip rows once it is on the page and
+         has a width — see foldInclusions, called by open(). */
+      incl.__fold = function () { foldInclusions(incl, room, ctx); };
       rate.appendChild(incl);
     } else {
       rate.appendChild(el('p', 'rv-plan-desc rv-muted', 'Inclusions as described for this rate.'));
@@ -259,6 +249,45 @@ window.BKReview = (function () {
     body.appendChild(stmt);
     card.appendChild(body);
     return card;
+  }
+
+  /* Fold an inclusion list to its first INCLUSION_ROWS rows of chips as
+     laid out on THIS screen: chips further down, and any section left
+     with nothing showing, hide behind one "Show all inclusions · N more"
+     button. Measured, not counted — a wide screen shows more per row. */
+  function foldInclusions(incl, room, ctx) {
+    var chips = Array.prototype.slice.call(incl.querySelectorAll('.rv-inc'));
+    if (!chips.length) return;
+    var tops = [];
+    chips.forEach(function (c) {
+      var t = Math.round(c.getBoundingClientRect().top);
+      if (tops.indexOf(t) < 0) tops.push(t);
+    });
+    tops.sort(function (a, b) { return a - b; });
+    if (tops.length <= INCLUSION_ROWS) return;
+    var limit = tops[INCLUSION_ROWS];
+    var hidden = [];
+    chips.forEach(function (c) {
+      if (Math.round(c.getBoundingClientRect().top) >= limit) { c.hidden = true; c.classList.add('rv-inc-more'); hidden.push(c); }
+    });
+    incl.querySelectorAll('.rv-inc-group').forEach(function (g) {
+      var shown = g.querySelectorAll('.rv-inc:not([hidden])').length;
+      if (!shown) { g.hidden = true; g.classList.add('rv-inc-more'); }
+    });
+    if (!hidden.length) return;
+    var more = el('button', 'rv-inc-toggle');
+    more.type = 'button';
+    more.setAttribute('aria-expanded', 'false');
+    var openLabel = 'Show all inclusions \u00b7 ' + hidden.length + ' more';
+    more.textContent = openLabel;
+    more.addEventListener('click', function () {
+      var open = more.getAttribute('aria-expanded') !== 'true';
+      incl.querySelectorAll('.rv-inc-more').forEach(function (n) { n.hidden = !open; });
+      more.setAttribute('aria-expanded', open ? 'true' : 'false');
+      more.textContent = open ? 'Show fewer' : openLabel;
+      if (ctx && ctx.track) ctx.track(open ? 'inclusions_expanded' : 'inclusions_collapsed', { roomTypeId: room.roomTypeId });
+    });
+    incl.appendChild(more);
   }
 
   /* Every charge across every suite, added up line by line — accommodation,
@@ -836,6 +865,8 @@ window.BKReview = (function () {
     var rooms = $('reviewRooms');
     rooms.textContent = '';
     ctx.picks.forEach(function (p, i) { rooms.appendChild(renderPick(ctx, p, i)); });
+    host.hidden = false; // on the page, with a width, before the inclusions are measured
+    rooms.querySelectorAll('.rv-inclusions').forEach(function (incl) { if (incl.__fold) incl.__fold(); });
     var totalsHost = $('reviewTotals');
     totalsHost.textContent = '';
     var totals = renderTotals(ctx, ctx.picks);

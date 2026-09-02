@@ -984,6 +984,9 @@
   }
   function updateSummary() {
     var picks = pickedRooms();
+    /* A changed selection retires the summary below the results — it no
+       longer says what is picked; Continue renders it afresh. */
+    if (window.BKReview && window.BKReview.isOpen()) window.BKReview.close();
     if (!picks.length) { hideSummary(); return; }
     var suites = picks.reduce(function (n, p) { return n + p.qty; }, 0);
     els.sumRoom.textContent = picks
@@ -1004,8 +1007,8 @@
   /* Continue opens the STAY SUMMARY (Dave, 2026-09-02): every suite chosen,
      the rate and its inclusions, the full statement per suite, every charge
      and the grand total — and the guest's agreement that it is all correct
-     before the payment step. The results and the bar step aside; "Change
-     your suites" brings them straight back with every pick intact. */
+     before the payment step, rendered BELOW the results (not a new page);
+     "Change your suites" scrolls back up with every pick intact. */
   function openReview() {
     var picks = pickedRooms();
     if (!picks.length || !window.BKReview) return;
@@ -1017,8 +1020,10 @@
       total: total ? total.sum.toFixed(2) : null,
     }, stateCheckpoint());
     var party = { adults: els.adults.value, children: els.children.value };
+    /* The results stay where they are (Dave, 2026-09-02): the summary is
+       a section below them, above the footer, and the page scrolls to it.
+       The bar steps aside — the summary's own buttons take over. */
     hideSummary();
-    els.results.hidden = true;
     window.BKReview.open({
       picks: picks, from: current.from, to: current.to, nights: current.nights,
       party: party, lodge: lodge, config: config,

@@ -155,3 +155,7 @@ body.hold-open { overflow: hidden; }
   .hold-options { grid-template-columns: 1fr 1fr; }
   .hold-payer { width: calc(50% - 7px); height: 104px; }
 }
+
+/* The summary and the hold are SECTIONS below the results (Dave, 2026-09-02). */
+.review, .hold-page { border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 34px; }
+.hold-known { margin: 10px 0 0 !important; color: var(--gold) !important; font-size: 13px !important; }

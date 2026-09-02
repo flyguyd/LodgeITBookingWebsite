@@ -700,4 +700,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.56',
+    version: '0.1.56',
+    date: '2026-09-02T13:20:00+02:00',
+    changes: [
+      {
+        headline:
+          'Continue and Hold no longer swap pages: the stay summary renders as a section BELOW the results, above the footer, and the page scrolls down to it; the Hold section renders below that. An email address this browser already verified is offered back in the Hold modal with Send reading Continue, and goes straight to the Hold section with no code.',
+        detail:
+          'Dave, 2026-09-02: instead of opening a new page when clicking Continue and Hold, add a new section at the bottom of the page above the footer, render the content and controls there and scroll down to it; if the email address has already been verified, do not verify it again. SECTIONS: openReview (both builds) keeps #results visible and only steps the bar aside; BKReview.open shows #review beneath the results and scrolls to it; openHoldPage shows #hold beneath the summary (no longer hiding it) and scrolls; a changed selection while the summary is open retires it (updateSummary closes it; Continue renders it afresh) and a fresh summary retires an earlier hold section; \u201cChange your suites\u201d hides both and brings the bar back. Both sections carry a top rule so they read as new sections. REMEMBERED ADDRESS: on a verified code (or a verified-on-the-spot start) review.js stores {email, holdId} under localStorage bk-hold-verified; the Hold modal opens with that address filled in, Send reads Continue with \u201cThis address was verified earlier \u2014 no code needed\u201d beneath, and Continue posts priorHoldId with the new stay; a verified: true reply skips the code step and opens the Hold section with the new reference; any other address (typed over it, or \u201cUse a different email address\u201d) is a plain Send with a code as before, and Lodge Ops refusing the prior id also falls back to the code step. VERIFIED in real Chromium against the config stub, 37 assertions: on desktop, mobile and the 8-days-out case the results stay, the summary sits below them and above the footer with the page scrolled; the Hold section sits below the summary; on desktop a second hold offers the address back, reads Continue, posts the prior id, makes no verify call and opens the Hold section with reference 3A3A3A3A and three options, and a different address turns Continue back into Send; no script errors. PAIRS WITH Lodge Ops 1.2.355 (priorHoldId). DEPLOY: rsync index.html, m/index.html, booking.js, m/booking.js, review.js, review.css.',
+      },
+    ],
+  },
 ];

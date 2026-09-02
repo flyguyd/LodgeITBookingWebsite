@@ -24,6 +24,18 @@ window.BKReview = (function () {
   var HOLD_API = window.BK_HOLD_API || '/api/web/booking-hold';
   /* Inclusion rows shown before "Show all" (Dave, 2026-09-02). */
   var INCLUSION_ROWS = 2;
+  /* An address this browser verified is not asked for a code again (Dave,
+     2026-09-02): the earlier hold's id is the proof Lodge Ops checks. */
+  var VERIFIED_KEY = 'bk-hold-verified';
+  function storedVerified() {
+    try {
+      var v = JSON.parse(localStorage.getItem(VERIFIED_KEY) || 'null');
+      return v && typeof v.email === 'string' && typeof v.holdId === 'string' ? v : null;
+    } catch (e) { return null; }
+  }
+  function rememberVerified(email, holdId) {
+    try { localStorage.setItem(VERIFIED_KEY, JSON.stringify({ email: email, holdId: holdId, at: Date.now() })); } catch (e) { /* private mode */ }
+  }
 
   /* Holds (Dave, 2026-09-02; Settings → Booking Engine → Holds): the button
      only when check-in is more than buttonMinDays away; the Hold page's
@@ -329,12 +341,22 @@ window.BKReview = (function () {
     var sent = $('txtHoldSent'); if (sent) sent.textContent = t.holdSent || DEFAULT_HOLD_SENT;
     var email = $('holdEmail'), send = $('holdSend'), note = $('holdNote');
     var codeStep = $('holdCodeStep'), code = $('holdCode'), verify = $('holdVerify'), codeNote = $('holdCodeNote');
-    var emailStep = $('holdEmailStep');
+    var emailStep = $('holdEmailStep'), known = $('holdKnown');
     state.hold = { id: null, email: '', totals: totals };
-    email.value = ''; code.value = '';
+    var prior = storedVerified();
+    email.value = prior ? prior.email : ''; code.value = '';
     note.hidden = true; note.textContent = ''; codeNote.hidden = true; codeNote.textContent = '';
     emailStep.hidden = false; codeStep.hidden = true;
     send.disabled = false; verify.disabled = false;
+    /* A verified address is offered back, and Send reads Continue for it. */
+    function isPrior() { return !!prior && String(email.value || '').trim().toLowerCase() === prior.email; }
+    function sendLabel() {
+      var p = isPrior();
+      send.textContent = p ? 'Continue' : 'Send';
+      if (known) known.hidden = !p;
+    }
+    sendLabel();
+    email.oninput = sendLabel;
     modal.hidden = false;
     document.body.classList.add('hold-open');
     if (ctx.track) ctx.track('hold_started', { total: totals && totals.grand != null ? totals.grand.toFixed(2) : null });
@@ -347,18 +369,29 @@ window.BKReview = (function () {
       if (!validEmail(v)) { fail(note, 'Please enter a valid email address.'); email.focus(); return; }
       note.hidden = true;
       send.disabled = true;
-      send.textContent = 'Sending\u2026';
-      postJson(HOLD_API + '/start', { email: v, stay: staySnapshot(ctx, totals) })
+      var usePrior = isPrior();
+      send.textContent = usePrior ? 'One moment\u2026' : 'Sending\u2026';
+      var body = { email: v, stay: staySnapshot(ctx, totals) };
+      if (usePrior) body.priorHoldId = prior.holdId;
+      postJson(HOLD_API + '/start', body)
         .then(function (j) {
-          send.disabled = false; send.textContent = 'Send';
+          send.disabled = false; sendLabel();
           if (!j || j.ok !== true) { fail(note, (j && j.message) || 'We could not send the code just now \u2014 please try again.'); if (ctx.track) ctx.track('hold_send_failed', {}); return; }
+          if (j.verified === true && j.id) {
+            /* Already verified: straight to the hold, no code. */
+            rememberVerified(j.email || v, j.id);
+            if (ctx.track) ctx.track('hold_verified', { prior: true });
+            closeHoldModal();
+            openHoldPage(ctx, totals, j.id, j.email || v);
+            return;
+          }
           state.hold.id = j.id; state.hold.email = j.email || v;
           emailStep.hidden = true; codeStep.hidden = false;
           var to = $('holdSentTo'); if (to) to.textContent = state.hold.email;
           if (ctx.track) ctx.track('hold_code_sent', {});
           setTimeout(function () { try { code.focus(); } catch (e) { /* fine */ } }, 50);
         })
-        .catch(function () { send.disabled = false; send.textContent = 'Send'; fail(note, 'We could not reach the lodge \u2014 check your connection and try again.'); });
+        .catch(function () { send.disabled = false; sendLabel(); fail(note, 'We could not reach the lodge \u2014 check your connection and try again.'); });
     };
     email.onkeydown = function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); send.click(); } };
     verify.onclick = function () {
@@ -376,6 +409,7 @@ window.BKReview = (function () {
             return;
           }
           if (ctx.track) ctx.track('hold_verified', {});
+          rememberVerified(state.hold.email, j.holdId);
           closeHoldModal();
           openHoldPage(ctx, totals, j.holdId, state.hold.email);
         })
@@ -383,7 +417,7 @@ window.BKReview = (function () {
     };
     code.onkeydown = function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); verify.click(); } };
     var again = $('holdAgain');
-    if (again) again.onclick = function () { emailStep.hidden = false; codeStep.hidden = true; codeNote.hidden = true; };
+    if (again) again.onclick = function () { emailStep.hidden = false; codeStep.hidden = true; codeNote.hidden = true; email.value = ''; sendLabel(); email.focus(); };
     var close = $('holdClose');
     if (close) close.onclick = closeHoldModal;
     modal.onclick = function (ev) { if (ev.target === modal) closeHoldModal(); };
@@ -397,8 +431,9 @@ window.BKReview = (function () {
     if (ev.key === 'Escape') { var m = $('holdModal'); if (m && !m.hidden) closeHoldModal(); }
   });
 
-  /* The Hold page: the verified address, the stay as it was agreed, a
-     reference \u2014 and nothing else (Dave, 2026-09-02: "do nothing else"). */
+  /* The Hold section: the verified address, the stay as it was agreed, a
+     reference, and the choices. Rendered BELOW the summary, above the
+     footer (Dave, 2026-09-02: not a new page), and scrolled to. */
   function openHoldPage(ctx, totals, holdId, email) {
     var host = $('hold');
     if (!host) return;
@@ -426,9 +461,7 @@ window.BKReview = (function () {
     var grand = $('holdGrand');
     if (grand) grand.textContent = totals && totals.grand != null ? C.moneyC(totals.grand, totals.currency) : '';
     renderHoldChoices(ctx, holdId);
-    var review = $('review'); if (review) review.hidden = true;
     host.hidden = false;
-    state.open = false;
     if (ctx.track) ctx.track('hold_page_opened', { holdId: holdId });
     try { host.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
   }
@@ -567,13 +600,15 @@ window.BKReview = (function () {
     }
   }
 
-  /* Open the summary. ctx: { picks, from, to, nights, party, lodge, config,
+  /* Open the summary as a section below the results (the results stay;
+     the page scrolls down to it). ctx: { picks, from, to, nights, party, lodge, config,
      photosFor, art, buildBreakdown, extrasLabel, inclLabel, onBack, onPay,
      track }. */
   function open(ctx) {
     var host = $('review');
     if (!host || !ctx.picks || !ctx.picks.length) return null;
     state.ctx = ctx;
+    var prevHold = $('hold'); if (prevHold) prevHold.hidden = true; // a fresh summary retires an earlier hold section
     var head = $('reviewHead'), meta = $('reviewMeta');
     var suites = ctx.picks.reduce(function (n, p) { return n + (p.qty || 1); }, 0);
     if (head) head.textContent = C.fmtDate(ctx.from) + ' — ' + C.fmtDate(ctx.to);

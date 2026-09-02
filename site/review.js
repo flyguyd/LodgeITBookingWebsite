@@ -25,6 +25,59 @@ window.BKReview = (function () {
   /* Inclusion rows shown before "Show all" (Dave, 2026-09-02). */
   var INCLUSION_ROWS = 2;
 
+  /* Holds (Dave, 2026-09-02; Settings → Booking Engine → Holds): the button
+     only when check-in is more than buttonMinDays away; the Hold page's
+     three options, each with its own distance; the payment providers
+     enabled there. The same defaults as Lodge Ops keeps. */
+  var HOLD_DEFAULTS = { enabled: true, buttonMinDays: 14, options: [
+    { hours: 24, price: 0, minDays: 0 }, { hours: 36, price: 150, minDays: 42 }, { hours: 72, price: 989, minDays: 91 }] };
+  var PROVIDERS = [
+    { key: 'stripe', name: 'Stripe' }, { key: 'yoco', name: 'Yoco' },
+    { key: 'paypal', name: 'PayPal' }, { key: 'turnstay', name: 'TurnStay' }];
+  function holdsConfig(config) {
+    var h = (config && config.holds && typeof config.holds === 'object') ? config.holds : {};
+    var raw = Array.isArray(h.options) ? h.options : [];
+    function num(v, d, max) { var n = Number(v); return isFinite(n) && n >= 0 ? Math.min(max, n) : d; }
+    return {
+      enabled: h.enabled !== false,
+      buttonMinDays: Math.round(num(h.buttonMinDays, HOLD_DEFAULTS.buttonMinDays, 3650)),
+      options: HOLD_DEFAULTS.options.map(function (d) {
+        var o = null;
+        for (var i = 0; i < raw.length; i++) { if (raw[i] && Number(raw[i].hours) === d.hours) { o = raw[i]; break; } }
+        o = o || {};
+        return { hours: d.hours,
+          price: d.hours === 24 ? 0 : Math.round(num(o.price, d.price, 1000000) * 100) / 100,
+          minDays: d.hours === 24 ? 0 : Math.round(num(o.minDays, d.minDays, 3650)) };
+      }),
+    };
+  }
+  function enabledProviders(config) {
+    var p = (config && config.payments && typeof config.payments === 'object') ? config.payments : {};
+    return PROVIDERS.filter(function (x) { return p[x.key] === true; });
+  }
+  /* Whole days from today to an ISO date, UTC like every date here. */
+  function daysUntil(iso) {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+    var t = Date.parse(iso + 'T00:00:00Z');
+    var today = Date.parse(C.isoToday() + 'T00:00:00Z');
+    return isFinite(t) ? Math.round((t - today) / 86400000) : null;
+  }
+  function holdOffered(config, from) {
+    var h = holdsConfig(config), d = daysUntil(from);
+    return h.enabled && d != null && d > h.buttonMinDays;
+  }
+  function exVat(price) {
+    var whole = Math.floor(price), frac = Math.round((price - whole) * 100);
+    return 'R' + String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (frac ? '.' + (frac < 10 ? '0' : '') + frac : '') + ' + VAT';
+  }
+  function fmtUntil(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var hh = d.getHours(), mm = d.getMinutes();
+    return C.fmtDate(d.getFullYear() + '-' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1) + '-' + (d.getDate() < 10 ? '0' : '') + d.getDate()) +
+      ' at ' + (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+  }
+
   function el(tag, cls, text) {
     var n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -372,11 +425,146 @@ window.BKReview = (function () {
     }
     var grand = $('holdGrand');
     if (grand) grand.textContent = totals && totals.grand != null ? C.moneyC(totals.grand, totals.currency) : '';
+    renderHoldChoices(ctx, holdId);
     var review = $('review'); if (review) review.hidden = true;
     host.hidden = false;
     state.open = false;
     if (ctx.track) ctx.track('hold_page_opened', { holdId: holdId });
     try { host.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
+  }
+
+  /* A brand-coloured wordmark per provider — CSS marks, no image files to
+     fetch, the same square on every provider. */
+  function providerMark(p) {
+    var mark = el('span', 'hold-logo hold-logo-' + p.key);
+    mark.setAttribute('aria-hidden', 'true');
+    if (p.key === 'paypal') {
+      mark.appendChild(el('span', 'hold-logo-a', 'Pay'));
+      mark.appendChild(el('span', 'hold-logo-b', 'Pal'));
+    } else if (p.key === 'turnstay') {
+      mark.appendChild(el('span', 'hold-logo-a', 'Turn'));
+      mark.appendChild(el('span', 'hold-logo-b', 'Stay'));
+    } else {
+      mark.appendChild(el('span', 'hold-logo-a', p.name.toLowerCase()));
+    }
+    return mark;
+  }
+
+  /* The Hold page's choices (Dave, 2026-09-02): the options the distance
+     to check-in allows, then a square button per enabled payment provider
+     for a paid one. The choice is recorded on the hold in Lodge Ops and the
+     reservations team is told; they arrange the payment. */
+  function renderHoldChoices(ctx, holdId) {
+    var host = $('holdChoice');
+    if (!host) return;
+    host.textContent = '';
+    var holds = holdsConfig(ctx.config);
+    var days = daysUntil(ctx.from);
+    var options = holds.options.filter(function (o) { return o.minDays === 0 || (days != null && days > o.minDays); });
+    var providers = enabledProviders(ctx.config);
+    if (!holds.enabled || !options.length) { host.hidden = true; return; }
+    host.hidden = false;
+    var chosen = null, done = false;
+
+    host.appendChild(el('p', 'kicker hold-kicker', 'How long shall we hold it?'));
+    var list = el('div', 'hold-options');
+    var optionButtons = options.map(function (o) {
+      var b = el('button', 'hold-opt');
+      b.type = 'button';
+      b.setAttribute('data-hours', String(o.hours));
+      b.setAttribute('aria-pressed', 'false');
+      b.appendChild(el('span', 'hold-opt-hours', o.hours + ' hours'));
+      b.appendChild(el('span', 'hold-opt-price', o.price > 0 ? exVat(o.price) : 'Free'));
+      b.addEventListener('click', function () { if (!done) select(o); });
+      list.appendChild(b);
+      return b;
+    });
+    host.appendChild(list);
+
+    var payWrap = el('div', 'hold-paywrap');
+    payWrap.hidden = true;
+    payWrap.appendChild(el('p', 'kicker hold-kicker', 'Pay the hold fee with'));
+    var pay = el('div', 'hold-pay');
+    var payButtons = providers.map(function (p) {
+      var b = el('button', 'hold-payer');
+      b.type = 'button';
+      b.setAttribute('data-provider', p.key);
+      b.setAttribute('aria-label', 'Pay with ' + p.name);
+      b.title = 'Pay with ' + p.name;
+      b.appendChild(providerMark(p));
+      b.appendChild(el('span', 'hold-payer-name', p.name));
+      b.addEventListener('click', function () { if (chosen && !done) commit(chosen, p); });
+      pay.appendChild(b);
+      return b;
+    });
+    payWrap.appendChild(pay);
+    host.appendChild(payWrap);
+
+    var confirmWrap = el('div', 'hold-confirm');
+    confirmWrap.hidden = true;
+    var confirm = el('button', 'cta');
+    confirm.type = 'button';
+    confirm.id = 'holdConfirm';
+    confirm.appendChild(el('span', 'cta-label', 'Confirm'));
+    confirm.addEventListener('click', function () { if (chosen && !done) commit(chosen, null); });
+    confirmWrap.appendChild(confirm);
+    host.appendChild(confirmWrap);
+    var note = el('p', 'hold-choice-note');
+    note.id = 'holdChoiceNote';
+    note.hidden = true;
+    host.appendChild(note);
+
+    function select(o) {
+      chosen = o;
+      optionButtons.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-hours') === String(o.hours) ? 'true' : 'false'); });
+      note.hidden = true;
+      if (o.price > 0 && providers.length) {
+        payWrap.hidden = false; confirmWrap.hidden = true;
+      } else {
+        payWrap.hidden = true; confirmWrap.hidden = false;
+        confirm.querySelector('.cta-label').textContent = o.price > 0
+          ? 'Request a ' + o.hours + '-hour hold \u00b7 ' + exVat(o.price)
+          : 'Hold it for ' + o.hours + ' hours \u00b7 free';
+      }
+      if (ctx.track) ctx.track('hold_option_selected', { hours: o.hours, price: o.price });
+    }
+    function busy(on) {
+      optionButtons.concat(payButtons).forEach(function (b) { b.disabled = on; });
+      confirm.disabled = on;
+    }
+    function commit(o, p) {
+      busy(true);
+      note.hidden = true;
+      postJson(HOLD_API + '/choose', { id: holdId, hours: o.hours, provider: p ? p.key : null })
+        .then(function (j) {
+          if (!j || j.ok !== true) {
+            busy(false);
+            note.className = 'hold-choice-note hold-choice-err';
+            note.textContent = (j && j.message) || 'Your choice could not be saved just now \u2014 please try again.';
+            note.hidden = false;
+            if (ctx.track) ctx.track('hold_choice_failed', { hours: o.hours });
+            return;
+          }
+          done = true;
+          host.classList.add('hold-chosen');
+          payWrap.hidden = true; confirmWrap.hidden = true;
+          note.className = 'hold-choice-note hold-choice-ok';
+          var until = fmtUntil(j.holdUntil);
+          note.textContent = o.price > 0
+            ? 'Your ' + o.hours + '-hour hold is noted' + (until ? ' until ' + until : '') + '. ' +
+              (p ? 'The reservations team has been told and will send you a secure ' + p.name + ' link for ' + exVat(o.price) + '.'
+                 : 'The reservations team has been told and will arrange the ' + exVat(o.price) + ' fee with you.')
+            : 'Your booking is held for ' + o.hours + ' hours' + (until ? ', until ' + until : '') + '. The reservations team has been told.';
+          note.hidden = false;
+          if (ctx.track) ctx.track('hold_chosen', { hours: o.hours, price: o.price, provider: p ? p.key : null });
+        })
+        .catch(function () {
+          busy(false);
+          note.className = 'hold-choice-note hold-choice-err';
+          note.textContent = 'We could not reach the lodge \u2014 check your connection and try again.';
+          note.hidden = false;
+        });
+    }
   }
 
   /* Open the summary. ctx: { picks, from, to, nights, party, lodge, config,
@@ -407,7 +595,9 @@ window.BKReview = (function () {
     var box = $('agreeBox'), pay = $('payBtn'), hold = $('holdBtn'), note = $('payNote');
     box.checked = false;
     pay.disabled = true;
-    if (hold) hold.disabled = true;
+    /* Hold my booking exists only when holds are on in Lodge Ops AND
+       check-in is more than the configured distance away (two weeks). */
+    if (hold) { hold.disabled = true; hold.hidden = !holdOffered(ctx.config, ctx.from); }
     if (note) { note.hidden = true; if (t.continueNote) note.textContent = t.continueNote; }
     box.onchange = function () {
       pay.disabled = !box.checked;
@@ -419,7 +609,7 @@ window.BKReview = (function () {
       if (ctx.onPay) ctx.onPay(totals);
     };
     if (hold) hold.onclick = function () {
-      if (!box.checked) return;
+      if (!box.checked || hold.hidden) return;
       openHoldModal(ctx, totals);
     };
     var back = $('backBtn');
@@ -446,5 +636,6 @@ window.BKReview = (function () {
 
   function isOpen() { return state.open; }
 
-  return { open: open, close: close, isOpen: isOpen, DEFAULT_AGREE: DEFAULT_AGREE };
+  return { open: open, close: close, isOpen: isOpen, DEFAULT_AGREE: DEFAULT_AGREE,
+    holdsConfig: holdsConfig, holdOffered: holdOffered, daysUntil: daysUntil };
 })();

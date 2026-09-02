@@ -687,4 +687,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.55',
+    version: '0.1.55',
+    date: '2026-09-02T12:40:00+02:00',
+    changes: [
+      {
+        headline:
+          'Holds, governed from Lodge Ops: \u201cHold my booking\u201d only exists when holds are on and check-in is more than two weeks away; the Hold page then asks how long \u2014 24 hours free, 36 hours for R150 + VAT (only when check-in is more than six weeks away), 72 hours for R989 + VAT (only past three months) \u2014 and, for a paid hold, shows a square button per payment provider enabled in Lodge Ops (Stripe, Yoco, PayPal, TurnStay). The choice is recorded on the hold and the reservations team is told.',
+        detail:
+          'Dave, 2026-09-02. CONFIG (/config.json, from Settings \u2192 Booking Engine): `holds` {enabled, buttonMinDays, options[{hours, price, minDays}]} and `payments` {stripe, yoco, paypal, turnstay}; missing keys read as the Lodge Ops defaults (on, 14 days, 24h free / 36h R150 past 42 days / 72h R989 past 91 days, no providers). review.js: holdOffered() hides #holdBtn on the stay summary unless holds are on and daysUntil(check-in) > buttonMinDays \u2014 whole days in UTC, so exactly 14 days is not enough and 15 is; renderHoldChoices() on the Hold page lists the options the distance allows as pressable cards (hours large, \u201cFree\u201d or \u201cR150 + VAT\u201d beneath), a paid option reveals the provider squares (118px, brand-coloured CSS wordmarks \u2014 no image files to fetch), the free one (or a paid one when no provider is enabled) a single confirm button; pressing a square or Confirm posts {id, hours, provider} to /api/web/booking-hold/choose and the page answers with the hold-until time and what happens next (\u201cThe reservations team has been told and will send you a secure PayPal link for R150 + VAT\u201d / \u201cYour booking is held for 24 hours, until \u2026\u201d); a refusal from Lodge Ops shows as its message with the options still live. Both builds share the renderer; the markup is one #holdChoice host in each index.html; review.css carries the cards, squares and the phone layout (two columns). VERIFIED in real Chromium against a config stub, 29 assertions across desktop (check-in 135 days out: three options, three squares for the enabled providers, 36 hours \u2192 PayPal \u2192 the noted-until line), mobile (90 days out: two options, the free 24-hour confirm) and a check-in 8 days out (no Hold button at all, Continue to payment alone; the flag and the 14/15-day edge checked directly); no overflow, no script errors. PAIRS WITH Lodge Ops 1.2.354 (migration 375 and the choose endpoint) \u2014 without it a choice answers that it could not be saved. DEPLOY: rsync index.html, m/index.html, review.js, review.css.',
+      },
+    ],
+  },
 ];

@@ -1,6 +1,6 @@
 {
   "name": "lodgeit-booking-website-server",
-  "version": "0.1.62",
+  "version": "0.1.63",
   "description": "Serves the LodgeIT booking site and forwards guest calls to the booking engine over HMAC service auth",
   "author": "7 Star Lodges",
   "private": true,

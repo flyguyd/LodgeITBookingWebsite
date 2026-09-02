@@ -773,6 +773,12 @@ window.BKReview = (function () {
     }
 
     var clock = el('div', 'held-clock');
+    /* When the hold was taken, in the guest's own time (Dave, 2026-09-02). */
+    if (hold.chosenAt) {
+      var taken = el('div', 'held-taken', 'Hold taken on ' + localUntil(hold.chosenAt) + ' (your local time)');
+      taken.id = 'heldTaken';
+      clock.appendChild(taken);
+    }
     clock.appendChild(el('span', 'rv-kicker', active ? 'Time left on this hold' : 'This hold'));
     var timer = el('div', 'held-timer'); timer.id = 'heldTimer';
     clock.appendChild(timer);

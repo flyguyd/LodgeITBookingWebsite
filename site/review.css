@@ -220,3 +220,4 @@ body.hold-open { overflow: hidden; }
 
 /* Refund terms under each suite on the hold cards. */
 .hold-refund { font-size: 12.5px; color: var(--paper-dim); margin: -2px 0 6px; padding-left: 14px; border-left: 2px solid rgba(216, 180, 106, 0.45); line-height: 1.5; }
+.held-taken { color: var(--paper-dim); font-size: 13px; margin-bottom: 8px; }

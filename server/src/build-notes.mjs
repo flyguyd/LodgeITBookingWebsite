@@ -791,4 +791,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.63',
+    version: '0.1.63',
+    date: '2026-09-02T19:30:00+02:00',
+    changes: [
+      {
+        headline:
+          'The hold section says when the hold was taken, in the guest\u2019s own time.',
+        detail:
+          'Dave, 2026-09-02: make sure the date and time the hold was created is recorded with the hold information. Lodge Ops 1.2.360 now sends chosenAt (Hold it pressed) and createdAt (the code went out) with every hold; showHeld renders \u201cHold taken on Thu, Sep 3, 2026, 08:20 PM SAST (your local time)\u201d above the clock, on a fresh hold and on a retrieved one alike. VERIFIED in real Chromium against the config stub, 70 assertions, both builds. PAIRS WITH Lodge Ops 1.2.360. DEPLOY: rsync review.js, review.css.',
+      },
+    ],
+  },
 ];

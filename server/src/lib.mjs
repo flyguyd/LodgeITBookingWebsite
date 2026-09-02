@@ -99,7 +99,7 @@ export const FORWARD_ROUTES = {
   // time; the body is passed as bytes).
   'GET /api/public/payments/gateways': { method: 'GET', path: '/api/booking/payments/gateways' },
   'GET /api/public/payments/fee': { method: 'GET', path: '/api/booking/payments/fee' },
-  'POST /api/public/payments/charge': { method: 'POST', path: '/api/booking/payments/charge' },
+  'POST /api/public/payments/intent': { method: 'POST', path: '/api/booking/payments/intent' },
   'POST /api/public/payments/checkout': { method: 'POST', path: '/api/booking/payments/checkout' },
   'POST /api/public/payments/status': { method: 'POST', path: '/api/booking/payments/status' },
 };

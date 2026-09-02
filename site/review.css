@@ -167,6 +167,13 @@ body.hold-open { overflow: hidden; }
 .hold-cardform input:focus { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(216, 180, 106, 0.25); }
 .hold-cardform input.bad { border-color: #e8a58a; }
 .hold-cardrow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* Stripe's own card fields (Stripe Elements) mounted inside our frame:
+   the number never touches our page's code or our servers. */
+.hold-stripe-el { display: block; margin-top: 6px; padding: 13px 14px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 10px; min-height: 20px; }
+.hold-stripe-el.focus { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(216, 180, 106, 0.25); }
+.hold-stripe-el.bad { border-color: #e8a58a; }
+.hold-stripe-el.loading { color: var(--paper-dim); font-size: 13px; letter-spacing: 0.04em; text-transform: none; }
+.hold-secure-stripe { font-weight: 700; letter-spacing: 0.02em; }
 .hold-cardnum { font-family: "SFMono-Regular", Menlo, Consolas, monospace; }
 .hold-secure { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 6px 0 14px; font-size: 11.5px; letter-spacing: 0.06em; color: var(--paper-dim); }
 .hold-secure svg { width: 16px; height: 16px; fill: none; stroke: var(--gold); stroke-width: 1.8; flex: none; }

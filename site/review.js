@@ -606,11 +606,31 @@ window.BKReview = (function () {
      greyed) and opens the way to pay below it: a card form on our page for
      a gateway that takes the card here, or a "Click here to make payment"
      button for one that takes it on its own page. Pressing the same square
-     again puts everything back. The card details go to the RATE ENGINE
-     (through the site server, signed) — never to Lodge Ops, never kept:
-     the fields are wiped the moment the request is built. */
+     again puts everything back. Stripe's card fields are STRIPE'S OWN
+     (Stripe Elements, an iframe from js.stripe.com): the number goes from
+     the guest's browser to Stripe and nowhere else — the rate engine only
+     creates the PaymentIntent and checks with Stripe afterwards; Lodge
+     Ops sees neither. Stripe refused a raw card number on 2026-09-02, and
+     the raw-card form that sent one is gone. */
   var PAY_API = window.BK_PAY_API || '/api/public/payments';
-  var STATIC_MODES = { stripe: 'card', yoco: 'redirect', paypal: 'redirect', turnstay: 'redirect' };
+  var STATIC_MODES = { stripe: 'element', yoco: 'redirect', paypal: 'redirect', turnstay: 'redirect' };
+  var STRIPE_JS = 'https://js.stripe.com/v3/';
+  var stripeLoad = null;
+  /* Stripe.js, loaded once when first needed (never on a page that does not
+     take a card). A test rig may set window.Stripe itself. */
+  function loadStripe(publishableKey) {
+    if (window.Stripe) return Promise.resolve(window.Stripe(publishableKey));
+    if (!stripeLoad) {
+      stripeLoad = new Promise(function (resolve, reject) {
+        var sc = document.createElement('script');
+        sc.src = STRIPE_JS; sc.async = true;
+        sc.onload = function () { window.Stripe ? resolve() : reject(new Error('Stripe.js did not load')); };
+        sc.onerror = function () { stripeLoad = null; reject(new Error('Stripe.js did not load')); };
+        document.head.appendChild(sc);
+      });
+    }
+    return stripeLoad.then(function () { return window.Stripe(publishableKey); });
+  }
   var PAY_KEY = 'bk-hold-pay';
   function rememberPayment(holdId, reference, paymentId) {
     try { localStorage.setItem(PAY_KEY, JSON.stringify({ holdId: holdId, reference: reference, paymentId: paymentId, at: Date.now() })); } catch (e) { /* private mode */ }
@@ -618,12 +638,6 @@ window.BKReview = (function () {
   function forgetPayment() { try { localStorage.removeItem(PAY_KEY); } catch (e) { /* fine */ } }
   function readPayment() { try { var v = JSON.parse(localStorage.getItem(PAY_KEY) || 'null'); return v && v.paymentId ? v : null; } catch (e) { return null; } }
   function getJson(url) { return fetch(url, { headers: { Accept: 'application/json' } }).then(function (r) { return r.json(); }); }
-  function luhn(n) {
-    if (!/^\d{12,19}$/.test(n)) return false;
-    var sum = 0, alt = false;
-    for (var i = n.length - 1; i >= 0; i--) { var d = +n[i]; if (alt) { d *= 2; if (d > 9) d -= 9; } sum += d; alt = !alt; }
-    return sum % 10 === 0;
-  }
   function secureRow() {
     var row = el('div', 'hold-secure');
     var lock = el('span', 'hold-secure-item');
@@ -660,7 +674,8 @@ window.BKReview = (function () {
     var providers = enabledProviders(ctx.config);
     if (!holds.enabled || !options.length) { host.hidden = true; return; }
     host.hidden = false;
-    var chosen = null, done = false, payer = null, modes = null, fees = {};
+    var chosen = null, done = false, payer = null, modes = null, fees = {}, gwInfo = {};
+    var stripeCard = null, stripeApi = null;
 
     host.appendChild(el('p', 'kicker hold-kicker', 'How long shall we hold it?'));
     var list = el('div', 'hold-options');
@@ -724,7 +739,7 @@ window.BKReview = (function () {
         var list = (j && Array.isArray(j.gateways)) ? j.gateways : null;
         modes = {};
         if (list) {
-          list.forEach(function (g) { if (g && g.key) modes[g.key] = g.mode === 'card' ? 'card' : 'redirect'; });
+          list.forEach(function (g) { if (g && g.key) { modes[g.key] = g.mode === 'element' ? 'element' : 'redirect'; gwInfo[g.key] = g; } });
           payButtons.forEach(function (b) { b.hidden = !modes[b.getAttribute('data-provider')]; });
         } else {
           modes = STATIC_MODES;
@@ -761,8 +776,12 @@ window.BKReview = (function () {
       }
       if (ctx.track) ctx.track('hold_option_selected', { hours: o.hours, price: o.price });
     }
+    function dropStripe() {
+      if (stripeCard) { try { stripeCard.unmount(); } catch (e) { /* fine */ } stripeCard = null; }
+    }
     function clearPayer() {
       payer = null;
+      dropStripe();
       payButtons.forEach(function (b) { b.classList.remove('on'); b.classList.remove('dim'); b.setAttribute('aria-pressed', 'false'); });
       panel.textContent = ''; panel.hidden = true;
     }
@@ -781,60 +800,61 @@ window.BKReview = (function () {
       panel.textContent = '';
       panel.hidden = false;
       var mode = (modes || STATIC_MODES)[p.key] || 'redirect';
-      panel.className = 'hold-paypanel ' + (mode === 'card' ? 'hold-cardform' : 'hold-redirect');
+      dropStripe();
+      panel.className = 'hold-paypanel ' + (mode === 'element' ? 'hold-cardform' : 'hold-redirect');
       panel.setAttribute('data-mode', mode);
       var err = el('p', 'hold-choice-note hold-choice-err'); err.id = 'holdPayNote'; err.hidden = true;
-      if (mode === 'card') {
+      if (mode === 'element') {
         panel.appendChild(el('p', 'kicker hold-kicker', 'Card details · ' + p.name));
         var form = document.createElement('form');
         form.setAttribute('autocomplete', 'on');
-        form.addEventListener('submit', function (ev) { ev.preventDefault(); payCard(); });
-        function field(label, name, extra) {
-          var l = el('label', null, label);
-          var i = document.createElement('input');
-          i.name = name; i.id = 'cc-' + name; i.type = 'text'; i.required = true;
-          Object.keys(extra || {}).forEach(function (k) { i.setAttribute(k, extra[k]); });
-          l.appendChild(i); return { l: l, i: i };
-        }
-        var name = field('Name on card', 'ccName', { autocomplete: 'cc-name', maxlength: '80', placeholder: 'As printed on the card' });
-        var num = field('Card number', 'ccNumber', { autocomplete: 'cc-number', inputmode: 'numeric', maxlength: '23', placeholder: '1234 5678 9012 3456', 'class': 'hold-cardnum' });
-        num.i.addEventListener('input', function () {
-          var digits = num.i.value.replace(/\D/g, '').slice(0, 19);
-          num.i.value = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
-          num.i.classList.remove('bad');
-        });
-        var exp = field('Expiry (MM/YY)', 'ccExp', { autocomplete: 'cc-exp', inputmode: 'numeric', maxlength: '5', placeholder: 'MM/YY' });
-        exp.i.addEventListener('input', function () {
-          var d = exp.i.value.replace(/\D/g, '').slice(0, 4);
-          exp.i.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
-          exp.i.classList.remove('bad');
-        });
-        var cvc = field('CVC', 'ccCvc', { autocomplete: 'cc-csc', inputmode: 'numeric', maxlength: '4', placeholder: '123' });
-        cvc.i.addEventListener('input', function () { cvc.i.value = cvc.i.value.replace(/\D/g, '').slice(0, 4); cvc.i.classList.remove('bad'); });
-        form.appendChild(name.l); form.appendChild(num.l);
-        var row = el('div', 'hold-cardrow'); row.appendChild(exp.l); row.appendChild(cvc.l); form.appendChild(row);
-        form.appendChild(secureRow());
-        var go = el('button', 'cta hold-paynow'); go.type = 'submit'; go.id = 'holdPayNow';
+        form.noValidate = true; /* our own messages, not the browser's bubbles */
+        form.addEventListener('submit', function (ev) { ev.preventDefault(); payElement(); });
+        var nameL = el('label', null, 'Name on card');
+        var nameI = document.createElement('input');
+        nameI.name = 'ccName'; nameI.id = 'cc-ccName'; nameI.type = 'text'; nameI.required = true;
+        nameI.setAttribute('autocomplete', 'cc-name'); nameI.setAttribute('maxlength', '80'); nameI.setAttribute('placeholder', 'As printed on the card');
+        nameL.appendChild(nameI); form.appendChild(nameL);
+        var cardL = el('label', null, 'Card number, expiry and CVC');
+        var mount = el('div', 'hold-stripe-el loading', 'Loading the secure card fields\u2026');
+        mount.id = 'holdCardElement';
+        cardL.appendChild(mount); form.appendChild(cardL);
+        var sec = secureRow();
+        var by = el('span', 'hold-secure-item hold-secure-stripe', 'Card fields by Stripe \u2014 never seen by this site');
+        sec.insertBefore(by, sec.firstChild);
+        form.appendChild(sec);
+        var go = el('button', 'cta hold-paynow'); go.type = 'submit'; go.id = 'holdPayNow'; go.disabled = true;
         go.appendChild(el('span', 'cta-label', 'Pay ' + feeLabel(chosen) + ' and hold it'));
         form.appendChild(go);
         form.appendChild(err);
         panel.appendChild(form);
-        function payCard() {
+        var pk = (gwInfo[p.key] && gwInfo[p.key].publishableKey) || (ctx.config && ctx.config.stripePublishableKey) || '';
+        loadStripe(pk).then(function (stripe) {
+          if (!payer || payer.key !== p.key || !mount.isConnected) return;
+          stripeApi = stripe;
+          var elements = stripe.elements();
+          stripeCard = elements.create('card', {
+            hidePostalCode: true,
+            style: { base: { color: '#f3ede1', fontFamily: 'inherit', fontSize: '16px', '::placeholder': { color: 'rgba(243, 237, 225, 0.4)' }, iconColor: '#d8b46a' }, invalid: { color: '#e8a58a', iconColor: '#e8a58a' } }
+          });
+          mount.textContent = ''; mount.classList.remove('loading');
+          stripeCard.mount(mount);
+          stripeCard.on('focus', function () { mount.classList.add('focus'); });
+          stripeCard.on('blur', function () { mount.classList.remove('focus'); });
+          stripeCard.on('change', function (e) {
+            mount.classList.toggle('bad', !!(e && e.error));
+            if (e && e.error) { err.textContent = e.error.message; err.hidden = false; } else { err.hidden = true; }
+            go.disabled = !(e && e.complete);
+          });
+        }).catch(function () {
+          mount.textContent = 'The secure card fields could not be loaded \u2014 check your connection, or choose another payment method.';
+          mount.classList.add('bad');
+        });
+        function payElement() {
           err.hidden = true;
-          var n = num.i.value.replace(/\D/g, '');
-          var e = exp.i.value.replace(/\D/g, '');
-          var mm = +e.slice(0, 2), yy = +e.slice(2, 4);
-          var now = new Date(), yNow = now.getFullYear() % 100, mNow = now.getMonth() + 1;
-          var bad = null;
-          if (!name.i.value.trim()) { bad = name.i; err.textContent = 'Please enter the name on the card.'; }
-          else if (!luhn(n)) { bad = num.i; err.textContent = 'Please check the card number.'; }
-          else if (e.length !== 4 || mm < 1 || mm > 12 || yy < yNow || (yy === yNow && mm < mNow)) { bad = exp.i; err.textContent = e.length === 4 && mm >= 1 && mm <= 12 ? 'That card has expired.' : 'Please check the expiry date (MM/YY).'; }
-          else if (!/^\d{3,4}$/.test(cvc.i.value)) { bad = cvc.i; err.textContent = 'Please check the security code (CVC).'; }
-          if (bad) { bad.classList.add('bad'); err.hidden = false; try { bad.focus(); } catch (x) { /* fine */ } return; }
-          /* Build the payload, then WIPE the fields before anything is
-             sent — the numbers live only inside this request. */
-          var card = { number: n, expMonth: mm, expYear: 2000 + yy, cvc: cvc.i.value, name: name.i.value.trim().slice(0, 80) };
-          commit(chosen, p, card);
+          if (!nameI.value.trim()) { nameI.classList.add('bad'); err.textContent = 'Please enter the name on the card.'; err.hidden = false; try { nameI.focus(); } catch (x) { /* fine */ } return; }
+          if (!stripeCard || !stripeApi) { err.textContent = 'The secure card fields are still loading \u2014 one moment.'; err.hidden = false; return; }
+          commit(chosen, p, { name: nameI.value.trim().slice(0, 80) });
         }
       } else {
         panel.appendChild(el('p', 'kicker hold-kicker', 'Pay with ' + p.name));
@@ -860,18 +880,38 @@ window.BKReview = (function () {
       target.textContent = msg;
       target.hidden = false;
     }
-    /* Card payment: the hold first (its reference is what the payment is
-       for), then the charge on the engine, then Lodge Ops told — which
-       checks with the engine before it believes it. */
-    function chargeCard(hold, p, card) {
-      var f = fees[hold.hours] || {};
-      return postJson(PAY_API + '/charge', { gateway: p.key, reference: hold.reference, hours: hold.hours, email: hold.email, card: card })
+    /* Stripe on the page: the hold first (its reference is what the payment
+       is for), then a PaymentIntent from the engine, then Stripe.js confirms
+       it IN THE BROWSER with the card in Stripe's fields, then the engine
+       is asked what Stripe says, then Lodge Ops is told — which checks with
+       the engine before it believes it. */
+    function payWithStripe(hold, p, billing) {
+      return postJson(PAY_API + '/intent', { gateway: p.key, reference: hold.reference, hours: hold.hours, email: hold.email })
         .then(function (j) {
-          card = null;
-          if (!j || j.ok !== true) throw new Error((j && j.message) || 'The payment was not accepted — please check the card details or try another card.');
-          if (ctx.track) ctx.track('hold_fee_paid', { reference: hold.reference, provider: p.key, amount: j.amount });
-          return postJson(HOLD_API + '/paid', { id: hold.holdId, reference: hold.reference, paymentId: j.paymentId })
-            .then(function (k) { return (k && k.ok === true) ? k : hold; });
+          if (!j || j.ok !== true) throw new Error((j && j.message) || 'The payment could not be started \u2014 please try again or choose another payment method.');
+          if (j.status === 'paid') return j.paymentId;
+          if (!j.clientSecret) throw new Error('The payment could not be started \u2014 please try again.');
+          return stripeApi.confirmCardPayment(j.clientSecret, { payment_method: { card: stripeCard, billing_details: { name: billing.name, email: hold.email || undefined } } })
+            .then(function (res) {
+              if (res && res.error) throw new Error(res.error.message || 'The payment was not accepted \u2014 please check the card or try another.');
+              return j.paymentId;
+            });
+        })
+        .then(function (paymentId) {
+          /* Stripe's word on it, through the engine — never the browser's. */
+          var tries = 0;
+          function verify() {
+            return postJson(PAY_API + '/status', { paymentId: paymentId }).then(function (st) {
+              if (st && st.status === 'paid') return st;
+              if (++tries < 6) return new Promise(function (r) { setTimeout(r, 1500); }).then(verify);
+              throw new Error((st && st.error) || 'The payment has not been confirmed yet \u2014 please retrieve your hold in a moment to see its state.');
+            });
+          }
+          return verify().then(function (st) {
+            if (ctx.track) ctx.track('hold_fee_paid', { reference: hold.reference, provider: p.key, amount: st.amount });
+            return postJson(HOLD_API + '/paid', { id: hold.holdId, reference: hold.reference, paymentId: paymentId })
+              .then(function (k) { return (k && k.ok === true) ? k : hold; });
+          });
         });
     }
     /* Hosted page: the hold, then the checkout on the engine, then the
@@ -891,13 +931,10 @@ window.BKReview = (function () {
           return { hold: hold, paymentId: j.paymentId, url: j.url, gateway: p };
         });
     }
-    function commit(o, p, card) {
+    function commit(o, p, billing) {
       busy(true);
       note.hidden = true;
       var payNote = panel.querySelector('#holdPayNote'); if (payNote) payNote.hidden = true;
-      /* Wipe the card fields now: the payload is built, the form need not
-         remember anything. */
-      if (card) panel.querySelectorAll('input').forEach(function (i) { i.value = ''; });
       postJson(HOLD_API + '/choose', { id: holdId, hours: o.hours, provider: p ? p.key : null,
         snapshot: ctx.snapshot ? ctx.snapshot() : null })
         .then(function (j) {
@@ -908,7 +945,7 @@ window.BKReview = (function () {
           if (ctx.track) ctx.track('hold_chosen', { hours: o.hours, price: o.price, provider: p ? p.key : null, reference: j.reference });
           if (!p || j.feePaid) return { hold: j };
           var mode = (modes || STATIC_MODES)[p.key] || 'redirect';
-          return mode === 'card' ? chargeCard(j, p, card).then(function (h) { return { hold: h }; }) : openCheckout(j, p);
+          return mode === 'element' ? payWithStripe(j, p, billing || { name: '' }).then(function (h) { return { hold: h }; }) : openCheckout(j, p);
         })
         .then(function (r) {
           done = true;
@@ -918,7 +955,6 @@ window.BKReview = (function () {
           showHeld(r.hold, ctx, r.paymentId ? { paymentId: r.paymentId, url: r.url, gateway: r.gateway } : null);
         })
         .catch(function (e) {
-          card = null;
           fail(e && e.message && !/fetch|network/i.test(e.message) ? e.message : 'We could not reach the lodge — check your connection and try again.');
         });
     }

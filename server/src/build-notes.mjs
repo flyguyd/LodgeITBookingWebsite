@@ -830,4 +830,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.66',
+    version: '0.1.66',
+    date: '2026-09-02T16:11:32+02:00',
+    changes: [
+      {
+        headline:
+          'Stripe on the hold card now uses Stripe\u2019s own card fields (Stripe Elements). The number, expiry and CVC live in an iframe from js.stripe.com and go from the guest\u2019s browser straight to Stripe; this site keeps only the name on the card. The rate engine creates the payment, Stripe.js confirms it on the page, and the engine checks with Stripe before the hold is marked paid.',
+        detail:
+          'Stripe, 2026-09-02: \u201cwe don\u2019t process charges that include full card numbers \u2014 use one of our official client integrations\u201d. Dave: do it. review.js: the raw-card form (number/expiry/CVC inputs, Luhn, the charge call) is GONE. A Stripe square now renders a panel with our Name-on-card field, a #holdCardElement mount and the secure row led by \u201cCard fields by Stripe \u2014 never seen by this site\u201d; loadStripe() injects https://js.stripe.com/v3/ once, on first need only (a rig may set window.Stripe), and creates a Card Element (hidePostalCode, our ivory/gold styling) with the publishable key the engine sends on GET /api/public/payments/gateways (mode element); the Pay button enables when Stripe says the card is complete and Stripe\u2019s own validation messages show under the panel. Pay: the hold first (/choose), then POST /api/public/payments/intent {gateway, reference, hours, email} for the client secret, then stripe.confirmCardPayment(secret, {card: the element, billing_details: name/email}) IN THE BROWSER (3-D Secure handled by Stripe.js), then POST /api/public/payments/status until the engine \u2014 asking Stripe \u2014 says paid, then Lodge Ops /booking-hold/paid. A decline is shown under the panel in Stripe\u2019s words with the hold kept; paying again reuses the same intent. Pressing the square again unmounts the element. The form is novalidate so our own messages show. review.css: .hold-stripe-el (the mount, focus/bad states), .hold-secure-stripe. server/src/lib.mjs: POST /api/public/payments/intent forwarded; the charge route removed. No CSP on this server, so js.stripe.com loads \u2014 if an nginx edge adds one, allow script-src js.stripe.com and frame-src js.stripe.com hooks.stripe.com. VERIFIED in real Chromium against the REAL Lodge Ops 1.3.4 API, engine 0.1.66 and the mock gateways with a stand-in for Stripe.js (same surface: elements().create(\u2018card\u2019).mount/on/unmount, confirmCardPayment), 17 assertions: the squares and their toggle, the panel holding ONLY the name field with Stripe\u2019s element mounted using the engine\u2019s publishable key, the secure row and the R172.50 label; the element unmounted on the second press; PayPal\u2019s button; no name refused on the page; a decline from Stripe.js shown with the hold kept, the intent request carrying no card data and Stripe.js handed the secret, the element and the name; no request from the page ever carrying a card number; paying again confirms the same intent and the held card reads \u201cPaid R172.50 incl. VAT via Stripe \u00b7 visa \u2022\u2022\u2022\u2022 4242\u201d with Lodge Ops\u2019 row matching; Retrieve, the PayPal hosted page, the poll and the return path unchanged. PAIRS WITH engine 0.1.66 and Lodge Ops 1.3.4. DEPLOY: rsync review.js, review.css and server/src/lib.mjs; restart the site service.',
+      },
+    ],
+  },
 ];

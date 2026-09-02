@@ -73,12 +73,15 @@
           <input id="fCode" type="text" maxlength="40" placeholder="—"
             autocapitalize="characters" autocomplete="off" spellcheck="false" />
         </label>
-        <button id="searchBtn" type="submit" class="cta">
-          <span class="cta-label">Check availability</span>
-        </button>
+        <div class="bar-go">
+          <button id="searchBtn" type="submit" class="cta">
+            <span class="cta-label">Check availability</span>
+          </button>
+          <!-- Directly under the button, inside the bar (Dave, 2026-09-02). -->
+          <button id="retrieveLink" type="button" class="retrieve-link">Retrieve booking</button>
+        </div>
       </form>
       <p id="formNote" class="form-note" hidden></p>
-      <p class="retrieve-row"><button id="retrieveLink" type="button" class="retrieve-link">Retrieve booking</button></p>
     </section>
 
     <section id="stateLoading" class="state" hidden>

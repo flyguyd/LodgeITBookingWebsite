@@ -162,6 +162,9 @@ body.hold-open { overflow: hidden; }
 
 /* Retrieve booking: the link under Check availability, its modal. */
 .retrieve-row { margin: 10px 0 0; text-align: right; }
+/* Desktop: the link sits inside the bar, directly under Check availability. */
+.bar-go { display: flex; flex-direction: column; align-items: center; align-self: center; gap: 5px; flex: 0 0 auto; }
+.bar-go .retrieve-link { font-size: 12px; padding: 0; line-height: 1.2; }
 .retrieve-link { background: none; border: none; color: var(--paper-dim); font: inherit; font-size: 13px; letter-spacing: 0.06em; text-decoration: underline; cursor: pointer; padding: 4px 0; }
 .retrieve-link:hover { color: var(--gold); }
 /* The hold section: reference, clock, the way back, the two ways on. */

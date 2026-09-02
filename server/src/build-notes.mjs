@@ -739,4 +739,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.59',
+    version: '0.1.59',
+    date: '2026-09-02T15:40:00+02:00',
+    changes: [
+      {
+        headline:
+          '\u201cRetrieve booking\u201d now sits inside the search bar, directly under the Check availability button, on the full site.',
+        detail:
+          'Dave, 2026-09-02 (screenshot): move Retrieve booking to the space under Check availability. index.html wraps the button and the link in .bar-go, a centred column inside the bar; review.css sizes the link at 12px with no padding. The phone build keeps its own row under the full-width button. VERIFIED in real Chromium at 1440px: the link is 5px under the button, centred on it to the pixel and inside the bar; the 46-assertion hold flow still passes, including the fresh-page Retrieve booking step. DEPLOY: rsync index.html, review.css.',
+      },
+    ],
+  },
 ];

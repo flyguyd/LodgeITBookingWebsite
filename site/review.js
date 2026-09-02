@@ -619,17 +619,28 @@ window.BKReview = (function () {
   /* Stripe.js, loaded once when first needed (never on a page that does not
      take a card). A test rig may set window.Stripe itself. */
   function loadStripe(publishableKey) {
-    if (window.Stripe) return Promise.resolve(window.Stripe(publishableKey));
+    if (!publishableKey) {
+      return Promise.reject(new Error('Stripe\u2019s publishable key has not reached this site \u2014 in Lodge Ops, Settings \u2192 Stripe, fill in the publishable key (pk_live_\u2026 or pk_test_\u2026) and save; the Booking Engine page shows whether the engine offers Stripe.'));
+    }
+    var make = function () {
+      try { return Promise.resolve(window.Stripe(publishableKey)); }
+      catch (e) {
+        /* Stripe.js explains itself well (a live key on an http page, a
+           malformed key) \u2014 pass its words on. */
+        return Promise.reject(new Error('Stripe would not start: ' + ((e && e.message) || e)));
+      }
+    };
+    if (window.Stripe) return make();
     if (!stripeLoad) {
       stripeLoad = new Promise(function (resolve, reject) {
         var sc = document.createElement('script');
         sc.src = STRIPE_JS; sc.async = true;
-        sc.onload = function () { window.Stripe ? resolve() : reject(new Error('Stripe.js did not load')); };
-        sc.onerror = function () { stripeLoad = null; reject(new Error('Stripe.js did not load')); };
+        sc.onload = function () { window.Stripe ? resolve() : reject(new Error('Stripe\u2019s script loaded but did not define Stripe')); };
+        sc.onerror = function () { stripeLoad = null; reject(new Error('Stripe\u2019s script (js.stripe.com) could not be loaded \u2014 a content blocker, a firewall or a Content-Security-Policy on the site may be in the way')); };
         document.head.appendChild(sc);
       });
     }
-    return stripeLoad.then(function () { return window.Stripe(publishableKey); });
+    return stripeLoad.then(make);
   }
   var PAY_KEY = 'bk-hold-pay';
   function rememberPayment(holdId, reference, paymentId) {
@@ -846,8 +857,10 @@ window.BKReview = (function () {
             if (e && e.error) { err.textContent = e.error.message; err.hidden = false; } else { err.hidden = true; }
             go.disabled = !(e && e.complete);
           });
-        }).catch(function () {
-          mount.textContent = 'The secure card fields could not be loaded \u2014 check your connection, or choose another payment method.';
+        }).catch(function (e) {
+          var why = (e && e.message) || 'check your connection';
+          try { console.warn('[booking] Stripe Elements not loaded:', why); } catch (x) { /* fine */ }
+          mount.textContent = 'The secure card fields could not be loaded: ' + why + '. You can choose another payment method.';
           mount.classList.add('bad');
         });
         function payElement() {

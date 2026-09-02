@@ -843,4 +843,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.67',
+    version: '0.1.67',
+    date: '2026-09-02T16:48:51+02:00',
+    changes: [
+      {
+        headline:
+          'When Stripe\u2019s card fields cannot load, the hold card now says exactly why \u2014 the publishable key not set in Lodge Ops, Stripe\u2019s script blocked, or Stripe.js refusing to start in its own words (a live key on a non-HTTPS page) \u2014 and a Stripe square is not shown at all while the engine has no publishable key for it.',
+        detail:
+          'Dave, 2026-09-02: \u201cThe secure card fields could not be loaded \u2014 check your connection, or choose another payment method.\u201d That line was a catch-all. review.js loadStripe(): no publishable key \u2192 \u201cStripe\u2019s publishable key has not reached this site \u2014 in Lodge Ops, Settings \u2192 Stripe, fill in the publishable key and save\u201d; the script failing \u2192 \u201cStripe\u2019s script (js.stripe.com) could not be loaded \u2014 a content blocker, a firewall or a Content-Security-Policy on the site may be in the way\u201d; window.Stripe(pk) throwing \u2192 \u201cStripe would not start: \u2026\u201d with Stripe\u2019s message (\u201cLive Stripe.js integrations must use HTTPS.\u201d is the one to expect on an http test page); the reason is also console.warn\u2019d. The engine (0.1.67) no longer lists Stripe without a publishable key, so the square is simply absent until Lodge Ops has shared both keys. VERIFIED in real Chromium against the real Lodge Ops 1.3.5 API and engine 0.1.67: 3 assertions (no Stripe square without the key; Stripe.js refusing to start named in its words; no console errors) and the 17-assertion Elements run unchanged. DEPLOY: rsync review.js; restart not needed.',
+      },
+    ],
+  },
 ];

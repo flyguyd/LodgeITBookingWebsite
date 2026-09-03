@@ -882,4 +882,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.70',
+    version: '0.1.70',
+    date: '2026-09-03T20:24:17+02:00',
+    changes: [
+      {
+        headline:
+          'When the Stripe square is pressed while the booking engine is not offering Stripe at all, the hold card now says exactly that and where to fix it \u2014 Settings \u2192 Booking Engine in Lodge Ops: Stripe ticked under Payment providers, its \u201cmissing: \u2026\u201d chip, and Share keys with the engine now \u2014 instead of only pointing at the Stripe page\u2019s publishable key.',
+        detail:
+          'Dave, 2026-09-03, pasted from the hold card: \u201cStripe\u2019s publishable key has not reached this site \u2014 in Lodge Ops, Settings \u2192 Stripe, fill in the publishable key\u2026\u201d. Since 0.1.69 a Stripe square stays on the page when the engine lists no gateway at all (the set-up note), and pressing it reached loadStripe() with no key \u2014 the same words as the narrower case where the engine offers Stripe but sent no key. Those are different gaps: the engine lists Stripe only when it holds an sk_/rk_ secret AND a pk_ publishable key AND Lodge Ops shared them with enabled=true (Stripe ticked under Payment providers on the Booking Engine page). review.js loadStripe(publishableKey, offered): offered = the engine\u2019s gateway list named Stripe; not offered and no key \u2192 \u201cthe booking engine is not offering Stripe right now \u2014 it holds no usable Stripe keys, or Lodge Ops has not shared them. In Lodge Ops open Settings \u2192 Booking Engine: check Stripe is ticked under Payment providers, read Stripe\u2019s chip (\u2018missing: \u2026\u2019 names the key it lacks), then press \u2018Share keys with the engine now\u2019; the Stripe page must hold both the secret key and the publishable key.\u201d; offered but no key \u2192 the previous publishable-key line. Lodge Ops\u2019 Booking Engine page already shows per gateway keys configured / missing: <which key> / switched off / engine offers it, the last share time and result, and the Share button \u2014 that page is the place to read the live state. VERIFIED in real Chromium against the real Lodge Ops 1.3.23 API and engine 0.1.68: with no gateway ready on the engine, pressing the Stripe square shows the not-offering message naming the Booking Engine page and the Share button; the 0.1.69 no-flicker run and the no-pk run unchanged; no console errors. DEPLOY: rsync review.js.',
+      },
+    ],
+  },
 ];

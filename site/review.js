@@ -618,11 +618,18 @@ window.BKReview = (function () {
   var stripeLoad = null;
   /* Stripe.js, loaded once when first needed (never on a page that does not
      take a card). A test rig may set window.Stripe itself. */
-  function loadStripe(publishableKey) {
+  function loadStripe(publishableKey, offered) {
     if (publishableKey && !/^pk_/.test(publishableKey)) {
       return Promise.reject(new Error('the key Lodge Ops passed for Stripe is not a publishable key (they start with pk_) \u2014 in Lodge Ops, Settings \u2192 Stripe, put the publishable key in its own field'));
     }
     if (!publishableKey) {
+      /* Two different gaps read the same on the page unless named
+         (Dave, 2026-09-03): the engine is not OFFERING Stripe at all (no
+         usable keys on it, or Lodge Ops has not shared them), or it offers
+         Stripe but sent no publishable key. */
+      if (!offered) {
+        return Promise.reject(new Error('the booking engine is not offering Stripe right now \u2014 it holds no usable Stripe keys, or Lodge Ops has not shared them. In Lodge Ops open Settings \u2192 Booking Engine: check Stripe is ticked under Payment providers, read Stripe\u2019s chip (\u201cmissing: \u2026\u201d names the key it lacks), then press \u201cShare keys with the engine now\u201d; the Stripe page must hold both the secret key and the publishable key.'));
+      }
       return Promise.reject(new Error('Stripe\u2019s publishable key has not reached this site \u2014 in Lodge Ops, Settings \u2192 Stripe, fill in the publishable key (pk_live_\u2026 or pk_test_\u2026) and save; the Booking Engine page shows whether the engine offers Stripe.'));
     }
     var make = function () {
@@ -882,7 +889,7 @@ window.BKReview = (function () {
         form.appendChild(err);
         panel.appendChild(form);
         var pk = (gwInfo[p.key] && gwInfo[p.key].publishableKey) || (ctx.config && ctx.config.stripePublishableKey) || '';
-        loadStripe(pk).then(function (stripe) {
+        loadStripe(pk, !!gwInfo[p.key]).then(function (stripe) {
           if (!payer || payer.key !== p.key || !mount.isConnected) return;
           stripeApi = stripe;
           var elements = stripe.elements();

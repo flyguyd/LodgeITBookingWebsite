@@ -869,4 +869,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.69',
+    version: '0.1.69',
+    date: '2026-09-03T20:16:08+02:00',
+    changes: [
+      {
+        headline:
+          'On the hold page, the payment squares no longer flash on and vanish. When a paid hold length is chosen the page now asks the engine which gateways it will take BEFORE showing any square (\u201cChecking payment options\u2026\u201d holds the space), and if the engine lists none of the gateways switched on in Lodge Ops \u2014 or cannot be reached \u2014 the enabled squares stay, with a note that the payment side is still being set up, instead of an empty section.',
+        detail:
+          'Dave, 2026-09-03: \u201cwhen selecting how long the hold is wanted, we should show the enabled payment gateways, but they flicker on and then off and don\u2019t come back.\u201d Cause: renderHoldChoices() showed the squares from Lodge Ops\u2019 payments flags the moment a paid option was chosen, then GET /api/public/payments/gateways answered and every square the engine did not list was hidden \u2014 the engine (0.1.67+) lists only gateways whose credentials are ready on it (Stripe needs both a secret and a publishable key of the right kind; PayPal a client id and secret; Yoco a secret; TurnStay an API key and base URL), so with nothing ready yet the answer was an empty list and every square went. review.js: the .hold-pay row starts hidden and a #holdPayChecking line shows while loadModes() runs; the row is revealed once the engine has answered (or failed); an unlisted square is hidden ONLY when the engine lists at least one of the enabled gateways; an empty list, a list with none of them, or no answer keeps every enabled square on the usual modes and shows #holdPayMissing (\u201cOur payment provider is still being set up for these options\u2026\u201d / \u201c\u2026could not be reached just now\u2026\u201d, both ending \u201cYou can try one, or contact us to secure the hold\u201d) with a hold_gateways_unavailable tracking event; the answer is asked once per page and shared between clicks. review.css: .hold-pay[hidden] { display: none } \u2014 the row is display:flex, which beats the hidden attribute on its own. Nothing else about paying changed. VERIFIED in real Chromium against the real Lodge Ops 1.3.23 API and engine 0.1.68 with a MutationObserver recording every hidden-attribute change from the click on: with no gateway ready on the engine, all three enabled squares stay with the set-up note, the checking line shown while asking and gone after, and no square was ever shown and then hidden; with PayPal alone ready, only its square shows and nothing flickers; with the gateways call failing, all three squares with the could-not-be-reached note, and switching to another hold length keeps them without asking again; no console errors. Also worth checking on the live site: if the squares were vanishing there, the engine is answering with no ready gateway \u2014 in Lodge Ops, Settings \u203a Booking Engine, share the payment gateways (and check the Stripe page holds both keys). DEPLOY: rsync review.js and review.css; no restart.',
+      },
+    ],
+  },
 ];

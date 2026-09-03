@@ -709,7 +709,19 @@ window.BKReview = (function () {
     var payWrap = el('div', 'hold-paywrap');
     payWrap.hidden = true;
     payWrap.appendChild(el('p', 'kicker hold-kicker', 'Pay the hold fee with'));
+    /* Shown while the engine is being asked which gateways it will take, so
+       the squares never appear and then vanish (Dave, 2026-09-03: "they
+       flicker on and then off and don't come back"). */
+    var payWait = el('p', 'hold-choice-note hold-paywait-note', 'Checking payment options\u2026');
+    payWait.id = 'holdPayChecking';
+    payWait.hidden = true;
+    payWrap.appendChild(payWait);
+    var payMissing = el('p', 'hold-choice-note hold-choice-err');
+    payMissing.id = 'holdPayMissing';
+    payMissing.hidden = true;
+    payWrap.appendChild(payMissing);
     var pay = el('div', 'hold-pay');
+    pay.hidden = true;
     var payButtons = providers.map(function (p) {
       var b = el('button', 'hold-payer');
       b.type = 'button';
@@ -745,21 +757,45 @@ window.BKReview = (function () {
     host.appendChild(note);
 
     /* Which gateways the engine will actually take, and how each takes the
-       card. Asked once; a square the engine does not list is hidden, and
-       if the engine cannot be asked the usual modes stand. */
+       card. Asked once, BEFORE the squares are shown: a square the engine
+       does not list is hidden; if the engine cannot be asked, or lists none
+       of the gateways Lodge Ops has switched on, every enabled square stays
+       with the usual modes and a note says the payment side is still being
+       set up — an empty section with a paid option chosen is the one thing
+       this must never leave the guest with (Dave, 2026-09-03). */
+    var modesLoad = null;
     function loadModes() {
       if (modes) return Promise.resolve(modes);
-      return getJson(PAY_API + '/gateways').then(function (j) {
+      if (modesLoad) return modesLoad;
+      modesLoad = getJson(PAY_API + '/gateways').then(function (j) {
         var list = (j && Array.isArray(j.gateways)) ? j.gateways : null;
-        modes = {};
+        var found = {};
         if (list) {
-          list.forEach(function (g) { if (g && g.key) { modes[g.key] = g.mode === 'element' ? 'element' : 'redirect'; gwInfo[g.key] = g; } });
+          list.forEach(function (g) { if (g && g.key) { found[g.key] = g.mode === 'element' ? 'element' : 'redirect'; gwInfo[g.key] = g; } });
+        }
+        var anyEnabled = providers.some(function (p) { return !!found[p.key]; });
+        if (list && anyEnabled) {
+          modes = found;
           payButtons.forEach(function (b) { b.hidden = !modes[b.getAttribute('data-provider')]; });
+          payMissing.hidden = true;
         } else {
           modes = STATIC_MODES;
+          payButtons.forEach(function (b) { b.hidden = false; });
+          payMissing.textContent = list
+            ? 'Our payment provider is still being set up for these options. You can try one, or contact us to secure the hold.'
+            : 'Our payment provider could not be reached just now. You can try one, or contact us to secure the hold.';
+          payMissing.hidden = false;
+          if (ctx.track) ctx.track('hold_gateways_unavailable', { listed: list ? list.length : null, enabled: providers.map(function (p) { return p.key; }) });
         }
         return modes;
-      }).catch(function () { modes = STATIC_MODES; return modes; });
+      }).catch(function () {
+        modes = STATIC_MODES;
+        payButtons.forEach(function (b) { b.hidden = false; });
+        payMissing.textContent = 'Our payment provider could not be reached just now. You can try one, or contact us to secure the hold.';
+        payMissing.hidden = false;
+        return modes;
+      }).then(function (m) { payWait.hidden = true; pay.hidden = false; return m; });
+      return modesLoad;
     }
     function loadFee(o) {
       if (fees[o.hours]) return Promise.resolve(fees[o.hours]);
@@ -779,6 +815,9 @@ window.BKReview = (function () {
       note.hidden = true;
       if (o.price > 0 && providers.length) {
         payWrap.hidden = false; confirmWrap.hidden = true;
+        /* The squares wait for the engine's answer; the kicker and the
+           "Checking…" line hold the space so the page does not jump. */
+        if (!modes) { payWait.hidden = false; pay.hidden = true; }
         loadModes(); loadFee(o).then(function () { if (payer) renderPanel(payer); });
         if (payer) renderPanel(payer);
       } else {

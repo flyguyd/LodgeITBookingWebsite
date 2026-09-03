@@ -899,6 +899,8 @@ window.BKReview = (function () {
           });
           mount.textContent = ''; mount.classList.remove('loading');
           stripeCard.mount(mount);
+          revealPanel(panel);
+          stripeCard.on('ready', function () { revealPanel(panel); });
           stripeCard.on('focus', function () { mount.classList.add('focus'); });
           stripeCard.on('blur', function () { mount.classList.remove('focus'); });
           stripeCard.on('change', function (e) {
@@ -911,6 +913,7 @@ window.BKReview = (function () {
           try { console.warn('[booking] Stripe Elements not loaded:', why); } catch (x) { /* fine */ }
           mount.textContent = 'The secure card fields could not be loaded: ' + why + '. You can choose another payment method.';
           mount.classList.add('bad');
+          revealPanel(panel);
         });
         function payElement() {
           err.hidden = true;
@@ -928,6 +931,7 @@ window.BKReview = (function () {
         panel.appendChild(go2);
         panel.appendChild(err);
       }
+      revealPanel(panel);
     }
     function busy(on) {
       optionButtons.concat(payButtons).forEach(function (b) { b.disabled = on; });
@@ -1356,6 +1360,52 @@ window.BKReview = (function () {
     m.onclick = function (ev) { if (ev.target === m) closeTerms(); };
   }
 
+  /* Scroll a section to the top of the window ONCE ITS CONTENT IS THERE.
+     A section built after a fetch starts as a one-line placeholder near
+     the foot of the page: a scroll made then stops where the page ends,
+     and when the card fills in and the page grows nobody scrolls again
+     (Dave, 2026-09-04: "the scroll to booking summary isn't scrolling far
+     enough"). So every section scrolls when it is built, and again on the
+     frame after layout in case fonts or images move it. */
+  function scrollToSection(host) {
+    if (!host) return;
+    function go() { try { host.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ } }
+    go();
+    if (window.requestAnimationFrame) requestAnimationFrame(function () { requestAnimationFrame(go); });
+  }
+  /* The same, only when the section's top is still below the top of the
+     window - for content that lands later (the gateway squares), so a
+     guest who has already scrolled on is not yanked back. */
+  function nudgeToSection(host) {
+    if (!host) return;
+    try { if (host.getBoundingClientRect().top > 8) scrollToSection(host); } catch (e) { /* fine */ }
+  }
+  /* Bring a gateway panel fully onto the screen once it is rendered
+     (Dave, 2026-09-04: "when you click the gateway its off the screen").
+     The panel lands BELOW the squares the guest just clicked, so the
+     bottom of it is what is out of view: scroll so the whole panel shows
+     (its top, when it is taller than the window). Nothing moves when it
+     is already in view. Runs on the frame after layout, and again when
+     Stripe's card fields mount and the panel grows. */
+  function revealPanel(panel) {
+    if (!panel) return;
+    function go() {
+      try {
+        if (panel.hidden || !panel.isConnected) return;
+        var r = panel.getBoundingClientRect();
+        var h = window.innerHeight || document.documentElement.clientHeight || 0;
+        if (r.top >= 0 && r.bottom <= h) return;
+        panel.scrollIntoView({ behavior: 'smooth', block: r.height > h - 40 ? 'start' : 'end' });
+      } catch (e) { /* fine */ }
+    }
+    if (window.requestAnimationFrame) requestAnimationFrame(function () { requestAnimationFrame(go); }); else go();
+    /* And once more after the panel has settled - the secure card fields
+       (or the note that they could not load) arrive a moment later and
+       make it taller. go() is a no-op when the panel is already in view. */
+    setTimeout(go, 450);
+    setTimeout(go, 1100);
+  }
+
   /* Start: the section, the call to Lodge Ops (which takes the nights on
      the engine), the card. fromHold = the hold view when the guest came
      from the held card. */
@@ -1369,7 +1419,7 @@ window.BKReview = (function () {
     card.textContent = '';
     card.appendChild(el('p', 'hold-choice-note', 'Holding your suites and rates on the booking engine…'));
     host.hidden = false;
-    try { host.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
+    scrollToSection(host);
     var stay = fromHold && fromHold.stay ? fromHold.stay : staySnapshot(ctx, totals || ctx.totals);
     if (ctx.track) ctx.track('checkout_hold_requested', { fromHold: fromHold ? fromHold.reference : null, total: stay && stay.total != null ? Number(stay.total).toFixed(2) : null });
     postJson(CHECKOUT_API + '/start', {
@@ -1435,6 +1485,17 @@ window.BKReview = (function () {
       grand.appendChild(el('strong', null, C.moneyC(co.total, co.currency)));
       grand.id = 'bsGrand';
       card.appendChild(grand);
+    }
+    /* The deposit, under the total, when the stay is outside the
+       full-payment window (Dave, 2026-09-04): the figure Lodge Ops worked
+       out from the deposit rule - what the guest will be asked for next. */
+    if (!co.paid && co.amountKind === 'deposit' && co.amountDue != null) {
+      var dep = el('div', 'pay-deposit bs-deposit'); dep.id = 'bsDeposit';
+      var depLine = el('p');
+      depLine.appendChild(document.createTextNode('Deposit amount to secure your booking '));
+      depLine.appendChild(el('strong', null, C.moneyC(co.amountDue, co.currency)));
+      dep.appendChild(depLine);
+      card.appendChild(dep);
     }
 
     /* The rates held: the message and the countdown (Dave: "these rates
@@ -1560,6 +1621,9 @@ window.BKReview = (function () {
       });
     };
     host.hidden = false;
+    /* The card is built now, so the page is tall enough to bring the
+       section to the top - the placeholder scroll could not. */
+    scrollToSection(host);
   }
 
   /* The payment section: the amount due, the deposit lines, the gateways. */
@@ -1609,18 +1673,37 @@ window.BKReview = (function () {
     payWrap.appendChild(squares);
     var panel = el('div', 'hold-paypanel'); panel.id = 'payPanel'; panel.hidden = true;
     payWrap.appendChild(panel);
+    var amountLabel = C.moneyC(co.amountDue, co.currency);
+    var simulateOn = !!(ctx.config && ctx.config.payments && ctx.config.payments.simulate === true);
+    /* SIMULATED PAYMENT as a gateway of its own (Dave, 2026-09-04: "make
+       the simulate appear as a selectable gateway"), only while Lodge Ops
+       allows simulated payments. A red square beside the real gateways;
+       choosing it renders a card form already filled with test details
+       and a red button that records the payment as paid without any
+       processing. Never offered when the switch is off. */
+    var SIMULATE = { key: 'simulate', name: 'Simulate' };
+    var sim = null;
+    if (simulateOn) {
+      sim = el('button', 'hold-payer hold-payer-sim'); sim.type = 'button';
+      sim.setAttribute('data-provider', 'simulate'); sim.setAttribute('aria-pressed', 'false');
+      sim.setAttribute('aria-label', 'Simulate a successful payment'); sim.title = 'Simulate a successful payment — testing only';
+      var simMark = el('span', 'hold-logo hold-logo-sim'); simMark.setAttribute('aria-hidden', 'true');
+      simMark.appendChild(el('span', 'hold-logo-a', 'TEST'));
+      sim.appendChild(simMark); sim.appendChild(el('span', 'hold-payer-name', 'Simulate'));
+      sim.addEventListener('click', function () { if (!done) togglePayer(SIMULATE); });
+      squares.appendChild(sim);
+      payButtons.push(sim);
+    }
     card.appendChild(payWrap);
     var note = el('p', 'hold-choice-note'); note.id = 'payNoteLine'; note.hidden = true;
     card.appendChild(note);
-    var amountLabel = C.moneyC(co.amountDue, co.currency);
-    var simulateOn = !!(ctx.config && ctx.config.payments && ctx.config.payments.simulate === true);
 
     getJson(PAY_API + '/gateways').then(function (j) {
       var list = (j && Array.isArray(j.gateways)) ? j.gateways : null;
       var found = {};
       if (list) list.forEach(function (g) { if (g && g.key) { found[g.key] = g.mode === 'element' ? 'element' : 'redirect'; gwInfo[g.key] = g; } });
       var anyEnabled = providers.some(function (p) { return !!found[p.key]; });
-      if (list && anyEnabled) { modes = found; payButtons.forEach(function (b) { b.hidden = !modes[b.getAttribute('data-provider')]; }); }
+      if (list && anyEnabled) { modes = found; payButtons.forEach(function (b) { var k = b.getAttribute('data-provider'); b.hidden = k !== 'simulate' && !modes[k]; }); }
       else {
         modes = STATIC_MODES; payButtons.forEach(function (b) { b.hidden = false; });
         payMissing.textContent = list ? 'Our payment provider is still being set up. You can try one, or contact us to secure the booking.' : 'Our payment provider could not be reached just now. You can try one, or contact us to secure the booking.';
@@ -1629,7 +1712,7 @@ window.BKReview = (function () {
     }).catch(function () {
       modes = STATIC_MODES; payButtons.forEach(function (b) { b.hidden = false; });
       payMissing.textContent = 'Our payment provider could not be reached just now. You can try one, or contact us to secure the booking.'; payMissing.hidden = false;
-    }).then(function () { payWait.hidden = true; squares.hidden = false; });
+    }).then(function () { payWait.hidden = true; squares.hidden = false; nudgeToSection(host); });
 
     function dropStripe() { if (stripeCard) { try { stripeCard.unmount(); } catch (e) { /* fine */ } stripeCard = null; } }
     function clearPayer() { payer = null; dropStripe(); payButtons.forEach(function (b) { b.classList.remove('on'); b.classList.remove('dim'); b.setAttribute('aria-pressed', 'false'); }); panel.textContent = ''; panel.hidden = true; }
@@ -1685,20 +1768,32 @@ window.BKReview = (function () {
     }
     function renderPanel(p) {
       panel.textContent = ''; panel.hidden = false;
-      var mode = (modes || STATIC_MODES)[p.key] || 'redirect';
+      var mode = p.key === 'simulate' ? 'simulate' : ((modes || STATIC_MODES)[p.key] || 'redirect');
       dropStripe();
-      panel.className = 'hold-paypanel ' + (mode === 'element' ? 'hold-cardform' : 'hold-redirect');
+      panel.className = 'hold-paypanel ' + (mode === 'element' || mode === 'simulate' ? 'hold-cardform' : 'hold-redirect') + (mode === 'simulate' ? ' hold-simform' : '');
       panel.setAttribute('data-mode', mode);
       var err = el('p', 'hold-choice-note hold-choice-err'); err.id = 'payErr'; err.hidden = true;
-      /* The RED simulate button above the card payment (Dave, 2026-09-03),
-         only while Lodge Ops allows simulated payments. */
-      if (simulateOn) {
-        var sim = el('button', 'pay-simulate'); sim.type = 'button'; sim.id = 'paySimulate';
-        sim.textContent = 'Simulate successful payment — ' + amountLabel;
-        sim.addEventListener('click', simulate);
-        panel.appendChild(sim);
-      }
-      if (mode === 'element') {
+      if (mode === 'simulate') {
+        panel.appendChild(el('p', 'kicker hold-kicker', 'Card details · Simulated payment'));
+        panel.appendChild(el('p', 'hold-sim-note', 'A test card is already filled in. Nothing is charged: the payment is recorded as paid without any processing.'));
+        var sform = document.createElement('form'); sform.setAttribute('autocomplete', 'off'); sform.noValidate = true; sform.id = 'paySimForm';
+        function simField(label, id, value, extra) {
+          var l = el('label', null, label);
+          var i = document.createElement('input'); i.id = id; i.name = id; i.type = 'text'; i.value = value; i.setAttribute('spellcheck', 'false');
+          if (extra) Object.keys(extra).forEach(function (k) { i.setAttribute(k, extra[k]); });
+          l.appendChild(i); return l;
+        }
+        sform.appendChild(simField('Name on card', 'pay-simName', 'Test Guest', { autocomplete: 'off' }));
+        sform.appendChild(simField('Card number', 'pay-simCard', '4242 4242 4242 4242', { inputmode: 'numeric', autocomplete: 'off' }));
+        var srow = el('div', 'hold-simrow');
+        srow.appendChild(simField('Expiry', 'pay-simExp', '12/34', { inputmode: 'numeric', autocomplete: 'off' }));
+        srow.appendChild(simField('CVC', 'pay-simCvc', '123', { inputmode: 'numeric', autocomplete: 'off' }));
+        sform.appendChild(srow);
+        var sgo = el('button', 'pay-simulate'); sgo.type = 'submit'; sgo.id = 'paySimulate';
+        sgo.textContent = 'Simulate successful payment — ' + amountLabel;
+        sform.appendChild(sgo); sform.appendChild(err); panel.appendChild(sform);
+        sform.addEventListener('submit', function (ev) { ev.preventDefault(); simulate(); });
+      } else if (mode === 'element') {
         panel.appendChild(el('p', 'kicker hold-kicker', 'Card details · ' + p.name));
         var form = document.createElement('form'); form.setAttribute('autocomplete', 'on'); form.noValidate = true;
         var nameL = el('label', null, 'Name on card');
@@ -1738,10 +1833,13 @@ window.BKReview = (function () {
           stripeCard = stripe.elements().create('card', { hidePostalCode: true, style: { base: { color: '#f3ede1', fontFamily: 'inherit', fontSize: '16px', '::placeholder': { color: 'rgba(243, 237, 225, 0.4)' }, iconColor: '#d8b46a' }, invalid: { color: '#e8a58a', iconColor: '#e8a58a' } } });
           mount.textContent = ''; mount.classList.remove('loading');
           stripeCard.mount(mount);
+          revealPanel(panel);
+          stripeCard.on('ready', function () { revealPanel(panel); });
           stripeCard.on('change', function (e) { mount.classList.toggle('bad', !!(e && e.error)); if (e && e.error) { err.textContent = e.error.message; err.hidden = false; } else { err.hidden = true; } go.disabled = !(e && e.complete); });
         }).catch(function (e) {
           mount.textContent = 'The secure card fields could not be loaded: ' + ((e && e.message) || 'check your connection') + '. You can choose another payment method.';
           mount.classList.add('bad');
+          revealPanel(panel);
         });
       } else {
         panel.appendChild(el('p', 'kicker hold-kicker', 'Pay with ' + p.name));
@@ -1775,9 +1873,10 @@ window.BKReview = (function () {
         });
         panel.appendChild(go2); panel.appendChild(err);
       }
+      revealPanel(panel);
     }
     host.hidden = false;
-    try { host.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
+    scrollToSection(host);
   }
 
   /* Congratulations, over ten seconds of fireworks. */

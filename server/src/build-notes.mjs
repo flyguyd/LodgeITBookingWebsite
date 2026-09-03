@@ -921,4 +921,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.73',
+    version: '0.1.73',
+    date: '2026-09-04T00:41:13+02:00',
+    changes: [
+      {
+        headline:
+          'Checkout, three fixes from the first live look (Dave, 2026-09-04). The Booking summary now scrolls all the way up: it used to scroll while the card was still a one-line placeholder near the foot of the page, stop where the page ended, and never scroll again once the card had rendered. Choosing a gateway now brings the rendered gateway panel fully onto the screen, and again when Stripe\u2019s card fields finish loading. Simulated payment is a selectable gateway of its own \u2014 a red TEST square beside Stripe, PayPal and TurnStay (only while the Lodge Ops switch is on) \u2014 and choosing it renders a card form already filled with test details and the red \u201cSimulate successful payment\u201d button. And the summary shows \u201cDeposit amount to secure your booking R\u2026\u201d under the grand total when check-in is outside the full-payment window.',
+        detail:
+          'Both builds (review.js is shared). SCROLL: scrollToSection(host) scrolls now and again on the frame after layout; startCheckout scrolls the placeholder, showCheckout scrolls once the card is built, showPayment the same, and nudgeToSection() re-scrolls only when the section top is still below the window once the gateway squares land \u2014 a guest who has scrolled on is never yanked back. revealPanel(panel): after a gateway is chosen, scrolls the panel into view (block end, or start when it is taller than the window) on the next frame and again at 450 and 1100 ms, and on Stripe mount / ready / load-failure \u2014 no-op when already in view; wired into both the hold-fee panel and the checkout panel; .hold-paypanel gains scroll-margin. SIMULATE GATEWAY: a .hold-payer-sim square (data-provider simulate) appended to #paySquares when config.payments.simulate is true, never hidden by the gateways fetch, dimmed/selected like the others; renderPanel mode simulate \u2192 .hold-cardform.hold-simform with #paySimForm (pay-simName Test Guest, pay-simCard 4242 4242 4242 4242, pay-simExp 12/34, pay-simCvc 123, a note that nothing is charged) ending in #paySimulate (submit \u2192 POST /api/public/payments/simulate \u2192 /api/web/booking-checkout/paid \u2192 Congratulations). The earlier in-panel and section-level red buttons are gone. DEPOSIT LINE: #bsDeposit (.pay-deposit.bs-deposit) under #bsGrand when the checkout\u2019s amountKind is deposit and it is not yet paid, from the amountDue Lodge Ops worked out. VERIFIED: 40 Chromium assertions on desktop and mobile against the live rig (engine 0.1.69, Lodge Ops 1.3.29): summary top at 0 px after render, payment section as high as the page allows, the simulate panel wholly on screen with its button, the prefilled form, the paid flow end to end. WHY THE SIMULATE OPTION MAY NOT SHOW: the switch is saved with the Save providers button on Settings \u203a Booking Engine; the site pulls the config once a minute and the page reads it on load \u2014 so save, wait a minute, reload. NOTE: when the engine returns no quote for a stay (no rate plan offered), Lodge Ops\u2019 checkout currently falls back to the page\u2019s own total \u2014 flagged to Dave, not changed here.',
+      },
+    ],
+  },
 ];

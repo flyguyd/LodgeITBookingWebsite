@@ -159,7 +159,7 @@ body.hold-open { overflow: hidden; }
 .hold-payer.dim:hover { border-color: rgba(255, 255, 255, 0.16); }
 /* The panel below the squares: the card form (card gateways) or the
    hosted-page button (redirect gateways). */
-.hold-paypanel { margin: 14px 0 6px; padding: 18px; border: 1px solid rgba(216, 180, 106, 0.35); border-radius: 16px; background: rgba(0, 0, 0, 0.18); }
+.hold-paypanel { margin: 14px 0 6px; scroll-margin: 16px 0; padding: 18px; border: 1px solid rgba(216, 180, 106, 0.35); border-radius: 16px; background: rgba(0, 0, 0, 0.18); }
 .hold-paypanel[hidden] { display: none; }
 .hold-paypanel .hold-kicker { margin-bottom: 10px; }
 .hold-cardform label { display: block; margin-bottom: 12px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--paper-dim); }
@@ -304,9 +304,18 @@ body.hold-open { overflow: hidden; }
 .pay-deposit p { margin: 0; }
 .pay-deposit p + p { margin-top: 4px; }
 .pay-deposit strong { color: var(--gold); font-weight: 500; }
+.bs-deposit { margin-top: 12px; }
 .pay-simulate { display: block; width: 100%; margin: 0 0 14px; padding: 12px 16px; border: 2px solid #c0392b; border-radius: 12px; background: #c0392b; color: #fff; font: inherit; font-weight: 600; letter-spacing: 0.04em; cursor: pointer; }
 .pay-simulate:hover { background: #a93226; }
 .pay-simulate:disabled { opacity: 0.6; cursor: default; }
+.hold-payer-sim { border-color: rgba(192, 57, 43, 0.75); }
+.hold-payer-sim .hold-payer-name { color: #e8a58a; }
+.hold-logo-sim { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 12px; background: #c0392b; color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 0.16em; }
+.hold-payer-sim.on { border-color: #c0392b; background: rgba(192, 57, 43, 0.16); box-shadow: 0 0 0 1px #c0392b inset, 0 12px 28px rgba(0, 0, 0, 0.35); }
+.hold-simform .pay-simulate { margin: 6px 0 0; }
+.hold-sim-note { margin: 0 0 12px; font-size: 13px; line-height: 1.55; color: var(--paper-dim); }
+.hold-simrow { display: flex; gap: 12px; }
+.hold-simrow label { flex: 1 1 0; }
 .success-modal { z-index: 70; overflow: hidden; }
 .fireworks { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .success-box { position: relative; text-align: center; width: min(560px, 100%); }

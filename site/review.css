@@ -285,6 +285,27 @@ body.hold-open { overflow: hidden; }
 .bs-email { margin-top: 18px; }
 .bs-email label { display: block; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--paper-dim); margin-bottom: 6px; }
 .bs-email input { width: 100%; max-width: 420px; }
+.bs-guest { display: block; }
+.bs-guest .bs-sub { display: block; margin: 18px 0 10px; }
+.bs-guest .bs-sub:first-of-type { margin-top: 0; }
+.bs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.bs-grid3 { grid-template-columns: 1.4fr 1fr 1fr; }
+.bs-span2 { grid-column: 1 / -1; }
+.bs-guest label { display: block; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--paper-dim); margin-bottom: 6px; }
+.bs-guest input { width: 100%; max-width: none; }
+.bs-req { color: var(--gold); }
+.bs-reqnote { margin: 10px 0 0; font-size: 12px; color: var(--paper-dim); }
+.bs-guest-row { margin-top: 12px; padding: 12px 14px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; }
+.bs-guest-n { display: block; margin-bottom: 8px; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold); }
+@media (max-width: 640px) { .bs-grid, .bs-grid3 { grid-template-columns: 1fr; } }
+/* The deposit under the grand total on Your stay - the loudest money line on the site. */
+.rv-deposit { margin-top: 16px; padding: 16px 20px; border: 1px solid rgba(216, 180, 106, 0.55); border-radius: 14px; background: linear-gradient(135deg, rgba(216, 180, 106, 0.16), rgba(216, 180, 106, 0.06)); box-shadow: 0 0 0 1px rgba(216, 180, 106, 0.18) inset; }
+.rv-deposit-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.rv-deposit-label { font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold); font-weight: 600; }
+.rv-deposit-amount { font-family: var(--serif); font-weight: 400; font-size: 40px; line-height: 1.05; color: var(--gold); }
+.rv-deposit-note { margin: 8px 0 0; font-size: 14px; line-height: 1.55; color: var(--paper); }
+.rv-deposit-full { border-color: rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.05); box-shadow: none; }
+.rv-deposit-full .rv-deposit-label, .rv-deposit-full .rv-deposit-amount { color: var(--paper); }
 .bs-agree { margin-top: 18px; }
 .bs-agree a { color: var(--gold); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .bs-actions { display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap; margin-top: 18px; }

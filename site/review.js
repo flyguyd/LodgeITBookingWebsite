@@ -128,6 +128,23 @@ window.BKReview = (function () {
       .concat(secs.filter(function (s) { return s.negative; })) : null;
   }
 
+  /* A datalist of country names for the Country fields, built in the
+     browser from the ISO list (no names to keep up to date); null where
+     Intl.DisplayNames is missing, and the field is then plain text. */
+  var ISO_COUNTRIES = 'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW';
+  var countryListCache = null;
+  function countryList() {
+    if (countryListCache !== null) return countryListCache ? countryListCache.cloneNode(true) : null;
+    try {
+      var dn = new Intl.DisplayNames(['en'], { type: 'region' });
+      var names = ISO_COUNTRIES.split(' ').map(function (c) { return dn.of(c); }).filter(function (n) { return n && n.length > 2; }).sort();
+      var dl = document.createElement('datalist'); dl.id = 'bsCountries';
+      names.forEach(function (n) { var o = document.createElement('option'); o.value = n; dl.appendChild(o); });
+      countryListCache = dl;
+      return dl.cloneNode(true);
+    } catch (e) { countryListCache = false; return null; }
+  }
+
   function partyLabel(party) {
     var a = Number(party && party.adults) || 0;
     var c = Number(party && party.children) || 0;
@@ -362,7 +379,49 @@ window.BKReview = (function () {
     grand.appendChild(el('span', null, 'Grand total'));
     grand.appendChild(el('strong', null, C.moneyC(grandC / 100, currency)));
     box.appendChild(grand);
+    box.appendChild(renderDepositLine(ctx, grandC / 100, currency));
     return { box: box, grand: grandC / 100, currency: currency };
+  }
+
+  /* THE DEPOSIT, under the grand total and louder than anywhere else on
+     the site (Dave, 2026-09-04): the same rule Lodge Ops applies when the
+     booking is made - the Booking deposits card on Settings > Booking
+     Engine (fixed / percent / first N nights, and the days before check-in
+     inside which the whole stay is due). Outside that window: the deposit
+     and the balance with its date. Inside it, or with no deposit rule: the
+     whole stay is due when the guest books. */
+  function depositFor(config, from, grand, nights) {
+    var d = (config && config.deposit) || {};
+    var mode = d.mode === 'fixed' || d.mode === 'nights' ? d.mode : 'percent';
+    var amount = Number(d.amount); if (!isFinite(amount) || amount < 0) amount = 0;
+    var days = Math.round(Number(d.fullPaymentDays)); if (!isFinite(days) || days < 0) days = 0;
+    var out = daysUntil(from);
+    var full = { kind: 'full', due: grand, deposit: null, balance: null, balanceDueOn: null, fullPaymentDays: days };
+    if (days <= 0 || out == null || out <= days || !(grand > 0) || amount <= 0) return full;
+    var dep;
+    if (mode === 'fixed') dep = amount;
+    else if (mode === 'percent') dep = grand * Math.min(100, amount) / 100;
+    else dep = nights > 0 ? grand * Math.min(nights, Math.round(amount)) / nights : grand;
+    dep = Math.round(Math.min(Math.max(dep, 0), grand) * 100) / 100;
+    if (dep <= 0 || dep >= grand) return full;
+    var dueOn = new Date(Date.parse(from + 'T00:00:00Z') - days * 86400000).toISOString().slice(0, 10);
+    return { kind: 'deposit', due: dep, deposit: dep, balance: Math.round((grand - dep) * 100) / 100, balanceDueOn: dueOn, fullPaymentDays: days };
+  }
+  function renderDepositLine(ctx, grand, currency) {
+    var d = depositFor(ctx.config, ctx.from, grand, ctx.nights);
+    var wrap = el('div', 'rv-deposit' + (d.kind === 'full' ? ' rv-deposit-full' : '')); wrap.id = 'rvDeposit';
+    var head = el('div', 'rv-deposit-head');
+    head.appendChild(el('span', 'rv-deposit-label', d.kind === 'deposit' ? 'Deposit to secure your booking' : 'Due when you book'));
+    head.appendChild(el('strong', 'rv-deposit-amount', C.moneyC(d.due, currency)));
+    wrap.appendChild(head);
+    if (d.kind === 'deposit') {
+      wrap.appendChild(el('p', 'rv-deposit-note', 'Pay this deposit now and your suites are yours. The balance of ' + C.moneyC(d.balance, currency) + ' is not due until ' + C.fmtDate(d.balanceDueOn) + '.'));
+    } else {
+      wrap.appendChild(el('p', 'rv-deposit-note', d.fullPaymentDays > 0
+        ? 'Your check-in is within ' + d.fullPaymentDays + ' days, so the full amount is due when you book.'
+        : 'The full amount is due when you book.'));
+    }
+    return wrap;
   }
 
   var state = { open: false, ctx: null, hold: null };
@@ -1546,14 +1605,62 @@ window.BKReview = (function () {
 
     if (co.paid) { host.hidden = false; return; }
 
-    /* The email for the receipt (a guest from a hold already gave one). */
-    var emailWrap = el('div', 'bs-email');
-    var emailL = el('label', null, 'Your email address (for your receipt)'); emailL.setAttribute('for', 'bsEmail');
-    var emailI = document.createElement('input');
-    emailI.id = 'bsEmail'; emailI.type = 'email'; emailI.className = 'hold-input'; emailI.inputMode = 'email';
-    emailI.setAttribute('autocomplete', 'email'); emailI.placeholder = 'you@example.com';
-    emailI.value = co.email || '';
-    emailWrap.appendChild(emailL); emailWrap.appendChild(emailI);
+    /* Who is booking (Dave, 2026-09-04): the booker's name, phone and
+       email, their postal address, and the other guests in the party (the
+       guest count less the booker) — a name each, phone and country if
+       they like. Starred fields must be given before Continue wakes. */
+    var emailWrap = el('div', 'bs-email bs-guest'); emailWrap.id = 'bsGuest';
+    var countries = countryList();
+    if (countries) emailWrap.appendChild(countries);
+    function field(host, label, id, type, mode, auto, placeholder, value, required, span) {
+      var w = el('div', 'bs-field' + (span ? ' bs-span2' : ''));
+      var l = el('label', null, label); l.setAttribute('for', id);
+      if (required) l.appendChild(el('span', 'bs-req', ' *'));
+      var i = document.createElement('input');
+      i.id = id; i.type = type; i.className = 'hold-input'; if (mode) i.inputMode = mode;
+      if (auto) i.setAttribute('autocomplete', auto);
+      if (placeholder) i.placeholder = placeholder;
+      i.value = value || '';
+      if (required) i.required = true;
+      if (/Country/.test(label) && countries) i.setAttribute('list', 'bsCountries');
+      w.appendChild(l); w.appendChild(i); host.appendChild(w);
+      return i;
+    }
+    emailWrap.appendChild(el('span', 'rv-kicker bs-sub', 'Your details'));
+    var grid1 = el('div', 'bs-grid'); emailWrap.appendChild(grid1);
+    var nameI = field(grid1, 'Your full name', 'bsName', 'text', null, 'name', 'First and last name', co.guestName, true);
+    var phoneI = field(grid1, 'Phone number', 'bsPhone', 'tel', 'tel', 'tel', '+27 82 123 4567', co.phone, true);
+    var emailI = field(grid1, 'E-mail address', 'bsEmail', 'email', 'email', 'email', 'you@example.com', co.email, true, true);
+    var addr = co.address || {};
+    emailWrap.appendChild(el('span', 'rv-kicker bs-sub', 'Postal address'));
+    var grid2 = el('div', 'bs-grid'); emailWrap.appendChild(grid2);
+    var streetI = field(grid2, 'House number and Road/Street', 'bsStreet', 'text', null, 'address-line1', '', addr.street, false, true);
+    var aptI = field(grid2, 'Apartment number', 'bsApartment', 'text', null, 'address-line2', '', addr.apartment, false);
+    var cityI = field(grid2, 'City', 'bsCity', 'text', null, 'address-level2', '', addr.city, false);
+    var postI = field(grid2, 'Post Code', 'bsPostCode', 'text', null, 'postal-code', '', addr.postCode, true);
+    var stateI = field(grid2, 'State', 'bsState', 'text', null, 'address-level1', 'Province / state', addr.state, true);
+    var countryI = field(grid2, 'Country', 'bsCountry', 'text', null, 'country-name', '', addr.country, true);
+    /* The other guests: the party as searched, less the booker. */
+    var party = (ctx && ctx.party) || {};
+    var others = Math.max(0, (Number(party.adults) || 0) + (Number(party.children) || 0) - 1);
+    var priorGuests = Array.isArray(co.guests) ? co.guests : [];
+    var guestRows = [];
+    if (others > 0) {
+      emailWrap.appendChild(el('span', 'rv-kicker bs-sub', others === 1 ? 'Your other guest' : 'Your other guests'));
+      for (var gi = 0; gi < others; gi++) {
+        var gWrap = el('div', 'bs-guest-row'); gWrap.setAttribute('data-guest', String(gi + 2));
+        gWrap.appendChild(el('span', 'bs-guest-n', 'Guest ' + (gi + 2)));
+        var gGrid = el('div', 'bs-grid bs-grid3'); gWrap.appendChild(gGrid);
+        var prior = priorGuests[gi] || {};
+        guestRows.push({
+          name: field(gGrid, 'Guest name', 'bsGuestName' + (gi + 2), 'text', null, 'off', 'First and last name', prior.name, true),
+          phone: field(gGrid, 'Phone Number', 'bsGuestPhone' + (gi + 2), 'tel', 'tel', 'off', '', prior.phone, false),
+          country: field(gGrid, 'Country', 'bsGuestCountry' + (gi + 2), 'text', null, 'off', '', prior.country, false)
+        });
+        emailWrap.appendChild(gWrap);
+      }
+    }
+    emailWrap.appendChild(el('p', 'bs-reqnote', '* required'));
     card.appendChild(emailWrap);
 
     /* I agree to the terms and conditions — the link opens them. */
@@ -1578,13 +1685,37 @@ window.BKReview = (function () {
     var note = el('p', 'hold-choice-note'); note.id = 'bsNote'; note.hidden = true;
     card.appendChild(note);
 
+    function validPhone(v) { return /^\+?[\d\s().-]{6,40}$/.test(v) && (v.match(/\d/g) || []).length >= 6; }
+    function missing() {
+      if (nameI.value.trim().length < 2) return 'Enter your full name first';
+      if (!validPhone(phoneI.value.trim())) return 'Enter your phone number first';
+      if (!validEmail(emailI.value.trim())) return 'Enter your email address first';
+      if (!postI.value.trim()) return 'Enter your post code first';
+      if (!stateI.value.trim()) return 'Enter your state first';
+      if (!countryI.value.trim()) return 'Enter your country first';
+      for (var k = 0; k < guestRows.length; k++) {
+        if (guestRows[k].name.value.trim().length < 2) return 'Enter the name of guest ' + (k + 2) + ' first';
+        var gp = guestRows[k].phone.value.trim();
+        if (gp && !validPhone(gp)) return 'Check the phone number of guest ' + (k + 2);
+      }
+      if (!agreeBox.checked) return 'You must agree first';
+      return null;
+    }
     function gate() {
-      var ok = agreeBox.checked && validEmail(emailI.value.trim());
-      go.disabled = !ok;
-      if (ok) go.removeAttribute('title'); else go.title = agreeBox.checked ? 'Enter your email address first' : 'You must agree first';
+      var why = missing();
+      go.disabled = !!why;
+      if (why) go.title = why; else go.removeAttribute('title');
     }
     agreeBox.onchange = function () { gate(); if (ctx && ctx.track) ctx.track(agreeBox.checked ? 'terms_agreed' : 'terms_unagreed', { reference: co.reference }); };
-    emailI.oninput = gate;
+    [nameI, phoneI, emailI, streetI, aptI, cityI, postI, stateI, countryI].forEach(function (i) { i.oninput = gate; });
+    guestRows.forEach(function (g) { g.name.oninput = gate; g.phone.oninput = gate; g.country.oninput = gate; });
+    function detailsPayload() {
+      return {
+        id: co.id, email: emailI.value.trim(), name: nameI.value.trim(), phone: phoneI.value.trim(),
+        address: { street: streetI.value.trim(), apartment: aptI.value.trim(), city: cityI.value.trim(), postCode: postI.value.trim(), state: stateI.value.trim(), country: countryI.value.trim() },
+        guests: guestRows.map(function (g) { return { name: g.name.value.trim(), phone: g.phone.value.trim(), country: g.country.value.trim() }; })
+      };
+    }
     gate();
 
     cancel.onclick = function () {
@@ -1601,7 +1732,7 @@ window.BKReview = (function () {
     go.onclick = function () {
       if (go.disabled) return;
       go.disabled = true; note.hidden = true;
-      postJson(CHECKOUT_API + '/continue', { id: co.id, email: emailI.value.trim() }).then(function (j) {
+      postJson(CHECKOUT_API + '/continue', detailsPayload()).then(function (j) {
         if (!j || j.ok !== true || !j.checkout) {
           go.disabled = false;
           note.className = 'hold-choice-note hold-choice-err';
@@ -1610,7 +1741,7 @@ window.BKReview = (function () {
           return;
         }
         checkoutState.current = j.checkout;
-        agreeBox.disabled = true; emailI.disabled = true;
+        agreeBox.disabled = true; emailWrap.querySelectorAll('input').forEach(function (i) { i.disabled = true; });
         if (ctx && ctx.track) ctx.track('checkout_continued', { reference: co.reference, amountDue: j.checkout.amountDue, kind: j.checkout.amountKind });
         showPayment(j.checkout, ctx, untilMs);
       }).catch(function () {
@@ -1729,6 +1860,15 @@ window.BKReview = (function () {
       var target = panel.hidden ? note : (panel.querySelector('#payErr') || note);
       target.className = 'hold-choice-note hold-choice-err'; target.textContent = msgText; target.hidden = false;
     }
+    /* A payment that FAILED (declined, refused, the gateway said no) is
+       reported to Lodge Ops so Admin and Reservations hear of it (Dave,
+       2026-09-04). A connection problem on this side is not a failed
+       payment and is not reported. Fire and forget. */
+    function reportFailure(gatewayKey, msgText) {
+      if (/could not reach the lodge|check your connection/i.test(msgText || '')) return;
+      if (ctx.track) ctx.track('checkout_payment_failed', { reference: co.reference, provider: gatewayKey, message: msgText });
+      postJson(CHECKOUT_API + '/payment-failed', { id: co.id, gateway: gatewayKey, message: String(msgText || '').slice(0, 300) }).catch(function () { /* told the guest already */ });
+    }
     function verifyPaid(paymentId) {
       var tries = 0;
       function verify() {
@@ -1824,7 +1964,7 @@ window.BKReview = (function () {
             })
             .then(function (paymentId) { return verifyPaid(paymentId).then(function () { return recordPaid(paymentId); }); })
             .then(celebrate)
-            .catch(function (e) { fail(e && e.message && !/fetch|network/i.test(e.message) ? e.message : 'We could not reach the lodge — check your connection and try again.'); });
+            .catch(function (e) { var m = e && e.message && !/fetch|network/i.test(e.message) ? e.message : 'We could not reach the lodge — check your connection and try again.'; fail(m); reportFailure(p.key, m); });
         });
         var pk = (gwInfo[p.key] && gwInfo[p.key].publishableKey) || (ctx.config && ctx.config.stripePublishableKey) || '';
         loadStripe(pk, !!gwInfo[p.key]).then(function (stripe) {
@@ -1864,7 +2004,7 @@ window.BKReview = (function () {
                 postJson(PAY_API + '/status', { paymentId: j.paymentId }).then(function (st) {
                   if (!st || st.status === 'pending') return;
                   clearInterval(poll);
-                  if (st.status !== 'paid') { fail('The payment did not go through (' + (st.error || st.status) + '). You can try again.'); return; }
+                  if (st.status !== 'paid') { var m2 = 'The payment did not go through (' + (st.error || st.status) + '). You can try again.'; fail(m2); reportFailure(p.key, m2); return; }
                   recordPaid(j.paymentId).then(celebrate).catch(function (e) { fail(e.message); });
                 }).catch(function () { /* next tick */ });
               }, 4000);
@@ -1904,6 +2044,13 @@ window.BKReview = (function () {
   }
   function openSuccess(co) {
     var m = $('successModal'); if (!m) return;
+    /* Paid: the search, Your stay, the hold sections and the payment are
+       over (Dave, 2026-09-04: "remove the sections Your Hold, Your Stay,
+       Available Suites"). The paid Booking summary is what remains. */
+    ['results', 'review', 'hold', 'held', 'payment'].forEach(function (id) { var h = $(id); if (h) h.hidden = true; });
+    stopHeldTimer(); stopCheckoutTimer();
+    var pin = $('pinnedTimer'); if (pin) pin.hidden = true;
+    state.open = false;
     var ref = $('successRef'); if (ref) ref.textContent = 'Booking reference ' + (co.reference || '') + ' · ' + C.moneyC(co.paidAmount != null ? co.paidAmount : co.amountDue, co.paidCurrency || co.currency) + ' received';
     m.hidden = false; document.body.classList.add('hold-open');
     var canvas = $('fireworks');

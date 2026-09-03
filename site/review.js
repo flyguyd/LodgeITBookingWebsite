@@ -1134,6 +1134,20 @@ window.BKReview = (function () {
       grand.appendChild(el('strong', null, C.moneyC(stay.total, stay.currency)));
       card.appendChild(grand);
     }
+    /* The held-rate check (Dave, 2026-09-03): opening a held booking asks
+       the rate engine again, fresh, for the same stay; a suite whose rate
+       went UP while the hold stood is said here, under the grand total,
+       with the reassurance that the held rate stands until the clock runs
+       out. A rate that stayed or fell says nothing. */
+    var rc = hold.rateCheck;
+    if (active && rc && rc.increased && rc.increased.length) {
+      var notes = el('div', 'held-ratenote'); notes.id = 'heldRateNote';
+      rc.increased.forEach(function (s) {
+        var amt = C.moneyC(s.delta, rc.currency || stay.currency);
+        notes.appendChild(el('p', null, 'While your booking was held, the rate for ' + (s.name || 'this suite') + ((s.qty || 1) > 1 ? ' (each)' : '') + ' changed by ' + amt + ', but your rate is locked in until ' + localUntil(hold.holdUntil) + '.'));
+      });
+      card.appendChild(notes);
+    }
 
     var clock = el('div', 'held-clock');
     /* When the hold was taken, in the guest's own time (Dave, 2026-09-02). */

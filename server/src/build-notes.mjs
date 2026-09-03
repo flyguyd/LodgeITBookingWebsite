@@ -895,4 +895,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.71',
+    version: '0.1.71',
+    date: '2026-09-03T22:33:24+02:00',
+    changes: [
+      {
+        headline:
+          'When you open a held booking again \u2014 by Retrieve booking or by coming back to the page \u2014 the site now checks with the rate engine whether the price for your suites has moved since the hold was taken. If a suite costs more now, a line appears under the grand total: \u201cWhile your booking was held, the rate for {suite} changed by R\u2026, but your rate is locked in until {time}.\u201d A rate that held steady or dropped says nothing, and the price you see never changes \u2014 the held rate stands until the clock runs out.',
+        detail:
+          'Dave, 2026-09-03: \u201cwhen a user opens a held booking, rerun the rate query and bypass the availability hold and cache to see if the rate would have changed. If it has changed, the new rate would be greater than the held rate, below the grand total say something like \u2018while your booking was held, the rate for this suite changed by {amount}, but your rate is locked in until the expiry time\u2019.\u201d The check is done in Lodge Ops (1.3.26), not on the site: at \u201cHold it\u201d the hold service asks the rate engine for a FRESH quote of the stay \u2014 BookingEngineService.siteQuote() posts /api/engine/rates/quote with NO sessionKey (so the engine\u2019s per-session cache is bypassed) and the engine prices without regard to the availability the hold itself took (availability there only flags bookability, never the money) \u2014 and keeps the per-suite grand total on the hold (rate_quote, migration 381). On retrieve of an ACTIVE hold, the same fresh quote runs again and any suite whose grand total ROSE on the same plan is returned as hold.rateCheck { checkedAt, currency, increased[{ roomTypeId, name, qty, heldTotal, nowTotal, delta }], delta }; a suite that stayed or fell is not listed. SITE: review.js showHeld() renders #heldRateNote under the .rv-grand block, one line per increased suite \u2014 \u201cWhile your booking was held, the rate for {name}{ (each) when qty>1 } changed by {C.moneyC(delta)}, but your rate is locked in until {localUntil(holdUntil)}.\u201d \u2014 shown only for an active hold with increases; review.css .held-ratenote (gold left border, faint gold wash). The grand total and every suite figure are untouched: the message is reassurance, not a re-price. VERIFIED in real Chromium (desktop + mobile) against the real Lodge Ops 1.3.26 API and rate engine: a hold taken at a nightly of 4000 shows the held card with no note; after the engine root rises to 4500 (grand total 13800 \u2192 15525), Retrieve booking shows the note reading \u201cchanged by R1,725.00\u2026 locked in until \u2026\u201d positioned below the grand total; a lower rate shows no note; no console errors. DEPLOY: rsync review.js + review.css.',
+      },
+    ],
+  },
 ];

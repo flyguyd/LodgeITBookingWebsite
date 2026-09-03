@@ -960,4 +960,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.76',
+    version: '0.1.76',
+    date: '2026-09-04T01:58:45+02:00',
+    changes: [
+      {
+        headline:
+          'Payment fireworks: a giraffe walks across in front of them, and the show runs fifteen seconds (Dave, 2026-09-04). The silhouette crosses the foot of the screen right to left for the whole show \u2014 the long neck, the head with its ossicones and an ear, the tail, and four legs swinging in a walking gait with a gentle bob \u2014 rim-lit in gold against a low horizon glow so it reads between bursts, behind the Congratulations box and in front of the fireworks.',
+        detail:
+          'review.js runFireworks(canvas, ms): ms 10000 \u2192 15000 from openSuccess. The giraffe is drawn on a SECOND canvas (#giraffe, class .fireworks, inserted right after #fireworks so it sits above the bursts and below .success-box) that is cleared every frame \u2014 the fireworks canvas keeps a fading trail of everything drawn on it, which smeared a moving silhouette and let a horizon glow pile up frame over frame into a solid band (both seen and fixed on the rig). drawGiraffe(t): x from just off the right edge to just off the left over ms; scale (H \u00d7 0.36) / 130 so it is 36% of the screen tall; body ellipse tilted shoulders-up, tapered neck polygon, head + snout ellipses, ear, two ossicones, tail with a swinging tuft, legs as hip\u2192knee\u2192hoof with diagonal pairs in phase and the knee folding on the forward swing; canvas shadow (gold, blur 16) as the rim light; a linear gold gradient over the bottom 40% as the horizon. data-giraffe (x) and data-running on #fireworks each frame for the test. Reduced-motion users get neither fireworks nor giraffe, as before. VERIFIED: 48 Chromium assertions on desktop and mobile \u2014 still running 11 s in, the giraffe well left of its start by then, off the left edge with the show over by 17 s; screenshots at 7 s.',
+      },
+    ],
+  },
 ];

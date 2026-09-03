@@ -2036,9 +2036,13 @@ window.BKReview = (function () {
     scrollToSection(host);
   }
 
-  /* Congratulations, over ten seconds of fireworks. */
+  /* Congratulations, over fifteen seconds of fireworks, and a giraffe. */
   var fireworksRaf = null, fireworksStop = null;
-  function stopFireworks() { if (fireworksRaf) { cancelAnimationFrame(fireworksRaf); fireworksRaf = null; } if (fireworksStop) { clearTimeout(fireworksStop); fireworksStop = null; } }
+  function stopFireworks() {
+    if (fireworksRaf) { cancelAnimationFrame(fireworksRaf); fireworksRaf = null; }
+    if (fireworksStop) { clearTimeout(fireworksStop); fireworksStop = null; }
+    var g = $('giraffe'); if (g) { try { g.getContext('2d').clearRect(0, 0, g.width, g.height); } catch (e) { /* fine */ } }
+  }
   function runFireworks(canvas, ms) {
     var ctx2 = canvas.getContext('2d'); if (!ctx2) return;
     var W = canvas.width = canvas.clientWidth || window.innerWidth, H = canvas.height = canvas.clientHeight || window.innerHeight;
@@ -2052,8 +2056,77 @@ window.BKReview = (function () {
       if (Math.random() < 0.06 && now - t0 < ms - 1500) launch();
       rockets = rockets.filter(function (r) { r.x += r.vx * dt; r.y += r.vy * dt; r.vy += 0.12 * dt; ctx2.fillStyle = r.c; ctx2.beginPath(); ctx2.arc(r.x, r.y, 2.2, 0, Math.PI * 2); ctx2.fill(); if (r.y <= r.burstAt || r.vy >= 0) { burst(r); return false; } return true; });
       parts = parts.filter(function (p) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 0.05 * dt; p.vx *= 0.985; p.vy *= 0.985; p.life -= 0.012 * dt; if (p.life <= 0) return false; ctx2.globalAlpha = Math.max(0, p.life); ctx2.fillStyle = p.c; ctx2.beginPath(); ctx2.arc(p.x, p.y, 2, 0, Math.PI * 2); ctx2.fill(); ctx2.globalAlpha = 1; return true; });
-      if (now - t0 < ms || parts.length || rockets.length) fireworksRaf = requestAnimationFrame(frame); else { fireworksRaf = null; ctx2.clearRect(0, 0, W, H); }
+      drawGiraffe(now - t0);
+      canvas.setAttribute('data-giraffe', String(Math.round(giraffeX(now - t0))));
+      if (now - t0 < ms || parts.length || rockets.length) fireworksRaf = requestAnimationFrame(frame); else { fireworksRaf = null; ctx2.clearRect(0, 0, W, H); canvas.setAttribute('data-running', '0'); }
     }
+    /* THE GIRAFFE (Dave, 2026-09-04): a silhouette walking right to left
+       across the foot of the screen for the whole show, in front of the
+       bursts. Drawn from scratch each frame in the lodge's night-black,
+       facing the way it walks: a tilted body, the long neck, the head with
+       ossicones and an ear, a tail, and four legs swinging in a walking
+       gait - diagonal pairs together, the knee folding on the forward
+       swing - with a gentle bob. Sized to the screen. */
+    /* The giraffe has a canvas of its own, layered over the fireworks and
+       under the message box and CLEARED every frame - the fireworks canvas
+       keeps a fading trail of everything drawn on it, which smears a moving
+       silhouette. A silhouette also needs light behind it: a low gold glow
+       along the horizon and a rim of the same light around its edge, so it
+       reads between bursts too. */
+    var gCanvas = canvas.parentNode ? canvas.parentNode.querySelector('#giraffe') : null;
+    if (!gCanvas && canvas.parentNode) {
+      gCanvas = document.createElement('canvas'); gCanvas.id = 'giraffe'; gCanvas.className = 'fireworks'; gCanvas.setAttribute('aria-hidden', 'true');
+      canvas.parentNode.insertBefore(gCanvas, canvas.nextSibling);
+    }
+    var gctx = gCanvas ? gCanvas.getContext('2d') : null;
+    if (gCanvas) { gCanvas.width = W; gCanvas.height = H; }
+    var gs = (H * 0.36) / 130;
+    function giraffeX(t) { return W + 70 * gs - (Math.min(t, ms) / ms) * (W + 140 * gs); }
+    function drawGiraffe(t) {
+      if (!gctx) return;
+      var ctx2 = gctx;
+      ctx2.clearRect(0, 0, W, H);
+      if (t >= ms) return;
+      var phase = (t / 1000) * Math.PI * 2 * 1.1;
+      var x0 = giraffeX(t), y0 = H - 10 + Math.sin(phase * 2) * 1.2 * gs;
+      ctx2.save();
+      ctx2.globalAlpha = 1;
+      var glow = ctx2.createLinearGradient(0, H * 0.6, 0, H);
+      glow.addColorStop(0, 'rgba(216, 180, 106, 0)'); glow.addColorStop(1, 'rgba(216, 180, 106, 0.16)');
+      ctx2.fillStyle = glow; ctx2.fillRect(0, H * 0.6, W, H * 0.4);
+      ctx2.translate(x0, y0);
+      ctx2.scale(gs, gs);
+      ctx2.shadowColor = 'rgba(216, 180, 106, 0.85)'; ctx2.shadowBlur = 16;
+      ctx2.fillStyle = '#05060a'; ctx2.strokeStyle = '#05060a'; ctx2.lineCap = 'round'; ctx2.lineJoin = 'round';
+      function leg(hx, hy, swing, front) {
+        var a = Math.sin(phase + swing) * 0.45;              /* upper leg from the vertical */
+        var fold = Math.max(0, Math.sin(phase + swing)) * 0.7; /* the knee folds on the forward swing */
+        var kx = hx + Math.sin(a) * 24, ky = hy + Math.cos(a) * 24;
+        var b = a + (front ? fold : -fold * 0.6);
+        var fx = kx + Math.sin(b) * 22, fy = ky + Math.cos(b) * 22;
+        ctx2.lineWidth = 5.5; ctx2.beginPath(); ctx2.moveTo(hx, hy); ctx2.lineTo(kx, ky); ctx2.stroke();
+        ctx2.lineWidth = 4.2; ctx2.beginPath(); ctx2.moveTo(kx, ky); ctx2.lineTo(fx, fy); ctx2.stroke();
+        ctx2.beginPath(); ctx2.ellipse(fx, fy + 1, 3.2, 2, 0, 0, Math.PI * 2); ctx2.fill();
+      }
+      /* far legs first, then the body, then the near legs */
+      leg(-12, -46, Math.PI, true); leg(12, -46, 0, false);
+      /* tail */
+      ctx2.lineWidth = 2.2; ctx2.beginPath(); ctx2.moveTo(22, -54); ctx2.quadraticCurveTo(30, -44, 29 + Math.sin(phase) * 2, -28); ctx2.stroke();
+      ctx2.beginPath(); ctx2.ellipse(29 + Math.sin(phase) * 2, -25, 2.6, 4, 0, 0, Math.PI * 2); ctx2.fill();
+      /* body: shoulders higher than the rump */
+      ctx2.beginPath(); ctx2.ellipse(0, -54, 24, 12.5, -0.16, 0, Math.PI * 2); ctx2.fill();
+      /* neck, tapering to the head */
+      ctx2.beginPath(); ctx2.moveTo(-6, -62); ctx2.lineTo(-38, -114); ctx2.lineTo(-46, -111); ctx2.lineTo(-22, -54); ctx2.closePath(); ctx2.fill();
+      /* head, snout, ear, ossicones */
+      ctx2.beginPath(); ctx2.ellipse(-46, -115, 9, 5.2, -0.3, 0, Math.PI * 2); ctx2.fill();
+      ctx2.beginPath(); ctx2.ellipse(-55, -117, 4.5, 3.2, -0.2, 0, Math.PI * 2); ctx2.fill();
+      ctx2.beginPath(); ctx2.moveTo(-39, -118); ctx2.lineTo(-33, -124); ctx2.lineTo(-40, -122); ctx2.closePath(); ctx2.fill();
+      ctx2.lineWidth = 2; ctx2.beginPath(); ctx2.moveTo(-44, -120); ctx2.lineTo(-45, -129); ctx2.moveTo(-49, -120); ctx2.lineTo(-51, -128); ctx2.stroke();
+      ctx2.beginPath(); ctx2.arc(-45, -130, 1.8, 0, Math.PI * 2); ctx2.arc(-51.5, -129, 1.8, 0, Math.PI * 2); ctx2.fill();
+      leg(-13, -47, 0, true); leg(13, -47, Math.PI, false);
+      ctx2.restore();
+    }
+    canvas.setAttribute('data-running', '1');
     ctx2.clearRect(0, 0, W, H);
     for (var i = 0; i < 3; i++) launch();
     fireworksRaf = requestAnimationFrame(frame);
@@ -2072,7 +2145,7 @@ window.BKReview = (function () {
     m.hidden = false; document.body.classList.add('hold-open');
     var canvas = $('fireworks');
     var reduce = false; try { reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { /* fine */ }
-    if (canvas && !reduce) runFireworks(canvas, 10000);
+    if (canvas && !reduce) runFireworks(canvas, 15000);
     function closeSuccess() { stopFireworks(); m.hidden = true; document.body.classList.remove('hold-open'); }
     var x = $('successClose'); if (x) x.onclick = closeSuccess;
     m.onclick = function (ev) { if (ev.target === m) closeSuccess(); };

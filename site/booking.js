@@ -1100,8 +1100,10 @@
           total: totals && totals.grand != null ? totals.grand.toFixed(2) : null,
           agreed: true,
         }, stateCheckpoint());
-        var note = document.getElementById('payNote');
-        if (note) note.hidden = false;
+        /* Make the reservation (Dave, 2026-09-03): the booking summary
+           below, the nights and rates held on the rate engine for the
+           configured minutes, the terms, then payment. */
+        if (window.BKReview && window.BKReview.startCheckout) window.BKReview.startCheckout(totals, null);
       },
     });
     if (!rerender) { try { history.pushState({ view: 'review' }, '', location.href); } catch (e) { /* fine */ } }

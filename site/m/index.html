@@ -120,7 +120,7 @@
               <button id="holdWhat" type="button" class="rv-what">What's this?</button>
             </div>
             <span class="rv-tip" data-tip="You must agree first">
-              <button id="payBtn" type="button" class="cta big" disabled>Continue to payment</button>
+              <button id="payBtn" type="button" class="cta big" disabled>Make the reservation</button>
             </span>
           </div>
         </div>
@@ -159,6 +159,55 @@
       </div>
       <section id="heldCard" class="glass hold-card"></section>
     </section>
+
+    <!-- Booking summary (Dave, 2026-09-03): after Make the reservation — the
+         booking held on the rate engine for the configured minutes, the
+         countdown, the terms, and Continue to payment. Built by review.js. -->
+    <section id="bookingSummary" class="hold-page" hidden>
+      <div class="rv-head">
+        <p class="kicker">Booking summary</p>
+        <h2 id="bookingSummaryTitle" class="results-title">Your booking is being held for you</h2>
+      </div>
+      <section id="bookingSummaryCard" class="glass hold-card"></section>
+    </section>
+
+    <!-- Payment (Dave, 2026-09-03): the amount due now (deposit or the whole
+         stay), the gateways, and the payment itself. Built by review.js. -->
+    <section id="payment" class="hold-page" hidden>
+      <div class="rv-head">
+        <p class="kicker">Payment</p>
+        <h2 id="paymentTitle" class="results-title">Secure your booking</h2>
+      </div>
+      <section id="paymentCard" class="glass hold-card"></section>
+    </section>
+
+    <!-- The pinned countdown: shown top-right while the summary's own clock
+         is scrolled off the screen. -->
+    <div id="pinnedTimer" class="pinned-timer" hidden aria-live="off">
+      <span class="pinned-timer-k">Rates held for</span>
+      <strong id="pinnedTimerValue">00:00</strong>
+    </div>
+
+    <!-- Terms and conditions (from Lodge Ops, Settings → Booking Engine). -->
+    <div id="termsModal" class="hold-modal" hidden role="dialog" aria-modal="true" aria-labelledby="termsHeading">
+      <div class="glass hold-box terms-box">
+        <button id="termsClose" type="button" class="hold-close" aria-label="Close">×</button>
+        <h2 id="termsHeading">Terms and conditions</h2>
+        <div id="termsBody" class="terms-body"></div>
+      </div>
+    </div>
+
+    <!-- Payment completed: the congratulations, over ten seconds of fireworks. -->
+    <div id="successModal" class="hold-modal success-modal" hidden role="dialog" aria-modal="true" aria-labelledby="successHeading">
+      <canvas id="fireworks" class="fireworks" aria-hidden="true"></canvas>
+      <div class="glass hold-box success-box">
+        <button id="successClose" type="button" class="hold-close" aria-label="Close">×</button>
+        <p class="kicker">Congratulations</p>
+        <h2 id="successHeading">Payment completed successfully.</h2>
+        <p>You will receive a payment receipt in your email shortly.</p>
+        <p id="successRef" class="success-ref"></p>
+      </div>
+    </div>
 
 
     <!-- What's a hold? Text from Lodge Ops (Settings → Booking Website). -->

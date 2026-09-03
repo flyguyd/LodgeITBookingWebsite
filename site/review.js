@@ -1221,11 +1221,9 @@ window.BKReview = (function () {
     }
     reserve.onclick = function () {
       if (ctx && ctx.track) ctx.track('reservation_started', { reference: hold.reference });
-      if (ctx && ctx.onPay) ctx.onPay(ctx.totals || null);
-      var t = (ctx && ctx.config && ctx.config.text) || {};
-      note.className = 'hold-choice-note hold-choice-ok';
-      note.textContent = t.continueNote || 'Secure checkout is almost ready \u2014 we have saved your selection, and the reservations team can confirm it today if you contact the lodge.';
-      note.hidden = false;
+      /* Make the reservation from the held card (Dave, 2026-09-03): the
+         checkout rides the hold's nights and its locked-in rate. */
+      startCheckout(ctx.totals || null, hold);
     };
 
     host.hidden = false;
@@ -1281,6 +1279,19 @@ window.BKReview = (function () {
     var paymentId = m[1], back = /[?&]r=([a-z]+)/.exec(location.search), remembered = readPayment();
     try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* fine */ }
     var ref = remembered && remembered.paymentId === paymentId ? remembered.reference : null;
+    if (remembered && remembered.kind === 'checkout' && remembered.paymentId === paymentId) {
+      /* A booking's hosted payment (Dave, 2026-09-03): the engine's word,
+         then Lodge Ops records it and the congratulations open. */
+      if (back && back[1] !== 'success') return;
+      postJson(PAY_API + '/status', { paymentId: paymentId }).then(function (j) {
+        if (!j || j.status !== 'paid') return;
+        return postJson(CHECKOUT_API + '/paid', { id: remembered.checkoutId, paymentId: paymentId }).then(function (k) {
+          forgetPayment();
+          if (k && k.ok === true && k.checkout) { openSuccess(k.checkout); }
+        });
+      }).catch(function () { /* the guest can retrieve later */ });
+      return;
+    }
     if (back && back[1] !== 'success') { if (ref) openRetrieve(ref); return; }
     postJson(PAY_API + '/status', { paymentId: paymentId }).then(function (j) {
       if (j && j.status === 'paid') {
@@ -1293,8 +1304,516 @@ window.BKReview = (function () {
     }).catch(function () { if (ref) openRetrieve(ref); });
   });
   document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape') { var m = $('retrieveModal'); if (m && !m.hidden) { m.hidden = true; document.body.classList.remove('hold-open'); } }
+    if (ev.key === 'Escape') {
+      ['retrieveModal', 'termsModal', 'successModal'].forEach(function (id) { var m = $(id); if (m && !m.hidden) { m.hidden = true; document.body.classList.remove('hold-open'); if (id === 'successModal') stopFireworks(); } });
+    }
   });
+
+  /* ================================================================
+     THE CHECKOUT (Dave, 2026-09-03): "Make the reservation".
+     Booking summary — the nights and rates held on the rate engine for the
+     configured minutes (a countdown, pinned top-right when scrolled off),
+     the email for the receipt, the terms and conditions (a link opens them
+     from Lodge Ops' Booking Engine page), Continue to payment.
+     Payment — the amount due now (a deposit when check-in is further away
+     than the full-payment window, else the whole stay), the same gateway
+     squares as the hold fee, the red Simulate successful payment button
+     when Lodge Ops allows it, the card fields or the hosted page, then the
+     congratulations over fireworks. Lodge Ops decides every figure; this
+     page only shows them.
+     ================================================================ */
+  var CHECKOUT_API = window.BK_CHECKOUT_API || '/api/web/booking-checkout';
+  var checkoutTimer = null, pinObserver = null;
+  var checkoutState = { current: null, ctx: null };
+  function stopCheckoutTimer() {
+    if (checkoutTimer) { clearInterval(checkoutTimer); checkoutTimer = null; }
+    if (pinObserver) { try { pinObserver.disconnect(); } catch (e) { /* fine */ } pinObserver = null; }
+    var pin = $('pinnedTimer'); if (pin) pin.hidden = true;
+  }
+  function mmss(untilMs) {
+    var left = Math.max(0, Math.floor((untilMs - Date.now()) / 1000));
+    var m = Math.floor(left / 60), sec = left % 60;
+    return pad2(m) + ':' + pad2(sec);
+  }
+  function termsParagraphs(text) {
+    var host = $('termsBody');
+    if (!host) return;
+    host.textContent = '';
+    var t = String(text || '').trim();
+    if (!t) { host.appendChild(el('p', 'terms-empty', 'No terms and conditions have been published yet — the lodge is adding them.')); return; }
+    t.split(/\n\s*\n/).forEach(function (para) {
+      var p = document.createElement('p');
+      para.split(/\n/).forEach(function (line, i) { if (i) p.appendChild(document.createElement('br')); p.appendChild(document.createTextNode(line)); });
+      host.appendChild(p);
+    });
+  }
+  function openTerms(config) {
+    var m = $('termsModal'); if (!m) return;
+    termsParagraphs(config && config.terms);
+    m.hidden = false; document.body.classList.add('hold-open');
+    function closeTerms() { m.hidden = true; document.body.classList.remove('hold-open'); }
+    var x = $('termsClose'); if (x) x.onclick = closeTerms;
+    m.onclick = function (ev) { if (ev.target === m) closeTerms(); };
+  }
+
+  /* Start: the section, the call to Lodge Ops (which takes the nights on
+     the engine), the card. fromHold = the hold view when the guest came
+     from the held card. */
+  function startCheckout(totals, fromHold) {
+    var ctx = state.ctx; if (!ctx) return;
+    var host = $('bookingSummary'), card = $('bookingSummaryCard');
+    if (!host || !card) return;
+    checkoutState.ctx = ctx;
+    var pay = $('payment'); if (pay) pay.hidden = true;
+    stopCheckoutTimer();
+    card.textContent = '';
+    card.appendChild(el('p', 'hold-choice-note', 'Holding your suites and rates on the booking engine…'));
+    host.hidden = false;
+    try { host.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
+    var stay = fromHold && fromHold.stay ? fromHold.stay : staySnapshot(ctx, totals || ctx.totals);
+    if (ctx.track) ctx.track('checkout_hold_requested', { fromHold: fromHold ? fromHold.reference : null, total: stay && stay.total != null ? Number(stay.total).toFixed(2) : null });
+    postJson(CHECKOUT_API + '/start', {
+      stay: stay,
+      snapshot: ctx.snapshot ? ctx.snapshot() : null,
+      email: fromHold && fromHold.email ? fromHold.email : null,
+      holdReference: fromHold ? fromHold.reference : null
+    }).then(function (j) {
+      if (!j || j.ok !== true || !j.checkout) {
+        card.textContent = '';
+        var err = el('p', 'hold-choice-note hold-choice-err', (j && j.message) || 'The booking could not be started just now — please try again in a moment.');
+        card.appendChild(err);
+        var back = el('button', 'cta cta-ghost'); back.type = 'button'; back.appendChild(el('span', 'cta-label', 'Search again'));
+        back.onclick = function () { host.hidden = true; if (ctx.onCancelHold) ctx.onCancelHold(); };
+        card.appendChild(back);
+        if (ctx.track) ctx.track('checkout_hold_failed', { message: j && j.message });
+        return;
+      }
+      if (ctx.track) ctx.track('checkout_held', { reference: j.checkout.reference, minutes: j.checkout.holdMinutes, amountDue: j.checkout.amountDue, kind: j.checkout.amountKind });
+      showCheckout(j.checkout, ctx);
+    }).catch(function () {
+      card.textContent = '';
+      card.appendChild(el('p', 'hold-choice-note hold-choice-err', 'We could not reach the lodge — check your connection and try again.'));
+    });
+  }
+
+  /* The booking summary card. */
+  function showCheckout(co, ctx) {
+    var host = $('bookingSummary'), card = $('bookingSummaryCard'), title = $('bookingSummaryTitle');
+    checkoutState.current = co;
+    card.textContent = '';
+    var stay = co.stay || {};
+    var untilMs = Date.parse(co.holdUntil);
+    var active = co.active !== false && co.status !== 'expired' && co.status !== 'cancelled' && untilMs > Date.now();
+    if (title) title.textContent = co.paid ? 'Your booking is paid' : active ? 'Your booking is being held for you' : 'The time to complete this booking has run out';
+
+    var refBlock = el('div', 'held-refblock');
+    refBlock.appendChild(el('span', 'rv-kicker', 'Booking reference'));
+    var ref = el('div', 'bs-ref', co.reference || ''); ref.id = 'bsRef';
+    refBlock.appendChild(ref);
+    card.appendChild(refBlock);
+
+    var meta = document.createElement('dl'); meta.className = 'bs-meta';
+    function row(k, v, id) { var dt = el('dt', null, k); var dd = el('dd', null, v); if (id) dd.id = id; meta.appendChild(dt); meta.appendChild(dd); }
+    var nights = stay.nights || 0;
+    if (stay.from && stay.to) row('Stay', C.fmtDate(stay.from) + ' — ' + C.fmtDate(stay.to) + ' · ' + nights + (nights === 1 ? ' night' : ' nights'), 'bsStay');
+    if (ctx && ctx.party) row('Guests', partyLabel(ctx.party));
+    if (co.holdReference) row('From your hold', co.holdReference);
+    card.appendChild(meta);
+
+    var list = el('div', 'held-suites bs-suites');
+    (stay.suites || []).forEach(function (s) {
+      var r = el('div', 'rv-row');
+      r.appendChild(el('span', null, (s.name || 'Suite') + ((s.qty || 1) > 1 ? ' × ' + s.qty : '') + (s.plan ? ' · ' + s.plan : '')));
+      r.appendChild(el('span', null, s.total != null ? C.moneyC(s.total * (s.qty || 1), co.currency) : 'on request'));
+      list.appendChild(r);
+      if (s.refund) list.appendChild(el('div', 'hold-refund', s.refund));
+    });
+    card.appendChild(list);
+    if (co.total != null) {
+      var grand = el('div', 'rv-grand');
+      grand.appendChild(el('span', null, 'Grand total'));
+      grand.appendChild(el('strong', null, C.moneyC(co.total, co.currency)));
+      grand.id = 'bsGrand';
+      card.appendChild(grand);
+    }
+
+    /* The rates held: the message and the countdown (Dave: "these rates
+       are being held for the {booking hold time} min timer counting down"). */
+    var held = el('div', 'bs-held'); held.id = 'bsHeld';
+    var msg = el('p', 'bs-held-msg'); msg.id = 'bsHeldMsg';
+    var timer = el('div', 'bs-held-timer'); timer.id = 'bsTimer';
+    held.appendChild(msg); held.appendChild(timer);
+    card.appendChild(held);
+    var pin = $('pinnedTimer'), pinVal = $('pinnedTimerValue');
+    function paintTimer() {
+      var v = mmss(untilMs);
+      timer.textContent = v;
+      if (pinVal) pinVal.textContent = v;
+    }
+    function expire() {
+      stopCheckoutTimer();
+      held.classList.add('out');
+      if (pin) pin.classList.add('out');
+      msg.textContent = 'The time to complete this booking has run out — the suites have been released. Please search again to start afresh.';
+      timer.textContent = '00:00';
+      if (title) title.textContent = 'The time to complete this booking has run out';
+      var btns = card.querySelectorAll('button.cta, input');
+      btns.forEach(function (b) { b.disabled = true; });
+      var pay = $('payment'); if (pay) pay.hidden = true;
+      if (ctx && ctx.track) ctx.track('checkout_expired', { reference: co.reference });
+    }
+    if (co.paid) {
+      msg.textContent = 'Paid — thank you. The reservations team will be in touch with your confirmation.';
+      timer.textContent = '✓';
+    } else if (active) {
+      msg.textContent = 'These rates and your suites are being held for you for ' + co.holdMinutes + ' minutes while you complete your booking.';
+      paintTimer();
+      checkoutTimer = setInterval(function () { if (untilMs - Date.now() <= 0) { expire(); return; } paintTimer(); }, 1000);
+      /* Pinned when the card's own clock scrolls out of view. */
+      if (pin && 'IntersectionObserver' in window) {
+        pin.classList.remove('out');
+        pinObserver = new IntersectionObserver(function (entries) {
+          entries.forEach(function (en) { pin.hidden = en.isIntersecting || !checkoutTimer; });
+        }, { threshold: 0 });
+        pinObserver.observe(held);
+      }
+    } else {
+      held.classList.add('out');
+      msg.textContent = 'The time to complete this booking has run out — please search again to start afresh.';
+      timer.textContent = '00:00';
+    }
+
+    if (co.paid) { host.hidden = false; return; }
+
+    /* The email for the receipt (a guest from a hold already gave one). */
+    var emailWrap = el('div', 'bs-email');
+    var emailL = el('label', null, 'Your email address (for your receipt)'); emailL.setAttribute('for', 'bsEmail');
+    var emailI = document.createElement('input');
+    emailI.id = 'bsEmail'; emailI.type = 'email'; emailI.className = 'hold-input'; emailI.inputMode = 'email';
+    emailI.setAttribute('autocomplete', 'email'); emailI.placeholder = 'you@example.com';
+    emailI.value = co.email || '';
+    emailWrap.appendChild(emailL); emailWrap.appendChild(emailI);
+    card.appendChild(emailWrap);
+
+    /* I agree to the terms and conditions — the link opens them. */
+    var agreeWrap = el('div', 'bs-agree');
+    var agreeLbl = el('label', 'agree');
+    var agreeBox = document.createElement('input'); agreeBox.type = 'checkbox'; agreeBox.id = 'bsAgree';
+    var agreeTxt = el('span', null, 'I agree to the ');
+    var termsLink = el('a', null, 'terms and conditions'); termsLink.id = 'bsTermsLink'; termsLink.href = '#terms';
+    termsLink.onclick = function (ev) { ev.preventDefault(); openTerms(ctx && ctx.config); if (ctx && ctx.track) ctx.track('terms_opened', { reference: co.reference }); };
+    agreeTxt.appendChild(termsLink); agreeTxt.appendChild(document.createTextNode('.'));
+    agreeLbl.appendChild(agreeBox); agreeLbl.appendChild(agreeTxt);
+    agreeWrap.appendChild(agreeLbl);
+    card.appendChild(agreeWrap);
+
+    var actions = el('div', 'bs-actions');
+    var cancel = el('button', 'cta cta-ghost'); cancel.type = 'button'; cancel.id = 'bsCancel';
+    cancel.appendChild(el('span', 'cta-label', 'Cancel and search again'));
+    var go = el('button', 'cta'); go.type = 'button'; go.id = 'bsContinue'; go.disabled = true; go.title = 'You must agree first';
+    go.appendChild(el('span', 'cta-label', 'Continue to payment'));
+    actions.appendChild(cancel); actions.appendChild(go);
+    card.appendChild(actions);
+    var note = el('p', 'hold-choice-note'); note.id = 'bsNote'; note.hidden = true;
+    card.appendChild(note);
+
+    function gate() {
+      var ok = agreeBox.checked && validEmail(emailI.value.trim());
+      go.disabled = !ok;
+      if (ok) go.removeAttribute('title'); else go.title = agreeBox.checked ? 'Enter your email address first' : 'You must agree first';
+    }
+    agreeBox.onchange = function () { gate(); if (ctx && ctx.track) ctx.track(agreeBox.checked ? 'terms_agreed' : 'terms_unagreed', { reference: co.reference }); };
+    emailI.oninput = gate;
+    gate();
+
+    cancel.onclick = function () {
+      cancel.disabled = true;
+      postJson(CHECKOUT_API + '/cancel', { id: co.id }).then(function () {
+        stopCheckoutTimer();
+        host.hidden = true;
+        var pay = $('payment'); if (pay) pay.hidden = true;
+        if (ctx && ctx.track) ctx.track('checkout_cancelled', { reference: co.reference });
+        if (co.holdReference) { /* the hold stands; back to the held card */ var h = $('held'); if (h) { try { h.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ } } }
+        else { close(); if (ctx && ctx.onCancelHold) ctx.onCancelHold(); }
+      }).catch(function () { cancel.disabled = false; });
+    };
+    go.onclick = function () {
+      if (go.disabled) return;
+      go.disabled = true; note.hidden = true;
+      postJson(CHECKOUT_API + '/continue', { id: co.id, email: emailI.value.trim() }).then(function (j) {
+        if (!j || j.ok !== true || !j.checkout) {
+          go.disabled = false;
+          note.className = 'hold-choice-note hold-choice-err';
+          note.textContent = (j && j.message) || 'That step could not be saved just now — please try again.';
+          note.hidden = false;
+          return;
+        }
+        checkoutState.current = j.checkout;
+        agreeBox.disabled = true; emailI.disabled = true;
+        if (ctx && ctx.track) ctx.track('checkout_continued', { reference: co.reference, amountDue: j.checkout.amountDue, kind: j.checkout.amountKind });
+        showPayment(j.checkout, ctx, untilMs);
+      }).catch(function () {
+        go.disabled = false;
+        note.className = 'hold-choice-note hold-choice-err';
+        note.textContent = 'We could not reach the lodge — check your connection and try again.';
+        note.hidden = false;
+      });
+    };
+    host.hidden = false;
+  }
+
+  /* The payment section: the amount due, the deposit lines, the gateways. */
+  function showPayment(co, ctx, untilMs) {
+    var host = $('payment'), card = $('paymentCard');
+    if (!host || !card) return;
+    card.textContent = '';
+    var stay = co.stay || {};
+    var meta = document.createElement('dl'); meta.className = 'bs-meta';
+    function row(k, v, id) { var dt = el('dt', null, k); var dd = el('dd', null, v); if (id) dd.id = id; meta.appendChild(dt); meta.appendChild(dd); }
+    row('Booking', co.reference, 'payRef');
+    row('Suites', (stay.suites || []).map(function (s) { return (s.name || 'Suite') + ((s.qty || 1) > 1 ? ' × ' + s.qty : ''); }).join(', '), 'paySuites');
+    if (stay.from && stay.to) row('Check-in / out', C.fmtDate(stay.from) + ' — ' + C.fmtDate(stay.to) + ' · ' + (stay.nights || 0) + (stay.nights === 1 ? ' night' : ' nights'), 'payDates');
+    row('Stay total', co.total != null ? C.moneyC(co.total, co.currency) : 'on request', 'payTotal');
+    card.appendChild(meta);
+
+    var amount = el('div', 'pay-amount'); amount.id = 'payAmount';
+    amount.appendChild(el('span', null, co.amountKind === 'deposit' ? 'Deposit due now' : 'Amount due now'));
+    amount.appendChild(el('strong', null, C.moneyC(co.amountDue, co.currency)));
+    card.appendChild(amount);
+    if (co.amountKind === 'deposit') {
+      var dep = el('div', 'pay-deposit'); dep.id = 'payDeposit';
+      var l1 = el('p'); l1.appendChild(document.createTextNode('Deposit amount required to secure your booking ')); l1.appendChild(el('strong', null, C.moneyC(co.amountDue, co.currency))); l1.appendChild(document.createTextNode('.'));
+      var l2 = el('p'); l2.appendChild(document.createTextNode('Your balance payment will not be due until ')); l2.appendChild(el('strong', null, co.balanceDueOn ? C.fmtDate(co.balanceDueOn) : 'later')); l2.appendChild(document.createTextNode('.'));
+      dep.appendChild(l1); dep.appendChild(l2);
+      card.appendChild(dep);
+    }
+
+    /* The gateways — the same squares as the hold fee. */
+    var providers = enabledProviders(ctx.config);
+    var payWrap = el('div', 'hold-paywrap');
+    payWrap.appendChild(el('p', 'kicker hold-kicker', 'Pay with'));
+    var payWait = el('p', 'hold-choice-note hold-paywait-note', 'Checking payment options…'); payWait.id = 'payChecking';
+    payWrap.appendChild(payWait);
+    var payMissing = el('p', 'hold-choice-note hold-choice-err'); payMissing.id = 'payMissing'; payMissing.hidden = true;
+    payWrap.appendChild(payMissing);
+    var squares = el('div', 'hold-pay'); squares.hidden = true; squares.id = 'paySquares';
+    var payer = null, modes = null, gwInfo = {}, stripeCard = null, stripeApi = null, done = false;
+    var payButtons = providers.map(function (p) {
+      var b = el('button', 'hold-payer'); b.type = 'button';
+      b.setAttribute('data-provider', p.key); b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', 'Pay with ' + p.name); b.title = 'Pay with ' + p.name;
+      b.appendChild(providerMark(p)); b.appendChild(el('span', 'hold-payer-name', p.name));
+      b.addEventListener('click', function () { if (!done) togglePayer(p); });
+      squares.appendChild(b);
+      return b;
+    });
+    payWrap.appendChild(squares);
+    var panel = el('div', 'hold-paypanel'); panel.id = 'payPanel'; panel.hidden = true;
+    payWrap.appendChild(panel);
+    card.appendChild(payWrap);
+    var note = el('p', 'hold-choice-note'); note.id = 'payNoteLine'; note.hidden = true;
+    card.appendChild(note);
+    var amountLabel = C.moneyC(co.amountDue, co.currency);
+    var simulateOn = !!(ctx.config && ctx.config.payments && ctx.config.payments.simulate === true);
+
+    getJson(PAY_API + '/gateways').then(function (j) {
+      var list = (j && Array.isArray(j.gateways)) ? j.gateways : null;
+      var found = {};
+      if (list) list.forEach(function (g) { if (g && g.key) { found[g.key] = g.mode === 'element' ? 'element' : 'redirect'; gwInfo[g.key] = g; } });
+      var anyEnabled = providers.some(function (p) { return !!found[p.key]; });
+      if (list && anyEnabled) { modes = found; payButtons.forEach(function (b) { b.hidden = !modes[b.getAttribute('data-provider')]; }); }
+      else {
+        modes = STATIC_MODES; payButtons.forEach(function (b) { b.hidden = false; });
+        payMissing.textContent = list ? 'Our payment provider is still being set up. You can try one, or contact us to secure the booking.' : 'Our payment provider could not be reached just now. You can try one, or contact us to secure the booking.';
+        payMissing.hidden = false;
+      }
+    }).catch(function () {
+      modes = STATIC_MODES; payButtons.forEach(function (b) { b.hidden = false; });
+      payMissing.textContent = 'Our payment provider could not be reached just now. You can try one, or contact us to secure the booking.'; payMissing.hidden = false;
+    }).then(function () { payWait.hidden = true; squares.hidden = false; });
+
+    function dropStripe() { if (stripeCard) { try { stripeCard.unmount(); } catch (e) { /* fine */ } stripeCard = null; } }
+    function clearPayer() { payer = null; dropStripe(); payButtons.forEach(function (b) { b.classList.remove('on'); b.classList.remove('dim'); b.setAttribute('aria-pressed', 'false'); }); panel.textContent = ''; panel.hidden = true; }
+    function togglePayer(p) {
+      if (payer && payer.key === p.key) { clearPayer(); return; }
+      payer = p;
+      payButtons.forEach(function (b) { var mine = b.getAttribute('data-provider') === p.key; b.classList.toggle('on', mine); b.classList.toggle('dim', !mine); b.setAttribute('aria-pressed', mine ? 'true' : 'false'); });
+      if (ctx.track) ctx.track('checkout_gateway_selected', { reference: co.reference, provider: p.key });
+      renderPanel(p);
+    }
+    function busy(on) { payButtons.forEach(function (b) { b.disabled = on; }); panel.querySelectorAll('button, input').forEach(function (i) { i.disabled = on; }); }
+    function fail(msgText) {
+      busy(false);
+      var target = panel.hidden ? note : (panel.querySelector('#payErr') || note);
+      target.className = 'hold-choice-note hold-choice-err'; target.textContent = msgText; target.hidden = false;
+    }
+    function verifyPaid(paymentId) {
+      var tries = 0;
+      function verify() {
+        return postJson(PAY_API + '/status', { paymentId: paymentId }).then(function (st) {
+          if (st && st.status === 'paid') return st;
+          if (++tries < 6) return new Promise(function (r) { setTimeout(r, 1500); }).then(verify);
+          throw new Error((st && st.error) || 'The payment has not been confirmed yet — please try again in a moment.');
+        });
+      }
+      return verify();
+    }
+    function recordPaid(paymentId) {
+      return postJson(CHECKOUT_API + '/paid', { id: co.id, paymentId: paymentId }).then(function (k) {
+        if (!k || k.ok !== true || !k.checkout) throw new Error((k && k.message) || 'The payment went through but could not be recorded — please contact the lodge with reference ' + co.reference + '.');
+        return k.checkout;
+      });
+    }
+    function celebrate(paidCo) {
+      done = true; busy(true);
+      checkoutState.current = paidCo;
+      stopCheckoutTimer();
+      if (ctx.track) ctx.track('checkout_paid', { reference: co.reference, amount: paidCo.paidAmount, gateway: paidCo.paymentGateway });
+      forgetPayment();
+      showCheckout(paidCo, ctx);
+      var pay = $('payment'); if (pay) pay.hidden = true;
+      openSuccess(paidCo);
+    }
+    function simulate() {
+      busy(true); note.hidden = true;
+      postJson(PAY_API + '/simulate', { reference: co.reference, email: co.email || undefined })
+        .then(function (j) {
+          if (!j || j.ok !== true || !j.paymentId) throw new Error((j && j.message) || 'The simulated payment was refused.');
+          return recordPaid(j.paymentId);
+        })
+        .then(celebrate)
+        .catch(function (e) { fail(e && e.message ? e.message : 'The simulated payment could not be made.'); });
+    }
+    function renderPanel(p) {
+      panel.textContent = ''; panel.hidden = false;
+      var mode = (modes || STATIC_MODES)[p.key] || 'redirect';
+      dropStripe();
+      panel.className = 'hold-paypanel ' + (mode === 'element' ? 'hold-cardform' : 'hold-redirect');
+      panel.setAttribute('data-mode', mode);
+      var err = el('p', 'hold-choice-note hold-choice-err'); err.id = 'payErr'; err.hidden = true;
+      /* The RED simulate button above the card payment (Dave, 2026-09-03),
+         only while Lodge Ops allows simulated payments. */
+      if (simulateOn) {
+        var sim = el('button', 'pay-simulate'); sim.type = 'button'; sim.id = 'paySimulate';
+        sim.textContent = 'Simulate successful payment — ' + amountLabel;
+        sim.addEventListener('click', simulate);
+        panel.appendChild(sim);
+      }
+      if (mode === 'element') {
+        panel.appendChild(el('p', 'kicker hold-kicker', 'Card details · ' + p.name));
+        var form = document.createElement('form'); form.setAttribute('autocomplete', 'on'); form.noValidate = true;
+        var nameL = el('label', null, 'Name on card');
+        var nameI = document.createElement('input'); nameI.name = 'ccName'; nameI.id = 'pay-ccName'; nameI.type = 'text'; nameI.required = true;
+        nameI.setAttribute('autocomplete', 'cc-name'); nameI.setAttribute('maxlength', '80'); nameI.setAttribute('placeholder', 'As printed on the card');
+        nameL.appendChild(nameI); form.appendChild(nameL);
+        var cardL = el('label', null, 'Card number, expiry and CVC');
+        var mount = el('div', 'hold-stripe-el loading', 'Loading the secure card fields…'); mount.id = 'payCardElement';
+        cardL.appendChild(mount); form.appendChild(cardL);
+        var sec = secureRow();
+        var by = el('span', 'hold-secure-item hold-secure-stripe', 'Card fields by Stripe — never seen by this site');
+        sec.insertBefore(by, sec.firstChild); form.appendChild(sec);
+        var go = el('button', 'cta hold-paynow'); go.type = 'submit'; go.id = 'payNow'; go.disabled = true;
+        go.appendChild(el('span', 'cta-label', 'Pay ' + amountLabel));
+        form.appendChild(go); form.appendChild(err); panel.appendChild(form);
+        form.addEventListener('submit', function (ev) {
+          ev.preventDefault(); err.hidden = true;
+          if (!nameI.value.trim()) { err.textContent = 'Please enter the name on the card.'; err.hidden = false; return; }
+          if (!stripeCard || !stripeApi) { err.textContent = 'The secure card fields are still loading — one moment.'; err.hidden = false; return; }
+          busy(true);
+          postJson(PAY_API + '/intent', { gateway: p.key, reference: co.reference, email: co.email || undefined })
+            .then(function (j) {
+              if (!j || j.ok !== true) throw new Error((j && j.message) || 'The payment could not be started — please try again or choose another payment method.');
+              if (j.status === 'paid') return j.paymentId;
+              if (!j.clientSecret) throw new Error('The payment could not be started — please try again.');
+              return stripeApi.confirmCardPayment(j.clientSecret, { payment_method: { card: stripeCard, billing_details: { name: nameI.value.trim().slice(0, 80), email: co.email || undefined } } })
+                .then(function (res) { if (res && res.error) throw new Error(res.error.message || 'The payment was not accepted — please check the card or try another.'); return j.paymentId; });
+            })
+            .then(function (paymentId) { return verifyPaid(paymentId).then(function () { return recordPaid(paymentId); }); })
+            .then(celebrate)
+            .catch(function (e) { fail(e && e.message && !/fetch|network/i.test(e.message) ? e.message : 'We could not reach the lodge — check your connection and try again.'); });
+        });
+        var pk = (gwInfo[p.key] && gwInfo[p.key].publishableKey) || (ctx.config && ctx.config.stripePublishableKey) || '';
+        loadStripe(pk, !!gwInfo[p.key]).then(function (stripe) {
+          if (!payer || payer.key !== p.key || !mount.isConnected) return;
+          stripeApi = stripe;
+          stripeCard = stripe.elements().create('card', { hidePostalCode: true, style: { base: { color: '#f3ede1', fontFamily: 'inherit', fontSize: '16px', '::placeholder': { color: 'rgba(243, 237, 225, 0.4)' }, iconColor: '#d8b46a' }, invalid: { color: '#e8a58a', iconColor: '#e8a58a' } } });
+          mount.textContent = ''; mount.classList.remove('loading');
+          stripeCard.mount(mount);
+          stripeCard.on('change', function (e) { mount.classList.toggle('bad', !!(e && e.error)); if (e && e.error) { err.textContent = e.error.message; err.hidden = false; } else { err.hidden = true; } go.disabled = !(e && e.complete); });
+        }).catch(function (e) {
+          mount.textContent = 'The secure card fields could not be loaded: ' + ((e && e.message) || 'check your connection') + '. You can choose another payment method.';
+          mount.classList.add('bad');
+        });
+      } else {
+        panel.appendChild(el('p', 'kicker hold-kicker', 'Pay with ' + p.name));
+        panel.appendChild(el('p', null, 'You will be taken to ' + p.name + '’s secure page to pay ' + amountLabel + '. This page keeps your booking and updates itself once the payment is done.'));
+        panel.appendChild(secureRow());
+        var go2 = el('button', 'cta hold-paynow'); go2.type = 'button'; go2.id = 'payNow';
+        go2.appendChild(el('span', 'cta-label', 'Click here to make payment'));
+        go2.addEventListener('click', function () {
+          busy(true);
+          var w = null; try { w = window.open('', '_blank'); } catch (e) { w = null; }
+          var here = location.href.split('#')[0].split('?')[0];
+          postJson(PAY_API + '/checkout', { gateway: p.key, reference: co.reference, email: co.email || undefined, returnUrl: here, cancelUrl: here })
+            .then(function (j) {
+              if (!j || j.ok !== true || !j.url) { if (w) w.close(); throw new Error((j && j.message) || 'The payment page could not be opened — please try again or choose another payment method.'); }
+              try { localStorage.setItem(PAY_KEY, JSON.stringify({ kind: 'checkout', checkoutId: co.id, reference: co.reference, paymentId: j.paymentId })); } catch (e) { /* fine */ }
+              if (w) { try { w.location = j.url; } catch (e) { w = null; } }
+              if (!w) { try { window.open(j.url, '_blank'); } catch (e) { location.href = j.url; } }
+              var wait = el('p', 'hold-paywait', 'Waiting for your payment on ' + p.name + '…'); panel.appendChild(wait);
+              var tries = 0;
+              var poll = setInterval(function () {
+                if (++tries > 450 || done) { clearInterval(poll); return; }
+                postJson(PAY_API + '/status', { paymentId: j.paymentId }).then(function (st) {
+                  if (!st || st.status === 'pending') return;
+                  clearInterval(poll);
+                  if (st.status !== 'paid') { fail('The payment did not go through (' + (st.error || st.status) + '). You can try again.'); return; }
+                  recordPaid(j.paymentId).then(celebrate).catch(function (e) { fail(e.message); });
+                }).catch(function () { /* next tick */ });
+              }, 4000);
+            })
+            .catch(function (e) { fail(e && e.message ? e.message : 'We could not reach the lodge — check your connection and try again.'); });
+        });
+        panel.appendChild(go2); panel.appendChild(err);
+      }
+    }
+    host.hidden = false;
+    try { host.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
+  }
+
+  /* Congratulations, over ten seconds of fireworks. */
+  var fireworksRaf = null, fireworksStop = null;
+  function stopFireworks() { if (fireworksRaf) { cancelAnimationFrame(fireworksRaf); fireworksRaf = null; } if (fireworksStop) { clearTimeout(fireworksStop); fireworksStop = null; } }
+  function runFireworks(canvas, ms) {
+    var ctx2 = canvas.getContext('2d'); if (!ctx2) return;
+    var W = canvas.width = canvas.clientWidth || window.innerWidth, H = canvas.height = canvas.clientHeight || window.innerHeight;
+    var parts = [], rockets = [], t0 = Date.now(), last = t0;
+    var colours = ['#d8b46a', '#f3ede1', '#e8a58a', '#7fd1b9', '#9ec5ff', '#f6c1ff'];
+    function launch() { rockets.push({ x: W * (0.15 + Math.random() * 0.7), y: H, vx: (Math.random() - 0.5) * 1.5, vy: -(H * 0.012 + Math.random() * H * 0.006), c: colours[Math.floor(Math.random() * colours.length)], burstAt: H * (0.25 + Math.random() * 0.35) }); }
+    function burst(r) { var n = 60 + Math.floor(Math.random() * 40); for (var i = 0; i < n; i++) { var a = (Math.PI * 2 * i) / n, sp = 2 + Math.random() * 4; parts.push({ x: r.x, y: r.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, c: r.c }); } }
+    function frame() {
+      var now = Date.now(), dt = Math.min(40, now - last) / 16; last = now;
+      ctx2.fillStyle = 'rgba(8, 10, 14, 0.22)'; ctx2.fillRect(0, 0, W, H);
+      if (Math.random() < 0.06 && now - t0 < ms - 1500) launch();
+      rockets = rockets.filter(function (r) { r.x += r.vx * dt; r.y += r.vy * dt; r.vy += 0.12 * dt; ctx2.fillStyle = r.c; ctx2.beginPath(); ctx2.arc(r.x, r.y, 2.2, 0, Math.PI * 2); ctx2.fill(); if (r.y <= r.burstAt || r.vy >= 0) { burst(r); return false; } return true; });
+      parts = parts.filter(function (p) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 0.05 * dt; p.vx *= 0.985; p.vy *= 0.985; p.life -= 0.012 * dt; if (p.life <= 0) return false; ctx2.globalAlpha = Math.max(0, p.life); ctx2.fillStyle = p.c; ctx2.beginPath(); ctx2.arc(p.x, p.y, 2, 0, Math.PI * 2); ctx2.fill(); ctx2.globalAlpha = 1; return true; });
+      if (now - t0 < ms || parts.length || rockets.length) fireworksRaf = requestAnimationFrame(frame); else { fireworksRaf = null; ctx2.clearRect(0, 0, W, H); }
+    }
+    ctx2.clearRect(0, 0, W, H);
+    for (var i = 0; i < 3; i++) launch();
+    fireworksRaf = requestAnimationFrame(frame);
+    fireworksStop = setTimeout(function () { /* the loop winds down by itself once ms is up */ }, ms);
+  }
+  function openSuccess(co) {
+    var m = $('successModal'); if (!m) return;
+    var ref = $('successRef'); if (ref) ref.textContent = 'Booking reference ' + (co.reference || '') + ' · ' + C.moneyC(co.paidAmount != null ? co.paidAmount : co.amountDue, co.paidCurrency || co.currency) + ' received';
+    m.hidden = false; document.body.classList.add('hold-open');
+    var canvas = $('fireworks');
+    var reduce = false; try { reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { /* fine */ }
+    if (canvas && !reduce) runFireworks(canvas, 10000);
+    function closeSuccess() { stopFireworks(); m.hidden = true; document.body.classList.remove('hold-open'); }
+    var x = $('successClose'); if (x) x.onclick = closeSuccess;
+    m.onclick = function (ev) { if (ev.target === m) closeSuccess(); };
+  }
 
   /* Open the summary as a section below the results (the results stay;
      the page scrolls down to it). ctx: { picks, from, to, nights, party, lodge, config,
@@ -1357,6 +1876,10 @@ window.BKReview = (function () {
       if (!box.checked) return;
       if (ctx.onPay) ctx.onPay(totals);
     };
+    /* A fresh summary retires an earlier checkout section. */
+    var prevBs = $('bookingSummary'); if (prevBs) prevBs.hidden = true;
+    var prevPay = $('payment'); if (prevPay) prevPay.hidden = true;
+    stopCheckoutTimer();
     if (hold) hold.onclick = function () {
       if (!box.checked || hold.hidden || hold.disabled) return;
       var prior = storedVerified();
@@ -1384,6 +1907,9 @@ window.BKReview = (function () {
     var held = $('held');
     if (held) held.hidden = true;
     stopHeldTimer();
+    var bs = $('bookingSummary'); if (bs) bs.hidden = true;
+    var pay = $('payment'); if (pay) pay.hidden = true;
+    stopCheckoutTimer();
     closeHoldModal();
     state.open = false;
   }
@@ -1392,5 +1918,6 @@ window.BKReview = (function () {
 
   return { open: open, close: close, isOpen: isOpen, DEFAULT_AGREE: DEFAULT_AGREE,
     holdsConfig: holdsConfig, holdOffered: holdOffered, daysUntil: daysUntil,
-    showHeld: showHeld, openRetrieve: openRetrieve };
+    showHeld: showHeld, openRetrieve: openRetrieve,
+    startCheckout: startCheckout, showCheckout: showCheckout };
 })();

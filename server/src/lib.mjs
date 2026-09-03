@@ -102,6 +102,9 @@ export const FORWARD_ROUTES = {
   'POST /api/public/payments/intent': { method: 'POST', path: '/api/booking/payments/intent' },
   'POST /api/public/payments/checkout': { method: 'POST', path: '/api/booking/payments/checkout' },
   'POST /api/public/payments/status': { method: 'POST', path: '/api/booking/payments/status' },
+  // A simulated payment (Dave, 2026-09-03) — the engine refuses it unless the
+  // site config's payments.simulate is on; testing only.
+  'POST /api/public/payments/simulate': { method: 'POST', path: '/api/booking/payments/simulate' },
 };
 
 export function forwardTargetFor(method, urlPath) {

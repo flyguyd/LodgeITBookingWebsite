@@ -947,4 +947,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.75',
+    version: '0.1.75',
+    date: '2026-09-04T01:51:28+02:00',
+    changes: [
+      {
+        headline:
+          'The Booking summary form validates as the guest goes (Dave, 2026-09-04). Once a field has been left, it is checked on every keystroke: a wrong one is highlighted with the reason under it \u2014 \u201cThat doesn\u2019t look like a valid e-mail address\u201d, \u201cEnter a phone number with at least 6 digits, e.g. +27 82 123 4567\u201d, \u201cEnter the full name\u201d, \u201cEnter your post code\u201d \u2014 and clears the moment it is right; a good one gets a quiet gold edge. Nothing shouts before the guest has touched a field, and blank optional fields are never flagged.',
+        detail:
+          'review.js showCheckout: field() now takes a check(value) \u2192 message|null and renders a .bs-err line under the input (aria-describedby / aria-invalid); each field is \u201ctouched\u201d on blur (or blur after typing) and re-checked on input thereafter, toggling .bad / .ok on its .bs-field. Checks: needName (blank \u2192 \u201cEnter your full name\u201d / \u201cEnter this guest\u2019s name\u201d, one character \u2192 \u201cEnter the full name\u201d), needPhone(optional) (the same 6-digit rule as Lodge Ops; blank allowed on the other guests), needEmail, needText for post code / state / country. The Continue gate reads the same checks, so the button and the highlights can never disagree. CSS: .bs-err, .bs-field.bad .hold-input (coral edge + glow), .bs-field.ok .hold-input (gold edge). VERIFIED: 46 Chromium assertions on desktop and mobile \u2014 bad e-mail / phone / short name flagged with the exact reason on leaving the field and cleared on correction, a blank optional field never flagged, the gate still opening only when everything is right.',
+      },
+    ],
+  },
 ];

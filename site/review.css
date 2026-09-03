@@ -294,6 +294,9 @@ body.hold-open { overflow: hidden; }
 .bs-guest label { display: block; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--paper-dim); margin-bottom: 6px; }
 .bs-guest input { width: 100%; max-width: none; }
 .bs-req { color: var(--gold); }
+.bs-err { margin: 5px 0 0; font-size: 12.5px; line-height: 1.4; color: #e8a58a; }
+.bs-field.bad .hold-input { border-color: #e8a58a; box-shadow: 0 0 0 2px rgba(232, 165, 138, 0.22); }
+.bs-field.ok .hold-input { border-color: rgba(216, 180, 106, 0.55); }
 .bs-reqnote { margin: 10px 0 0; font-size: 12px; color: var(--paper-dim); }
 .bs-guest-row { margin-top: 12px; padding: 12px 14px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; }
 .bs-guest-n { display: block; margin-bottom: 8px; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold); }

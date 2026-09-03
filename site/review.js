@@ -1612,7 +1612,14 @@ window.BKReview = (function () {
     var emailWrap = el('div', 'bs-email bs-guest'); emailWrap.id = 'bsGuest';
     var countries = countryList();
     if (countries) emailWrap.appendChild(countries);
-    function field(host, label, id, type, mode, auto, placeholder, value, required, span) {
+    /* Each field validates itself as the guest goes (Dave, 2026-09-04):
+       once a field has been left (or typed in and left), it is checked on
+       every keystroke, highlighted while wrong, with the reason under it -
+       "That doesn't look like a valid e-mail address" - and cleared the
+       moment it is right. Nothing shouts before the guest has touched it. */
+    var fields = [];
+    function validPhone(v) { return /^\+?[\d\s().-]{6,40}$/.test(v) && (v.match(/\d/g) || []).length >= 6; }
+    function field(host, label, id, type, mode, auto, placeholder, value, required, span, check) {
       var w = el('div', 'bs-field' + (span ? ' bs-span2' : ''));
       var l = el('label', null, label); l.setAttribute('for', id);
       if (required) l.appendChild(el('span', 'bs-req', ' *'));
@@ -1623,23 +1630,41 @@ window.BKReview = (function () {
       i.value = value || '';
       if (required) i.required = true;
       if (/Country/.test(label) && countries) i.setAttribute('list', 'bsCountries');
-      w.appendChild(l); w.appendChild(i); host.appendChild(w);
+      var err = el('p', 'bs-err'); err.id = id + 'Err'; err.hidden = true;
+      i.setAttribute('aria-describedby', err.id);
+      w.appendChild(l); w.appendChild(i); w.appendChild(err); host.appendChild(w);
+      var f = { input: i, wrap: w, err: err, check: check || null, touched: false };
+      f.problem = function () { return f.check ? f.check(i.value.trim()) : null; };
+      f.show = function () {
+        var msg = f.problem();
+        w.classList.toggle('bad', !!msg);
+        w.classList.toggle('ok', !msg && !!i.value.trim());
+        i.setAttribute('aria-invalid', msg ? 'true' : 'false');
+        err.textContent = msg || ''; err.hidden = !msg;
+      };
+      i.addEventListener('blur', function () { if (i.value.trim() || f.touched) { f.touched = true; f.show(); } });
+      i.addEventListener('input', function () { if (f.touched) f.show(); });
+      fields.push(f);
       return i;
     }
+    var needName = function (what) { return function (v) { return !v ? 'Enter ' + what : v.length < 2 ? 'Enter the full name' : null; }; };
+    var needPhone = function (optional) { return function (v) { return !v ? (optional ? null : 'Enter a phone number we can reach you on') : validPhone(v) ? null : 'Enter a phone number with at least 6 digits, e.g. +27 82 123 4567'; }; };
+    var needText = function (what) { return function (v) { return v ? null : 'Enter ' + what; }; };
+    var needEmail = function (v) { return !v ? 'Enter your e-mail address' : validEmail(v) ? null : 'That doesn\u2019t look like a valid e-mail address'; };
     emailWrap.appendChild(el('span', 'rv-kicker bs-sub', 'Your details'));
     var grid1 = el('div', 'bs-grid'); emailWrap.appendChild(grid1);
-    var nameI = field(grid1, 'Your full name', 'bsName', 'text', null, 'name', 'First and last name', co.guestName, true);
-    var phoneI = field(grid1, 'Phone number', 'bsPhone', 'tel', 'tel', 'tel', '+27 82 123 4567', co.phone, true);
-    var emailI = field(grid1, 'E-mail address', 'bsEmail', 'email', 'email', 'email', 'you@example.com', co.email, true, true);
+    var nameI = field(grid1, 'Your full name', 'bsName', 'text', null, 'name', 'First and last name', co.guestName, true, false, needName('your full name'));
+    var phoneI = field(grid1, 'Phone number', 'bsPhone', 'tel', 'tel', 'tel', '+27 82 123 4567', co.phone, true, false, needPhone(false));
+    var emailI = field(grid1, 'E-mail address', 'bsEmail', 'email', 'email', 'email', 'you@example.com', co.email, true, true, needEmail);
     var addr = co.address || {};
     emailWrap.appendChild(el('span', 'rv-kicker bs-sub', 'Postal address'));
     var grid2 = el('div', 'bs-grid'); emailWrap.appendChild(grid2);
     var streetI = field(grid2, 'House number and Road/Street', 'bsStreet', 'text', null, 'address-line1', '', addr.street, false, true);
     var aptI = field(grid2, 'Apartment number', 'bsApartment', 'text', null, 'address-line2', '', addr.apartment, false);
     var cityI = field(grid2, 'City', 'bsCity', 'text', null, 'address-level2', '', addr.city, false);
-    var postI = field(grid2, 'Post Code', 'bsPostCode', 'text', null, 'postal-code', '', addr.postCode, true);
-    var stateI = field(grid2, 'State', 'bsState', 'text', null, 'address-level1', 'Province / state', addr.state, true);
-    var countryI = field(grid2, 'Country', 'bsCountry', 'text', null, 'country-name', '', addr.country, true);
+    var postI = field(grid2, 'Post Code', 'bsPostCode', 'text', null, 'postal-code', '', addr.postCode, true, false, needText('your post code'));
+    var stateI = field(grid2, 'State', 'bsState', 'text', null, 'address-level1', 'Province / state', addr.state, true, false, needText('your state or province'));
+    var countryI = field(grid2, 'Country', 'bsCountry', 'text', null, 'country-name', '', addr.country, true, false, needText('your country'));
     /* The other guests: the party as searched, less the booker. */
     var party = (ctx && ctx.party) || {};
     var others = Math.max(0, (Number(party.adults) || 0) + (Number(party.children) || 0) - 1);
@@ -1653,8 +1678,8 @@ window.BKReview = (function () {
         var gGrid = el('div', 'bs-grid bs-grid3'); gWrap.appendChild(gGrid);
         var prior = priorGuests[gi] || {};
         guestRows.push({
-          name: field(gGrid, 'Guest name', 'bsGuestName' + (gi + 2), 'text', null, 'off', 'First and last name', prior.name, true),
-          phone: field(gGrid, 'Phone Number', 'bsGuestPhone' + (gi + 2), 'tel', 'tel', 'off', '', prior.phone, false),
+          name: field(gGrid, 'Guest name', 'bsGuestName' + (gi + 2), 'text', null, 'off', 'First and last name', prior.name, true, false, needName('this guest\u2019s name')),
+          phone: field(gGrid, 'Phone Number', 'bsGuestPhone' + (gi + 2), 'tel', 'tel', 'off', '', prior.phone, false, false, needPhone(true)),
           country: field(gGrid, 'Country', 'bsGuestCountry' + (gi + 2), 'text', null, 'off', '', prior.country, false)
         });
         emailWrap.appendChild(gWrap);
@@ -1685,18 +1710,10 @@ window.BKReview = (function () {
     var note = el('p', 'hold-choice-note'); note.id = 'bsNote'; note.hidden = true;
     card.appendChild(note);
 
-    function validPhone(v) { return /^\+?[\d\s().-]{6,40}$/.test(v) && (v.match(/\d/g) || []).length >= 6; }
     function missing() {
-      if (nameI.value.trim().length < 2) return 'Enter your full name first';
-      if (!validPhone(phoneI.value.trim())) return 'Enter your phone number first';
-      if (!validEmail(emailI.value.trim())) return 'Enter your email address first';
-      if (!postI.value.trim()) return 'Enter your post code first';
-      if (!stateI.value.trim()) return 'Enter your state first';
-      if (!countryI.value.trim()) return 'Enter your country first';
-      for (var k = 0; k < guestRows.length; k++) {
-        if (guestRows[k].name.value.trim().length < 2) return 'Enter the name of guest ' + (k + 2) + ' first';
-        var gp = guestRows[k].phone.value.trim();
-        if (gp && !validPhone(gp)) return 'Check the phone number of guest ' + (k + 2);
+      for (var k = 0; k < fields.length; k++) {
+        var msg = fields[k].problem();
+        if (msg) return msg;
       }
       if (!agreeBox.checked) return 'You must agree first';
       return null;

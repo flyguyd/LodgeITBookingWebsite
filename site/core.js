@@ -603,6 +603,20 @@ window.BKCore = (function () {
    *  2026-09-02): the first restriction message any offered plan carries —
    *  "Closed to arrivals on 15 September 2026". Empty when the suite is
    *  simply unpriced; never invented. */
+  /** True when NO offered plan takes this party in this suite because the
+   *  suite does not allow the requested number of guests (engine 028) —
+   *  the card then offers the advanced search instead of a calendar. */
+  function planOverCapacity(roomTypeId, ratePlans) {
+    var seen = false, over = true;
+    (ratePlans || []).forEach(function (p) {
+      var s = p && p.suites && p.suites[String(roomTypeId)];
+      if (!s) return;
+      seen = true;
+      if (s.available === true || s.overCapacity !== true) over = false;
+    });
+    return seen && over;
+  }
+
   function planRestriction(roomTypeId, ratePlans) {
     var out = '';
     (ratePlans || []).forEach(function (p) {
@@ -980,6 +994,7 @@ window.BKCore = (function () {
     extraGuestsLabel: extraGuestsLabel,
     planOptionsFor: planOptionsFor,
     planRestriction: planRestriction,
+    planOverCapacity: planOverCapacity,
     applyInclusionDeltas: applyInclusionDeltas,
     refundLabel: refundLabel,
     ruleCallouts: ruleCallouts,

@@ -76,9 +76,33 @@
           autocapitalize="characters" autocomplete="off" spellcheck="false" />
       </label>
       <button id="searchBtn" type="submit" class="cta big">Check availability</button>
-      <p class="retrieve-row"><button id="retrieveLink" type="button" class="retrieve-link">Retrieve booking</button></p>
+      <p class="retrieve-row">
+        <button id="retrieveLink" type="button" class="retrieve-link">Retrieve booking</button>
+        <button id="advBtn" type="button" class="retrieve-link adv-link" data-tip="Advanced search">Advanced search</button>
+      </p>
       <p id="formNote" class="form-note" hidden></p>
     </form>
+    <!-- ADVANCED SEARCH (Dave, 2026-09-04): a party per room — advanced.js. -->
+    <section id="advPanel" class="glass panel adv-panel" hidden>
+      <div class="adv-head">
+        <div>
+          <p class="kicker">Advanced search</p>
+          <h2 class="adv-title">A suite for every room</h2>
+          <p class="adv-sub">Who is in each room? Every room is searched at once; choose a suite for each.</p>
+        </div>
+        <button type="button" class="adv-close" aria-label="Close the advanced search">Simple</button>
+      </div>
+      <div class="adv-rooms"></div>
+      <div class="adv-actions">
+        <button type="button" class="adv-add">+ Add another room</button>
+        <span class="adv-hint">Then press Check availability.</span>
+      </div>
+      <div class="adv-results"></div>
+      <div class="adv-foot">
+        <span class="adv-continue-note"></span>
+        <button type="button" class="cta adv-continue" hidden>Continue with these suites</button>
+      </div>
+    </section>
 
     <section id="stateLoading" class="state" hidden>
       <div class="glass skeleton"></div>
@@ -292,6 +316,7 @@
   <script src="../calendar.js"></script>
   <script src="../lightbox.js"></script>
   <script src="../review.js"></script>
+  <script src="../advanced.js"></script>
   <script src="booking.js"></script>
 
   <!-- The website chat client (see the full build for the rationale). -->

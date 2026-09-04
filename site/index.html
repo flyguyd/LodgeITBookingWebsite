@@ -44,7 +44,7 @@
 
     <section class="bar-wrap reveal d4">
       <form id="searchForm" class="glass bar" novalidate>
-        <label class="bar-field">
+        <label class="bar-field date">
           <span>Arrive</span>
           <input id="fArrive" type="date" required />
         </label>
@@ -55,19 +55,19 @@
           <input id="fNightsCustom" type="number" min="2" max="30" inputmode="numeric" placeholder="nights" hidden />
         </label>
         <span class="bar-sep" aria-hidden="true"></span>
-        <label class="bar-field slim">
+        <label class="bar-field slim party">
           <span>Adults</span>
           <select id="fAdults"></select>
         </label>
-        <label class="bar-field slim">
+        <label class="bar-field slim party">
           <span>Children</span>
           <select id="fChildren"></select>
         </label>
-        <label class="bar-field slim">
+        <label class="bar-field slim party">
           <span>Infants</span>
           <select id="fInfants"></select>
         </label>
-        <label class="bar-field slim">
+        <label class="bar-field slim party">
           <span>Suites</span>
           <select id="fRooms"></select>
         </label>
@@ -78,13 +78,43 @@
             autocapitalize="characters" autocomplete="off" spellcheck="false" />
         </label>
         <div class="bar-go">
-          <button id="searchBtn" type="submit" class="cta">
-            <span class="cta-label">Check availability</span>
-          </button>
+          <div class="bar-go-row">
+            <button id="searchBtn" type="submit" class="cta">
+              <span class="cta-label">Check availability</span>
+            </button>
+            <!-- The advanced search lives behind a handle on the button's
+                 right (Dave, 2026-09-04): hover says what it is, a click
+                 opens the room-by-room search above the results. -->
+            <button id="advBtn" type="button" class="cta-adv" aria-label="Advanced search" data-tip="Advanced search">
+              <span aria-hidden="true">⁝</span>
+            </button>
+          </div>
           <!-- Directly under the button, inside the bar (Dave, 2026-09-02). -->
           <button id="retrieveLink" type="button" class="retrieve-link">Retrieve booking</button>
         </div>
       </form>
+      <!-- ADVANCED SEARCH (Dave, 2026-09-04): one party per room, every room
+           searched at once, a suite chosen for each — see advanced.js. -->
+      <section id="advPanel" class="glass adv-panel" hidden>
+        <div class="adv-head">
+          <div>
+            <p class="kicker">Advanced search</p>
+            <h2 class="adv-title">A suite for every room</h2>
+            <p class="adv-sub">Tell us who is in each room. We search every room at once and you choose a suite for each.</p>
+          </div>
+          <button type="button" class="adv-close" aria-label="Close the advanced search">Simple search</button>
+        </div>
+        <div class="adv-rooms"></div>
+        <div class="adv-actions">
+          <button type="button" class="adv-add">+ Add another room</button>
+          <span class="adv-hint">Then press Check availability.</span>
+        </div>
+        <div class="adv-results"></div>
+        <div class="adv-foot">
+          <span class="adv-continue-note"></span>
+          <button type="button" class="cta adv-continue" hidden><span class="cta-label">Continue with these suites</span></button>
+        </div>
+      </section>
       <p id="formNote" class="form-note" hidden></p>
     </section>
 
@@ -323,6 +353,7 @@
   <script src="calendar.js"></script>
   <script src="lightbox.js"></script>
   <script src="review.js"></script>
+  <script src="advanced.js"></script>
   <script src="booking.js"></script>
   <!-- The hidden Rate Engine load harness (0.1.30): type "load" to open it.
        Inert unless the server has it switched on — LOAD_TEST=0 makes its

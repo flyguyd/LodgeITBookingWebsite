@@ -10,7 +10,7 @@
   var els = {
     arrive: $('fArrive'), nights: $('fNights'), nightsCustom: $('fNightsCustom'),
     adults: $('fAdults'), children: $('fChildren'), infants: $('fInfants'), rooms: $('fRooms'),
-    code: $('fCode'), btn: $('searchBtn'),
+    code: $('fCode'), btn: $('searchBtn'), adv: $('advBtn'), advPanel: $('advPanel'),
     note: $('formNote'), loading: $('stateLoading'),
     maintenance: $('stateMaintenance'), unavailable: $('stateUnavailable'),
     empty: $('stateEmpty'), results: $('results'), resultsHead: $('resultsHead'),
@@ -22,6 +22,13 @@
   /* picks: roomTypeId -> { room, qty } — guests can take MORE THAN ONE suite
      (Dave, 2026-08-23), and more than one unit of a type when available. */
   var current = { from: null, to: null, results: [], picks: {}, nights: 0 };
+  /* THE PARTY as the page knows it: the bar's single party, or — in the
+     advanced search (Dave, 2026-09-04) — every room's party added up. */
+  function advOn() { return !!(window.BKAdv && window.BKAdv.isOn()); }
+  function partyNow() {
+    if (advOn()) return window.BKAdv.party();
+    return { adults: els.adults.value, children: els.children.value, infants: els.infants ? els.infants.value : '0' };
+  }
   /* Relative on purpose: under the /book/ path-mount this resolves to
      /book/media/… which nginx strips back to /media/… for the site server. */
   var MEDIA_BASE = 'media/';
@@ -175,32 +182,30 @@
   /* The search answer applied to the page — shared by a live search and
      by Retrieve booking, which replays the answer a hold was taken from
      (Dave, 2026-09-02). planFor: roomTypeId → planId to land on. */
-  function applySearchResult(json, planFor) {
-    current.raw = json;
-      current.results = json.results || [];
-      current.nights = json.nights;
-      current.ratePlans = json.ratePlans || [];
-      /* Prices come from the Rate Engine ONLY (0.1.26): the server strips
-         the provider's figures and attaches the offered plans' quotes.
-         Each suite maps its first priced plan onto the card; further
-         plans become pills the guest can switch between. A suite the
-         engine does not price shows "Rates on request" — never a number
-         from anywhere else. (The old site-side 5th-night promotion is
-         retired with this: pricing rules live in the Rate Engine now.)
-         The conservation levy still comes from the replicated lodge
-         settings — the engine knows nothing of it. */
-      var party = { adults: els.adults.value, children: els.children.value, infants: els.infants ? els.infants.value : '0' };
-      current.results.forEach(function (room) {
-        room.plans = C.planOptionsFor(room.roomTypeId, current.ratePlans);
-        /* Closed to arrivals / departures (engine 2026-09-02): no plan
-           sells the stay and the engine said why — the card says the
-           same words and cannot be picked. */
-        room.restricted = room.plans.length ? null
-          : C.planRestriction(room.roomTypeId, current.ratePlans) || null;
-        /* A search lands on the CHEAPEST priced plan (0.1.29), not merely
-           the first one offered — the guest sees the best price the lodge
-           has for them without having to hunt through the pills. */
-        var wanted = planFor && planFor[String(room.roomTypeId)];
+  /* One search answer turned into rooms the cards can render, priced for
+     ONE party: plans, the cheapest plan applied, the refusal reason, the
+     over-capacity flag, and the party itself on each room (a suite chosen
+     through the advanced search keeps ITS room's party for its statement).
+     Shared by the single search, Retrieve booking and every room of the
+     advanced search — it never touches `current`. */
+  function hydrateRooms(json, party, planFor, nights) {
+    var results = (json.results || []).slice();
+    var ratePlans = json.ratePlans || [];
+    results.forEach(function (room) {
+      room.plans = C.planOptionsFor(room.roomTypeId, ratePlans);
+      /* Closed to arrivals / departures (engine 2026-09-02) or more guests
+         than the suite takes (engine 028): no plan sells the stay and the
+         engine said why — the card says the same words and cannot be picked. */
+      room.restricted = room.plans.length ? null
+        : C.planRestriction(room.roomTypeId, ratePlans) || null;
+      room.overCapacity = !room.plans.length && C.planOverCapacity(room.roomTypeId, ratePlans);
+      room.party = party;
+      var sc = suites[String(room.roomTypeId)];
+      room.sleeps = (sc && sc.maxTotalGuests) || room.maxGuests || null;
+      /* A search lands on the CHEAPEST priced plan (0.1.29), not merely
+         the first one offered — the guest sees the best price the lodge
+         has for them without having to hunt through the pills. */
+      var wanted = planFor && planFor[String(room.roomTypeId)];
       var pick = null;
       if (wanted) {
         for (var pi = 0; pi < room.plans.length; pi++) {
@@ -208,22 +213,37 @@
         }
       }
       if (!pick) pick = C.defaultPlanOption(room.plans);
-        if (pick) C.applyPlanToRoom(room, pick, lodge, party, json.nights);
-      });
-      /* The provider omits fully booked room types entirely — when Lodge
-         Ops says to show them, the replicated suite list fills the gaps. */
-      if (config.showUnavailable === true) {
-        var present = {};
-        current.results.forEach(function (room) { present[String(room.roomTypeId)] = true; });
-        Object.keys(suites).forEach(function (id) {
-          if (present[id] || id.charAt(0) === '_') return;
-          if (!suites[id] || !suites[id].name) return;
-          current.results.push({
-            roomTypeId: id, name: suites[id].name, available: 0,
-            totalPrice: null, currency: null, photos: [],
-          });
+      if (pick) C.applyPlanToRoom(room, pick, lodge, party, nights);
+    });
+    /* The provider omits fully booked room types entirely — when Lodge
+       Ops says to show them, the replicated suite list fills the gaps. */
+    if (config.showUnavailable === true) {
+      var present = {};
+      results.forEach(function (room) { present[String(room.roomTypeId)] = true; });
+      Object.keys(suites).forEach(function (id) {
+        if (present[id] || id.charAt(0) === '_') return;
+        if (!suites[id] || !suites[id].name) return;
+        results.push({
+          roomTypeId: id, name: suites[id].name, available: 0,
+          totalPrice: null, currency: null, photos: [], party: party,
         });
-      }
+      });
+    }
+    return results;
+  }
+
+  function applySearchResult(json, planFor) {
+      current.raw = json;
+      current.nights = json.nights;
+      current.ratePlans = json.ratePlans || [];
+      /* Prices come from the Rate Engine ONLY (0.1.26): the server strips
+         the provider's figures and attaches the offered plans' quotes.
+         Each suite maps its first priced plan onto the card; further
+         plans become pills the guest can switch between. A suite the
+         engine does not price shows "Rates on request" — never a number
+         from anywhere else. The conservation levy still comes from the
+         replicated lodge settings — the engine knows nothing of it. */
+      current.results = hydrateRooms(json, partyNow(), planFor, json.nights);
       C.track('availability_viewed', { count: current.results.length });
       /* Fully-booked suites appear only when Lodge Ops says so
          (site_config.showUnavailable); the empty state judges what is
@@ -263,6 +283,15 @@
     current.to = to;
     current.picks = {};
     if (window.BKReview) window.BKReview.close();
+    /* ADVANCED: every room's search at once, results room by room inside
+       the panel (advanced.js); the single-party flow below is untouched. */
+    if (advOn()) {
+      hideStates();
+      hideSummary();
+      current.nights = n;
+      window.BKAdv.search(from, to, n, els.code ? els.code.value.trim().toUpperCase() : '');
+      return;
+    }
     show('loading');
     els.btn.disabled = true;
     C.track('search_started',
@@ -335,7 +364,7 @@
   function buildBreakdown(room, nights) {
     var bd = C.stayBreakdown(room, current.from, nights);
     if (!bd) return null;
-    var party = { adults: els.adults.value, children: els.children.value, infants: els.infants ? els.infants.value : '0' };
+    var party = room.party || partyNow();
     var lines = C.stayMath(room, lodge, party, nights);
     var tip = document.createElement('div');
     tip.className = 'bk-breakdown';
@@ -633,29 +662,30 @@
     } else {
       photo.appendChild(art(room));
     }
-    /* Factual scarcity only — no artificial urgency (spec §7). */
+    /* ONE ribbon, ever (Dave, 2026-09-04: "Last suite" was drawn over the
+       refusal). No availability on any night → "Sorry no availability" and
+       nothing else; a refusal the engine explained (too many guests, a
+       closed date) → its words; otherwise factual scarcity only — never
+       artificial urgency (spec §7). */
     var soldOut = (!(room.available > 0) && room.availabilityKnown !== false) || !!room.restricted;
     var availUnknown = room.availabilityKnown === false && !room.restricted;
+    var ribbon = null;
     if (soldOut) {
       card.classList.add('soldout');
-      var so = document.createElement('span');
-      so.className = 'room-scarce';
-      so.textContent = room.restricted || 'Unavailable for your dates';
-      photo.appendChild(so);
+      ribbon = room.available > 0 && room.restricted ? room.restricted : 'Sorry no availability';
     } else if (availUnknown) {
       /* The engine holds no availability for these dates (beyond its synced
          window, or a suite it has never been told about). Said plainly —
          never rendered as sold out, which would be a guess. */
-      var unk = document.createElement('span');
-      unk.className = 'room-scarce';
-      unk.textContent = 'Availability on request';
-      photo.appendChild(unk);
+      ribbon = 'Availability on request';
+    } else if (room.available > 0 && room.available <= 2) {
+      ribbon = room.available === 1 ? 'Last suite' : 'Only ' + room.available + ' left';
     }
-    if (room.available > 0 && room.available <= 2) {
-      var sc = document.createElement('span');
-      sc.className = 'room-scarce';
-      sc.textContent = room.available === 1 ? 'Last suite' : 'Only ' + room.available + ' left';
-      photo.appendChild(sc);
+    if (ribbon) {
+      var rb = document.createElement('span');
+      rb.className = 'room-scarce';
+      rb.textContent = ribbon;
+      photo.appendChild(rb);
     }
     card.appendChild(photo);
 
@@ -759,7 +789,7 @@
         pb.addEventListener('click', function (ev) {
           ev.stopPropagation();
           if (opt.planId === room.planId) return;
-          var party = { adults: els.adults.value, children: els.children.value, infants: els.infants ? els.infants.value : '0' };
+          var party = room.party || partyNow();
           C.applyPlanToRoom(room, opt, lodge, party, nights);
           C.track('plan_selected',
             { roomTypeId: room.roomTypeId, planId: opt.planId, total: room.totalPrice },
@@ -928,8 +958,18 @@
          this suite's own availability calendar instead. */
       qtyRow.remove();
       card.__refresh = function () {}; /* refresh() must not rewrite the CTA */
-      btn.textContent = 'Show availability';
       btn.classList.add('room-cta-avail');
+      if (room.overCapacity && window.BKAdv) {
+        /* Too many guests for this suite (engine 028): the way forward is a
+           suite per room, not a calendar (Dave, 2026-09-04). */
+        btn.textContent = 'Try advanced search';
+        btn.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          window.BKAdv.open(partyNow());
+        });
+        return card;
+      }
+      btn.textContent = 'Show availability';
       btn.addEventListener('click', function (ev) {
         ev.stopPropagation();
         openAvailability(room);
@@ -1067,7 +1107,7 @@
       }),
       total: total ? total.sum.toFixed(2) : null,
     }, stateCheckpoint());
-    var party = { adults: els.adults.value, children: els.children.value, infants: els.infants ? els.infants.value : '0' };
+    var party = partyNow();
     /* The results stay where they are (Dave, 2026-09-02): the summary is
        a section below them, above the footer, and the page scrolls to it.
        The bar steps aside — the summary's own buttons take over. */
@@ -1133,9 +1173,12 @@
     return {
       form: {
         arrive: current.from, nights: current.nights,
-        adults: String(els.adults.value), children: String(els.children.value), rooms: String(els.rooms.value),
-        infants: els.infants ? String(els.infants.value) : '0',
+        adults: String(partyNow().adults), children: String(partyNow().children), rooms: String(advOn() ? window.BKAdv.groups().length : els.rooms.value),
+        infants: String(partyNow().infants),
         code: els.code ? String(els.code.value || '').trim().toUpperCase() : '',
+        /* The advanced search's rooms with the suite each chose (2026-09-04):
+           Lodge Ops re-prices every suite for ITS party from this. */
+        groups: advOn() ? window.BKAdv.snapshotGroups() : undefined,
       },
       json: current.raw || null,
       picks: stateCheckpoint().rooms,
@@ -1188,15 +1231,61 @@
   function closeReview(pop) {
     if (!window.BKReview || !window.BKReview.isOpen()) return;
     window.BKReview.close();
-    els.results.hidden = false;
-    updateSummary();
-    try { els.results.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
+    if (advOn()) {
+      try { els.advPanel.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
+    } else {
+      els.results.hidden = false;
+      updateSummary();
+      try { els.results.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
+    }
     if (pop) { try { if (history.state && history.state.view === 'review') history.back(); } catch (e) { /* fine */ } }
   }
   window.addEventListener('popstate', function () {
     if (window.BKReview && window.BKReview.isOpen()) closeReview(false);
   });
   els.continueBtn.addEventListener('click', openReview);
+
+  /* ---- the advanced search (advanced.js; Dave, 2026-09-04) ---- */
+  if (window.BKAdv && els.advPanel) {
+    window.BKAdv.attach({
+      panel: els.advPanel,
+      baseParty: function () {
+        return { adults: els.adults.value, children: els.children.value, infants: els.infants ? els.infants.value : '0' };
+      },
+      /* As many rooms as the lodge has suites — one suite per room. */
+      maxRooms: function () {
+        return Object.keys(suites).filter(function (id) { return id.charAt(0) !== '_' && suites[id] && suites[id].name; }).length || 1;
+      },
+      config: function () { return config; },
+      search: function (params) { return C.searchAvailability(params); },
+      hydrate: function (json, party) { return hydrateRooms(json, party, null, json.nights); },
+      onSearch: function (groups) {
+        C.track('search_started', { from: current.from, to: current.to, rooms: groups.length, advanced: true }, { from: current.from, to: current.to });
+      },
+      onToggle: function (on) {
+        els.adv.classList.toggle('on', on);
+        if (on) { hideStates(); hideSummary(); if (window.BKReview) window.BKReview.close(); }
+      },
+      scrollTop: function () {
+        try { document.querySelector('.bar-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ }
+      },
+      onContinue: function (picks, party, stay) {
+        current.from = stay.from;
+        current.to = stay.to;
+        current.nights = stay.nights;
+        current.raw = stay.json || current.raw;
+        current.results = Object.keys(picks).map(function (id) { return picks[id].room; });
+        current.picks = picks;
+        C.track('room_selected', { advanced: true, rooms: Object.keys(picks).length }, stateCheckpoint());
+        hideStates();
+        openReview();
+      },
+    });
+    els.adv.addEventListener('click', function () {
+      if (advOn()) window.BKAdv.close();
+      else window.BKAdv.open(null);
+    });
+  }
 
 
   /* Lodge Ops-managed copy: every guest-facing string can be overridden from

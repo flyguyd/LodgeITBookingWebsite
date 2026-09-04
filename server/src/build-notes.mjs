@@ -1012,4 +1012,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.80',
+    version: '0.1.80',
+    date: '2026-09-04T21:40:00+02:00',
+    changes: [
+      {
+        headline:
+          'The ADVANCED SEARCH: a suite for every room. Behind a small handle on the right of Check availability (hover says \u201cAdvanced search\u201d) the checker scrolls to the top and opens room by room \u2014 Room 1 with its adults, children and infants, + Add another room up to the number of suites the lodge has. Check availability searches every room at once; as each answer lands, the suites that take that room\u2019s party are listed with a radio button and their price for that party; choosing a suite for one room takes it out of every other room\u2019s list; Continue with these suites opens Your stay with the lot. A suite card refused for too many guests now offers \u201cTry advanced search\u201d instead of the calendar. Cards carry ONE ribbon: \u201cSorry no availability\u201d when there is none, the engine\u2019s reason when it refused, scarcity only otherwise \u2014 no more \u201cLast suite\u201d drawn over a refusal. The Arrive date no longer clips.',
+        detail:
+          'NEW site/advanced.js (BKAdv, shared by both builds): attach(adapter) / open(prefill) / close() / isOn() / search(from, to, nights, code) / party() / snapshotGroups() / groups(). State: groups [{adults, children, infants}], results[i] {status loading|error|done, rooms, json}, picks {i: roomTypeId}, a sequence number so a stale answer never lands. search() fires api.search() per room in parallel (rooms=1 each) and hydrates each answer through the build\u2019s hydrateRooms for that room\u2019s party; the list shows rooms with available > 0 and no restriction, minus the suites picked by other rooms; pick() clears the same suite from any other room; Continue enables only when every room holds a listed pick; onContinue(picks, partyTotals, {from, to, nights, json}). Both builds: hydrateRooms(json, party, planFor, nights) extracted from applySearchResult (plans, restricted, overCapacity via C.planOverCapacity, party and sleeps on each room); partyNow() = the advanced totals when on, else the bar; the submit handler branches to BKAdv.search when on; stayMath/plan switches use room.party; snapshotState().form gains groups [{adults, children, infants, roomTypeId}] and totals; closeReview returns to the panel; the sold-out CTA reads \u201cTry advanced search\u201d when room.overCapacity. Ribbons: soldOut \u2192 the engine\u2019s restriction when it explained one (available > 0) else \u201cSorry no availability\u201d; availability unknown \u2192 \u201cAvailability on request\u201d; else scarcity; never two. Desktop: #advBtn (.cta-adv, data-tip hover) beside the CTA in .bar-go-row, #advPanel (.adv-*) under the bar, .bar-field.date min-width 158px, body.adv-on hides the .party fields. Mobile: an Advanced search link beside Retrieve booking, the same panel, steppers hidden while on. core.js: planOverCapacity(); review.js prices each suite\u2019s statement for room.party. VERIFIED in Chromium on the rig (case 70.29\u201370.36): one ribbon on a refused card, Try advanced search, the panel at the top with Room 1 = the 4 adults, two rooms searched together with their own prices, the Lagoon leaving Room 2\u2019s list when Room 1 takes it, Continue disabled until both rooms choose, Your stay with both suites and R25,875; the mobile build driven the same way by hand.',
+      },
+    ],
+  },
 ];

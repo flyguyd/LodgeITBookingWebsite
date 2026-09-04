@@ -352,7 +352,9 @@ window.BKReview = (function () {
       accC += Math.round(bd.baseTotal * 100) * qty;
       discC += Math.round(bd.discount * 100) * qty;
       grandC += Math.round(bd.grand * 100) * qty;
-      C.stayMath(room, ctx.lodge, ctx.party, ctx.nights).forEach(function (l) {
+      /* A suite chosen through the advanced search carries ITS room's
+         party (2026-09-04); the single-search party otherwise. */
+      C.stayMath(room, ctx.lodge, room.party || ctx.party, ctx.nights).forEach(function (l) {
         if (!(l.label in lineC)) { lineC[l.label] = 0; lineOrder.push(l.label); }
         lineC[l.label] += Math.round(l.amount * 100) * qty;
       });

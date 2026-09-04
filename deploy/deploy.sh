@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # ============================================================================
-#  deploy.sh — install the LodgeIT Booking Website service on webbox.
+#  deploy.sh — install the LodgeIT Booking Website service on its host
+#  (webbox until 2026-09, ratebox after the move — the engine repo's
+#  deploy/ratebox/README.md is the runbook).
 #
-#  Run as root from the deploy checkout (/root/BookingEngine/LodgeITBookingWebsite):
+#  Run as root from the deploy checkout (e.g. /root/BookingEngine/LodgeITBookingWebsite):
 #      ./deploy/deploy.sh
 #
 #  The service is zero-dependency node (no npm install, no build step), so a
@@ -34,12 +36,16 @@ if [[ ! -f "${REPO_DIR}/VERSION" || ! -f "${REPO_DIR}/server/src/server.mjs" ]];
   exit 1
 fi
 
-# The port the site listens on — from the installed .env, default 3200.
+# The port (and, on ratebox, the one address) the site listens on — from
+# the installed .env, defaults 3200 on every interface.
 PORT=3200
+LISTEN_HOST=
 if [[ -f "${ENV_FILE}" ]]; then
   PORT="$(grep -E '^PORT=' "${ENV_FILE}" | tail -1 | cut -d= -f2 || true)"
   PORT="${PORT:-3200}"
+  LISTEN_HOST="$(grep -E '^LISTEN_HOST=' "${ENV_FILE}" | tail -1 | cut -d= -f2 || true)"
 fi
+PROBE_HOST="${LISTEN_HOST:-127.0.0.1}"
 
 health_field() {  # health_field <json> <field>  → value or empty
   node -e '
@@ -83,10 +89,12 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 !! ${ENV_FILE} does not exist. Files are installed, but the service was NOT
 !! restarted. Create it (owner oase, mode 600) with the wiring only:
      PORT=3200
+     LISTEN_HOST=      # ratebox: the DMZ-facing address the Caddy proxy reaches; empty = every interface
      ENGINE_URL=http://127.0.0.1:3100
      CLIENT_KEY=site
      CLIENT_SECRET=…   # generated on the Lodge Ops Booking Engine page
-     SITE_PUBLIC_URL=https://lodgeops.7starlodges.com/book/
+     SITE_PUBLIC_URL=https://lodgeops.7starlodges.com/book/   # the PUBLIC address guests use (ratebox: the DMZ Caddy's site)
+!! (deploy/site.env.example is the same file, filled in for ratebox)
 !! then run this script again.
 EOF
   exit 1
@@ -94,20 +102,24 @@ fi
 chown oase:oase "${ENV_FILE}"
 chmod 600 "${ENV_FILE}"
 if [[ ! -f "${UNIT_FILE}" ]]; then
-  echo "!! ${UNIT_FILE} does not exist — install the unit (see the runbook," >&2
-  echo "!! phase 7), systemctl daemon-reload, then run this script again."   >&2
+  echo "!! ${UNIT_FILE} does not exist — install it from this repo:"          >&2
+  echo "     cp ${REPO_DIR}/deploy/lodgeit-site.service ${UNIT_FILE}"         >&2
+  echo "     systemctl daemon-reload && systemctl enable ${SERVICE}"          >&2
+  echo "!! then run this script again."                                      >&2
   exit 1
 fi
+# The data folder is the ONE path the hardened unit lets the service write.
+mkdir -p "${APP_ROOT}/data" && chown oase:oase "${APP_ROOT}/data"
 
 # ---- 4. Restart + verify ----
 echo "==> Restarting ${SERVICE}…"
 systemctl restart "${SERVICE}"
 
-echo "==> Waiting for /health on :${PORT}…"
+echo "==> Waiting for /health on ${PROBE_HOST}:${PORT}…"
 HEALTH=""
 for _ in $(seq 1 15); do
   sleep 1
-  HEALTH="$(curl -s --max-time 2 "http://127.0.0.1:${PORT}/health" || true)"
+  HEALTH="$(curl -s --max-time 2 "http://${PROBE_HOST}:${PORT}/health" || true)"
   [[ -n "${HEALTH}" ]] && break
 done
 if [[ -z "${HEALTH}" ]]; then

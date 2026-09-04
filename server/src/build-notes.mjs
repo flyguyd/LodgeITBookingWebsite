@@ -986,4 +986,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.78',
+    version: '0.1.78',
+    date: '2026-09-04T18:02:00+02:00',
+    changes: [
+      {
+        headline:
+          'Ready for ratebox. The site can now bind a single address (LISTEN_HOST) so that on ratebox only the DMZ Caddy can reach it, and it can carry the guest\u2019s calls to Lodge Ops itself: with LODGEOPS_WEB_URL set, the hold and checkout pages, the embed script and its tracking posts (/api/web/*) are passed through to Lodge Ops over the tunnel, so the DMZ host needs no road to Lodge Ops at all. The systemd unit the deploy script always asked for is now in the repo, with a filled-in .env for ratebox.',
+        detail:
+          'server.mjs: LISTEN_HOST (env, optional) \u2014 server.listen(PORT, host) when set, every interface when not; the boot line names what it bound. LODGEOPS_WEB_URL (env, optional): requests under /api/web/* go through passThrough() \u2014 the guest\u2019s rate limit first (429 like every other guest call), then a streamed node:http/https request to LODGEOPS_WEB_URL + the original path and query with method, content-type, accept, accept-encoding, accept-language, user-agent, referer and the conditional headers carried, Host set to the target, X-Forwarded-For = the guest\u2019s IP (Lodge Ops\u2019 hold-code throttle keeps working; its TRUSTED_PROXY_HOPS counts this hop), X-Forwarded-Proto https, X-Forwarded-Host = SITE_PUBLIC_URL\u2019s host; the answer\u2019s status, Content-Type, Content-Length, Content-Encoding (gzip survives end to end), ETag, Last-Modified, Vary, Location and Cache-Control (no-store when absent) come back; POST bodies capped at 64 KB with a real 413 (the request is paused and the connection closed with the answer, not destroyed); upstream unreachable \u2192 503 BOOKING_UNAVAILABLE, 30 s timeout. Unset = 404 as before. No signing: these Lodge Ops routes are public by design. NEW deploy/lodgeit-site.service (oase, EnvironmentFile /opt/lodgeit-site/.env, SITE_DATA_DIR=/opt/lodgeit-site/data as the ONE writable path, ProtectSystem=strict, SIGTERM so the engine session closes first, MemoryMax 512M) and deploy/site.env.example (ratebox values: LISTEN_HOST = the DMZ-facing address, ENGINE_URL 127.0.0.1:3100 while the engine shares the box, SITE_PUBLIC_URL = the public name, LODGEOPS_WEB_URL over the tunnel). deploy.sh: probes /health where the site listens, names the unit file to copy, creates the data folder. VERIFIED live against the Lodge Ops e2e rig: embed.js 200 through the pass-through (97 KB, and gzip when asked), a POST answered by Lodge Ops\u2019 own router, a 70 KB body refused with 413, unset LODGEOPS_WEB_URL still 404, the engine forwards untouched; then the rig\u2019s edge switched to the DMZ layout (everything to the site) and the hold, checkout and guest-journey cases run through the pass-through.',
+      },
+    ],
+  },
 ];

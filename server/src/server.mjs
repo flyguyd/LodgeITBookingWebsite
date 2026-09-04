@@ -6,13 +6,25 @@
 // Essential configuration ONLY lives in .env / the environment (Dave,
 // 2026-08-22) — this service holds no business configuration at all:
 //   PORT             listen port (default 3200)
+//   LISTEN_HOST      optional; bind ONE address instead of every interface —
+//                    on ratebox the DMZ-facing address the Caddy proxy uses,
+//                    so the port is invisible from the tunnel and the LAN
 //   ENGINE_URL       the booking engine base URL (e.g. http://127.0.0.1:3100)
 //   CLIENT_KEY       this service's api_clients key id on the engine ('site')
 //   CLIENT_SECRET    the matching shared secret
 //   SITE_PUBLIC_URL  optional; reported in the heartbeat so Lodge Ops can
 //                    link straight to the live site
+//   LODGEOPS_WEB_URL optional (ratebox, 2026-09-04); when set, the guest's
+//                    same-origin calls to Lodge Ops' PUBLIC web routes
+//                    (/api/web/* — the hold and checkout flow, the embed
+//                    script and its tracking posts) are passed through to
+//                    this base over the tunnel, rate-limited like every
+//                    other guest call, the guest's IP carried in
+//                    X-Forwarded-For. Unset = 404 as before (the shared
+//                    webbox proxy routes /api/web/* itself).
 //   RATE_LIMIT / RATE_WINDOW_MS   guest rate limiting (default 120 per 60s)
-import { createServer } from 'node:http';
+import http, { createServer } from 'node:http';
+import https from 'node:https';
 import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,10 +47,12 @@ const VERSION = JSON.parse(
 ).version;
 
 const PORT = Number(process.env.PORT) || 3200;
+const LISTEN_HOST = (process.env.LISTEN_HOST ?? '').trim();
 const ENGINE_URL = (process.env.ENGINE_URL ?? '').replace(/\/+$/, '');
 const CLIENT_KEY = process.env.CLIENT_KEY ?? '';
 const CLIENT_SECRET = process.env.CLIENT_SECRET ?? '';
 const SITE_PUBLIC_URL = process.env.SITE_PUBLIC_URL ?? `http://127.0.0.1:${PORT}`;
+const LODGEOPS_WEB_URL = (process.env.LODGEOPS_WEB_URL ?? '').trim().replace(/\/+$/, '');
 const RATE_LIMIT = Number(process.env.RATE_LIMIT) || 120;
 const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS) || 60_000;
 const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MS) || 60_000;
@@ -508,6 +522,72 @@ async function engineCallRaw(method, path) {
   }
 }
 
+/** Stream one guest request to Lodge Ops and its answer back, unchanged in
+ *  substance: method, path and query, the content type, the body (capped at
+ *  the guest POST size), and on the way back the status, content type,
+ *  encoding and caching headers. The guest's IP travels in X-Forwarded-For
+ *  so Lodge Ops' own per-IP limits (the hold-code throttle) keep working
+ *  behind the tunnel; TRUSTED_PROXY_HOPS on that side must count this hop. */
+function passThrough(req, res, target, ip, capBytes = 64 * 1024) {
+  return new Promise((resolve) => {
+    let u;
+    try { u = new URL(target); } catch { json(res, 503, { code: 'BOOKING_UNAVAILABLE', message: 'Booking is briefly unavailable — please try again shortly.' }); return resolve(); }
+    const mod = u.protocol === 'https:' ? https : http;
+    const method = req.method ?? 'GET';
+    const headers = {
+      host: u.host,
+      'x-forwarded-for': ip,
+      'x-forwarded-proto': 'https',
+      'x-forwarded-host': (() => { try { return new URL(SITE_PUBLIC_URL).host; } catch { return u.host; } })(),
+    };
+    for (const h of ['content-type', 'content-length', 'accept', 'accept-encoding', 'accept-language', 'user-agent', 'referer', 'if-none-match', 'if-modified-since']) {
+      if (req.headers[h] != null) headers[h] = req.headers[h];
+    }
+    let settled = false;
+    const fail = (status, code, message) => {
+      if (settled) return;
+      settled = true;
+      if (!res.headersSent) json(res, status, { code, message });
+      else res.destroy();
+      resolve();
+    };
+    const up = mod.request(u, { method, headers, timeout: 30_000 }, (r) => {
+      const out = { 'Cache-Control': r.headers['cache-control'] ?? 'no-store' };
+      for (const [h, k] of [['content-type', 'Content-Type'], ['content-length', 'Content-Length'], ['content-encoding', 'Content-Encoding'], ['etag', 'ETag'], ['last-modified', 'Last-Modified'], ['vary', 'Vary'], ['location', 'Location']]) {
+        if (r.headers[h] != null) out[k] = r.headers[h];
+      }
+      res.writeHead(r.statusCode ?? 502, out);
+      r.pipe(res);
+      r.on('end', () => { settled = true; resolve(); });
+      r.on('error', () => fail(502, 'BAD_GATEWAY', 'Lodge Ops did not answer cleanly.'));
+    });
+    up.on('timeout', () => { up.destroy(new Error('timeout')); });
+    up.on('error', () => fail(503, 'BOOKING_UNAVAILABLE', 'Booking is briefly unavailable — please try again shortly.'));
+    if (method === 'GET' || method === 'HEAD') {
+      up.end();
+      return;
+    }
+    let size = 0;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > capBytes) {
+        stats.apiTooLarge();
+        up.destroy();
+        // Stop reading, answer, and let the connection close with the
+        // answer — destroying the socket here would leave the guest with no
+        // status at all.
+        req.pause();
+        if (!res.headersSent) res.setHeader('Connection', 'close');
+        fail(413, 'TOO_LARGE', 'Request too large.');
+        return;
+      }
+      up.write(chunk);
+    });
+    req.on('end', () => { if (!settled) up.end(); });
+    req.on('error', () => { up.destroy(); fail(400, 'BAD_REQUEST', 'The request ended early.'); });
+  });
+}
+
 const server = createServer(async (req, res) => {
   const url = req.url ?? '/';
   const method = req.method ?? 'GET';
@@ -779,6 +859,23 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // ---- Lodge Ops' public web routes, passed through over the tunnel ----
+  // The booking pages call /api/web/booking-hold/*, /api/web/booking-checkout/*
+  // and load /api/web/embed.js from THIS origin. On the shared webbox the
+  // proxy in front routed them to Lodge Ops; on ratebox the DMZ Caddy has no
+  // road to Lodge Ops, so the site carries them over the tunnel itself. A
+  // plain pass-through: no signing (these routes are public by design), the
+  // guest's own rate limit, bodies capped like every other guest POST.
+  if (LODGEOPS_WEB_URL && url.startsWith('/api/web/')) {
+    if (!allow(ip)) {
+      stats.apiRateLimited();
+      json(res, 429, { code: 'RATE_LIMITED', message: 'Too many requests — slow down.' });
+      return;
+    }
+    await passThrough(req, res, LODGEOPS_WEB_URL + url, ip);
+    return;
+  }
+
   // ---- the guest API: rate-limited, allow-listed, forwarded signed ----
   const target = forwardTargetFor(method, url);
   if (url.startsWith('/api/')) {
@@ -874,8 +971,8 @@ async function heartbeat() {
   }
 }
 
-server.listen(PORT, () => {
-  console.log(`[site] LodgeIT Booking Website v${VERSION} listening on port ${PORT}`);
+const onListening = () => {
+  console.log(`[site] LodgeIT Booking Website v${VERSION} listening on ${LISTEN_HOST || '*'}:${PORT}`);
   if (!ENGINE_URL || !CLIENT_KEY || !CLIENT_SECRET) {
     console.warn('[site] ENGINE_URL / CLIENT_KEY / CLIENT_SECRET not set — guest API calls will fail closed.');
   }
@@ -894,7 +991,9 @@ server.listen(PORT, () => {
   setInterval(() => void syncConfig().catch(() => {}), HEARTBEAT_MS).unref();
   setInterval(() => void syncSuiteContent().catch(() => {}), HEARTBEAT_MS).unref();
   setInterval(() => void syncPlanInclusions().catch(() => {}), HEARTBEAT_MS).unref();
-});
+};
+if (LISTEN_HOST) server.listen(PORT, LISTEN_HOST, onListening);
+else server.listen(PORT, onListening);
 
 /* A clean shutdown closes the engine session (and with it the session's
    cached answers) instead of leaving it to time out. */

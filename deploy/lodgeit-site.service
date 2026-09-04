@@ -1,0 +1,43 @@
+# systemd unit for the LodgeIT Booking Website (the public guest site).
+#
+# Install to: /etc/systemd/system/lodgeit-site.service
+# Then:  sudo systemctl daemon-reload && sudo systemctl enable --now lodgeit-site
+#
+# Assumes deploy/deploy.sh's layout: the repo synced to /opt/lodgeit-site,
+# the wiring in /opt/lodgeit-site/.env (owner oase, mode 600), and the
+# service's own writable data (suite content, plan inclusions, the media
+# mirror) in /opt/lodgeit-site/data — the one path it may write.
+#
+# Zero-dependency node: no build, no node_modules. The process is small (the
+# site holds a media mirror on disk, not in RAM); 512M is generous.
+
+[Unit]
+Description=LodgeIT Booking Website (public guest site)
+After=network.target
+
+[Service]
+Type=simple
+User=oase
+Group=oase
+WorkingDirectory=/opt/lodgeit-site
+EnvironmentFile=/opt/lodgeit-site/.env
+Environment=SITE_DATA_DIR=/opt/lodgeit-site/data
+ExecStart=/usr/bin/node /opt/lodgeit-site/server/src/server.mjs
+Restart=on-failure
+RestartSec=5
+# SIGTERM lets the server close its engine session first (server.mjs).
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+MemoryHigh=384M
+MemoryMax=512M
+
+# Hardening: read-only system, no home, only the data folder writable.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/lodgeit-site/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1129,6 +1129,7 @@ window.BKReview = (function () {
     ctx = ctx || state.ctx;
     var host = $('held'), card = $('heldCard');
     if (!host || !card || !hold) return;
+    bookingState.hold = { reference: hold.reference || null, status: hold.status || null, until: hold.holdUntil || null, hours: hold.hours != null ? hold.hours : null };
     stopHeldTimer(); stopPayPoll();
     /* The agreement stands while the hold does (Dave, 2026-09-02): ticked
        and locked, the buttons awake; cancelling unlocks it for the next
@@ -1357,7 +1358,7 @@ window.BKReview = (function () {
         if (!j || j.status !== 'paid') return;
         return postJson(CHECKOUT_API + '/paid', { id: remembered.checkoutId, paymentId: paymentId }).then(function (k) {
           forgetPayment();
-          if (k && k.ok === true && k.checkout) { openSuccess(k.checkout); }
+          if (k && k.ok === true && k.checkout) { noteCheckout(k.checkout); openSuccess(k.checkout); }
         });
       }).catch(function () { /* the guest can retrieve later */ });
       return;
@@ -1395,6 +1396,13 @@ window.BKReview = (function () {
   var CHECKOUT_API = window.BK_CHECKOUT_API || '/api/web/booking-checkout';
   var checkoutTimer = null, pinObserver = null;
   var checkoutState = { current: null, ctx: null };
+  /* What the guest has on the go, for the live chat's booking context
+     (Dave, 2026-09-05): the hold and the checkout as last shown. */
+  var bookingState = { hold: null, checkout: null };
+  function noteCheckout(co) {
+    if (!co) return;
+    bookingState.checkout = { reference: co.reference || null, status: co.status || null, amountDue: co.amountDue != null ? co.amountDue : null, amountKind: co.amountKind || null, paid: co.paid === true || co.status === 'paid' };
+  }
   function stopCheckoutTimer() {
     if (checkoutTimer) { clearInterval(checkoutTimer); checkoutTimer = null; }
     if (pinObserver) { try { pinObserver.disconnect(); } catch (e) { /* fine */ } pinObserver = null; }
@@ -1514,6 +1522,7 @@ window.BKReview = (function () {
 
   /* The booking summary card. */
   function showCheckout(co, ctx) {
+    noteCheckout(co);
     var host = $('bookingSummary'), card = $('bookingSummaryCard'), title = $('bookingSummaryTitle');
     checkoutState.current = co;
     card.textContent = '';
@@ -1783,6 +1792,7 @@ window.BKReview = (function () {
 
   /* The payment section: the amount due, the deposit lines, the gateways. */
   function showPayment(co, ctx, untilMs) {
+    noteCheckout(co);
     var host = $('payment'), card = $('paymentCard');
     if (!host || !card) return;
     card.textContent = '';
@@ -1907,6 +1917,7 @@ window.BKReview = (function () {
     function recordPaid(paymentId) {
       return postJson(CHECKOUT_API + '/paid', { id: co.id, paymentId: paymentId }).then(function (k) {
         if (!k || k.ok !== true || !k.checkout) throw new Error((k && k.message) || 'The payment went through but could not be recorded — please contact the lodge with reference ' + co.reference + '.');
+        noteCheckout(k.checkout);
         return k.checkout;
       });
     }
@@ -2334,6 +2345,7 @@ window.BKReview = (function () {
   function isOpen() { return state.open; }
 
   return { open: open, close: close, isOpen: isOpen, DEFAULT_AGREE: DEFAULT_AGREE,
+    bookingState: function () { return { hold: bookingState.hold, checkout: bookingState.checkout }; },
     holdsConfig: holdsConfig, holdOffered: holdOffered, daysUntil: daysUntil,
     showHeld: showHeld, openRetrieve: openRetrieve,
     startCheckout: startCheckout, showCheckout: showCheckout };

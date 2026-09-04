@@ -1064,6 +1064,49 @@
     };
   }
 
+
+  /* THE LIVE CHAT KNOWS WHAT THE GUEST IS LOOKING AT (Dave, 2026-09-05):
+     the search, the suites chosen and their prices, the hold or checkout
+     and where it stands — handed to the chat widget, which sends it to the
+     staff member the moment the chat opens and whenever it changes. */
+  function bookingContext() {
+    var party = partyNow();
+    var picks = pickedRooms().map(function (p) {
+      var pp = C.priceParts(p.room, config);
+      return { roomTypeId: p.room.roomTypeId, name: p.room.name, qty: p.qty || 1, planName: p.room.planName || null,
+        total: pp.headline != null ? (pp.headline + (pp.note && pp.note.kind === 'plus' ? pp.note.extras : 0)) * (p.qty || 1) : null };
+    });
+    var tot = selectionTotal();
+    var rv = window.BKReview && window.BKReview.bookingState ? window.BKReview.bookingState() : {};
+    var stage = rv.checkout && rv.checkout.paid ? 'paid' : rv.checkout ? 'checkout' : rv.hold ? 'hold'
+      : (window.BKReview && window.BKReview.isOpen && window.BKReview.isOpen()) ? 'your stay'
+      : picks.length ? 'choosing' : current.from ? 'searching' : 'browsing';
+    var rooms = 1;
+    try { rooms = advOn() ? window.BKAdv.groups().length : (Number(els.rooms && (els.rooms.value || els.rooms.textContent)) || 1); } catch (e) { rooms = 1; }
+    return {
+      page: String(location.href).slice(0, 300),
+      stage: stage,
+      search: current.from ? { from: current.from, to: current.to, nights: current.nights, adults: Number(party.adults) || null, children: Number(party.children) || 0, infants: Number(party.infants) || 0, rooms: rooms, code: (els.code && els.code.value) || null } : null,
+      picks: picks,
+      total: tot ? tot.sum + tot.extras : null,
+      currency: tot ? tot.currency : null,
+      hold: rv.hold || null,
+      checkout: rv.checkout || null,
+    };
+  }
+  var chatContextLast = '';
+  function publishChatContext() {
+    try {
+      if (!window.OaseWeb || !window.OaseWeb.setBookingContext) return;
+      var ctx = bookingContext();
+      var text = JSON.stringify(ctx);
+      if (text === chatContextLast) return;
+      chatContextLast = text;
+      window.OaseWeb.setBookingContext(ctx);
+    } catch (e) { /* the chat is decoration on the booking flow */ }
+  }
+  setInterval(publishChatContext, 3000);
+
   function selectionTotal() {
     var sum = 0, extras = 0, priced = false, currency = null;
     pickedRooms().forEach(function (p) {

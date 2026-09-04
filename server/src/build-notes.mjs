@@ -1083,4 +1083,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.85',
+    version: '0.1.85',
+    date: '2026-09-05T01:07:00+02:00',
+    changes: [
+      {
+        headline:
+          'The live chat knows what you are booking (Dave, 2026-09-05). Whenever the chat is open, the page hands the chat widget your current booking picture \u2014 the dates and party you searched, the suites you have chosen with their prices, and any hold or checkout with its reference and where it stands \u2014 so the person answering at the lodge sees it, with links to the right places on their side, the moment the chat opens, and as it changes.',
+        detail:
+          'booking.js and m/booking.js: bookingContext() = { page, stage (browsing | searching | choosing | your stay | hold | checkout | paid), search {from, to, nights, adults, children, infants, rooms, code}, picks [{roomTypeId, name, qty, planName, total = priceParts headline + extras \u00d7 qty}], total, currency, hold, checkout }; publishChatContext() hands it to window.OaseWeb.setBookingContext (the Lodge Ops embed, 1.3.48) every 3 s when it changed (JSON-compared). review.js keeps bookingState {hold: {reference, status, until, hours} from showHeld(); checkout: {reference, status, amountDue, amountKind, paid} from showCheckout() / showPayment() / the paid answers} and exposes BKReview.bookingState(). Without the embed on the page nothing runs. Static files only \u2014 rsync booking.js, m/booking.js, review.js.',
+      },
+    ],
+  },
 ];

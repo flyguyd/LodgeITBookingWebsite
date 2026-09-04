@@ -973,4 +973,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.77',
+    version: '0.1.77',
+    date: '2026-09-04T02:08:10+02:00',
+    changes: [
+      {
+        headline:
+          'A more realistic giraffe, and the Congratulations modal returns the guest to the top of the page (Dave, 2026-09-04). The silhouette is now drawn from the animal\u2019s proportions \u2014 legs nearly a third of its height, a hump at the withers and a back sloping to the rump, a neck thick at the base and thin at the poll with a short mane along the crest, a long muzzle with a rounded nose, an ear and two knobbed ossicones, a tail to the hocks with a tuft \u2014 and it PACES the way a giraffe does, both legs on one side swinging together, the far side half a stride behind and a touch translucent for depth. Closing the modal scrolls smoothly to the top, where the paid Booking summary is what remains.',
+        detail:
+          'review.js drawGiraffe(): 195-unit figure (H \u00d7 0.36 tall), body\u2013neck\u2013head as one bezier silhouette, tapered limb segments with rounded joints (seg), hooves, front leg shoulder\u2192knee\u2192fetlock with the knee folding and the hoof lifting on the forward swing, hind leg hip\u2192stifle (forward)\u2192hock (back)\u2192fetlock, stride 0.8 Hz, far side at phase + \u03c0 in rgba(5,6,10,0.72). The animal is composed on an OFFSCREEN canvas and stamped onto the #giraffe layer with a single gold glow \u2014 a glow per shape showed inside the silhouette at every joint (seen on the rig). closeSuccess(): window.scrollTo({top: 0, behavior: \'smooth\'}). VERIFIED: 50 Chromium assertions on desktop and mobile, including the modal\u2019s close landing at scrollY 0 from several thousand pixels down with the paid summary still shown; screenshot at 7 s.',
+      },
+    ],
+  },
 ];

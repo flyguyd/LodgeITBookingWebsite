@@ -2080,51 +2080,119 @@ window.BKReview = (function () {
     }
     var gctx = gCanvas ? gCanvas.getContext('2d') : null;
     if (gCanvas) { gCanvas.width = W; gCanvas.height = H; }
-    var gs = (H * 0.36) / 130;
-    function giraffeX(t) { return W + 70 * gs - (Math.min(t, ms) / ms) * (W + 140 * gs); }
+    /* The animal is composed on an offscreen canvas and stamped onto its
+       layer with ONE glow: a glow on each shape would show inside the
+       silhouette at every joint. */
+    var oc = document.createElement('canvas'); oc.width = W; oc.height = H;
+    var octx = oc.getContext('2d');
+    var gs = (H * 0.36) / 195;
+    function giraffeX(t) { return W + 110 * gs - (Math.min(t, ms) / ms) * (W + 220 * gs); }
+    /* Drawn from the animal's proportions (Dave, 2026-09-04: "make the
+       giraffe look more realistic"): legs about as long as the body is
+       deep is wrong - a giraffe's legs are nearly a third of its height,
+       the back slopes from a hump at the withers down to the rump, the
+       neck is thick at the base and thin at the poll with a short mane
+       along the crest, the head is a long muzzle with a rounded nose,
+       an ear and two knobbed ossicones, and the tail hangs to the hocks
+       with a tuft. Giraffes PACE: both legs on one side swing together,
+       the other side half a stride behind. Far-side legs are a touch
+       translucent for depth. Units: 195 tall, origin under the body at
+       the ground, facing left. */
     function drawGiraffe(t) {
-      if (!gctx) return;
-      var ctx2 = gctx;
-      ctx2.clearRect(0, 0, W, H);
+      if (!gctx || !octx) return;
+      gctx.clearRect(0, 0, W, H);
       if (t >= ms) return;
-      var phase = (t / 1000) * Math.PI * 2 * 1.1;
-      var x0 = giraffeX(t), y0 = H - 10 + Math.sin(phase * 2) * 1.2 * gs;
+      var phase = (t / 1000) * Math.PI * 2 * 0.8;
+      var x0 = giraffeX(t), y0 = H - 10 + Math.sin(phase * 2) * 0.9 * gs;
+      var glow = gctx.createLinearGradient(0, H * 0.6, 0, H);
+      glow.addColorStop(0, 'rgba(216, 180, 106, 0)'); glow.addColorStop(1, 'rgba(216, 180, 106, 0.16)');
+      gctx.fillStyle = glow; gctx.fillRect(0, H * 0.6, W, H * 0.4);
+      var ctx2 = octx;
+      ctx2.clearRect(0, 0, W, H);
       ctx2.save();
       ctx2.globalAlpha = 1;
-      var glow = ctx2.createLinearGradient(0, H * 0.6, 0, H);
-      glow.addColorStop(0, 'rgba(216, 180, 106, 0)'); glow.addColorStop(1, 'rgba(216, 180, 106, 0.16)');
-      ctx2.fillStyle = glow; ctx2.fillRect(0, H * 0.6, W, H * 0.4);
       ctx2.translate(x0, y0);
       ctx2.scale(gs, gs);
-      ctx2.shadowColor = 'rgba(216, 180, 106, 0.85)'; ctx2.shadowBlur = 16;
-      ctx2.fillStyle = '#05060a'; ctx2.strokeStyle = '#05060a'; ctx2.lineCap = 'round'; ctx2.lineJoin = 'round';
-      function leg(hx, hy, swing, front) {
-        var a = Math.sin(phase + swing) * 0.45;              /* upper leg from the vertical */
-        var fold = Math.max(0, Math.sin(phase + swing)) * 0.7; /* the knee folds on the forward swing */
-        var kx = hx + Math.sin(a) * 24, ky = hy + Math.cos(a) * 24;
-        var b = a + (front ? fold : -fold * 0.6);
-        var fx = kx + Math.sin(b) * 22, fy = ky + Math.cos(b) * 22;
-        ctx2.lineWidth = 5.5; ctx2.beginPath(); ctx2.moveTo(hx, hy); ctx2.lineTo(kx, ky); ctx2.stroke();
-        ctx2.lineWidth = 4.2; ctx2.beginPath(); ctx2.moveTo(kx, ky); ctx2.lineTo(fx, fy); ctx2.stroke();
-        ctx2.beginPath(); ctx2.ellipse(fx, fy + 1, 3.2, 2, 0, 0, Math.PI * 2); ctx2.fill();
+      ctx2.lineCap = 'round'; ctx2.lineJoin = 'round';
+      var INK = '#05060a', FAR = 'rgba(5, 6, 10, 0.72)';
+      /* a point L along from (px,py) at angle th from straight down, positive = forward (the giraffe faces -x) */
+      function at(px, py, th, L) { return [px - Math.sin(th) * L, py + Math.cos(th) * L]; }
+      /* a tapered limb segment with rounded joints */
+      function seg(a, b, w1, w2) {
+        var dx = b[0] - a[0], dy = b[1] - a[1], L = Math.sqrt(dx * dx + dy * dy) || 1, nx = -dy / L, ny = dx / L;
+        ctx2.beginPath();
+        ctx2.moveTo(a[0] + nx * w1 / 2, a[1] + ny * w1 / 2); ctx2.lineTo(b[0] + nx * w2 / 2, b[1] + ny * w2 / 2);
+        ctx2.lineTo(b[0] - nx * w2 / 2, b[1] - ny * w2 / 2); ctx2.lineTo(a[0] - nx * w1 / 2, a[1] - ny * w1 / 2);
+        ctx2.closePath(); ctx2.fill();
+        ctx2.beginPath(); ctx2.arc(a[0], a[1], w1 / 2, 0, Math.PI * 2); ctx2.fill();
+        ctx2.beginPath(); ctx2.arc(b[0], b[1], w2 / 2, 0, Math.PI * 2); ctx2.fill();
       }
-      /* far legs first, then the body, then the near legs */
-      leg(-12, -46, Math.PI, true); leg(12, -46, 0, false);
-      /* tail */
-      ctx2.lineWidth = 2.2; ctx2.beginPath(); ctx2.moveTo(22, -54); ctx2.quadraticCurveTo(30, -44, 29 + Math.sin(phase) * 2, -28); ctx2.stroke();
-      ctx2.beginPath(); ctx2.ellipse(29 + Math.sin(phase) * 2, -25, 2.6, 4, 0, 0, Math.PI * 2); ctx2.fill();
-      /* body: shoulders higher than the rump */
-      ctx2.beginPath(); ctx2.ellipse(0, -54, 24, 12.5, -0.16, 0, Math.PI * 2); ctx2.fill();
-      /* neck, tapering to the head */
-      ctx2.beginPath(); ctx2.moveTo(-6, -62); ctx2.lineTo(-38, -114); ctx2.lineTo(-46, -111); ctx2.lineTo(-22, -54); ctx2.closePath(); ctx2.fill();
-      /* head, snout, ear, ossicones */
-      ctx2.beginPath(); ctx2.ellipse(-46, -115, 9, 5.2, -0.3, 0, Math.PI * 2); ctx2.fill();
-      ctx2.beginPath(); ctx2.ellipse(-55, -117, 4.5, 3.2, -0.2, 0, Math.PI * 2); ctx2.fill();
-      ctx2.beginPath(); ctx2.moveTo(-39, -118); ctx2.lineTo(-33, -124); ctx2.lineTo(-40, -122); ctx2.closePath(); ctx2.fill();
-      ctx2.lineWidth = 2; ctx2.beginPath(); ctx2.moveTo(-44, -120); ctx2.lineTo(-45, -129); ctx2.moveTo(-49, -120); ctx2.lineTo(-51, -128); ctx2.stroke();
-      ctx2.beginPath(); ctx2.arc(-45, -130, 1.8, 0, Math.PI * 2); ctx2.arc(-51.5, -129, 1.8, 0, Math.PI * 2); ctx2.fill();
-      leg(-13, -47, 0, true); leg(13, -47, Math.PI, false);
+      function hoof(f, lift) {
+        ctx2.beginPath(); ctx2.moveTo(f[0] - 3.4, f[1] - lift); ctx2.lineTo(f[0] + 3.4, f[1] - lift);
+        ctx2.lineTo(f[0] + 3.9, f[1] + 4.5 - lift); ctx2.lineTo(f[0] - 4.1, f[1] + 4.5 - lift); ctx2.closePath(); ctx2.fill();
+      }
+      /* front leg: shoulder → knee → fetlock, the knee folding on the forward swing, the hoof lifting */
+      function frontLeg(sw, colour) {
+        ctx2.fillStyle = colour;
+        var a = Math.sin(phase + sw) * 0.30;
+        var fwd = Math.max(0, Math.sin(phase + sw + 0.5));
+        var knee = at(-24, -78, a, 34), fet = at(knee[0], knee[1], a - fwd * 0.55, 34);
+        var lift = fwd * 3.5;
+        seg([-24, -80], knee, 12, 7); seg(knee, [fet[0], fet[1] - lift], 7, 5.2); hoof(fet, lift);
+      }
+      /* hind leg: hip → stifle (forward) → hock (back) → fetlock, the hock the joint that points backward */
+      function hindLeg(sw, colour) {
+        ctx2.fillStyle = colour;
+        var a = Math.sin(phase + sw) * 0.26;
+        var fwd = Math.max(0, Math.sin(phase + sw + 0.5));
+        var st = at(20, -74, a + 0.32, 24), hk = at(st[0], st[1], a - 0.62, 18), fet = at(hk[0], hk[1], a + 0.22 - fwd * 0.45, 30);
+        var lift = fwd * 3.5;
+        seg([20, -78], st, 17, 9); seg(st, hk, 9, 6.2); seg(hk, [fet[0], fet[1] - lift], 6.2, 5); hoof(fet, lift);
+      }
+      /* pacing: the far side first (half a stride behind), then the body, then the near side */
+      frontLeg(Math.PI, FAR); hindLeg(Math.PI, FAR);
+      /* the tail, hanging to the hocks, tuft swaying with the stride */
+      ctx2.fillStyle = INK; ctx2.strokeStyle = INK;
+      var sway = Math.sin(phase) * 2.5;
+      ctx2.lineWidth = 2.4; ctx2.beginPath(); ctx2.moveTo(30, -92); ctx2.quadraticCurveTo(35, -75, 34 + sway, -46); ctx2.stroke();
+      ctx2.beginPath(); ctx2.ellipse(34 + sway, -40, 3.2, 6.5, 0, 0, Math.PI * 2); ctx2.fill();
+      /* body, neck and head as one silhouette */
+      ctx2.beginPath();
+      ctx2.moveTo(-28, -104);                                              /* withers, the hump */
+      ctx2.bezierCurveTo(-12, -108, 8, -104, 26, -96);                     /* the back, sloping to the rump */
+      ctx2.bezierCurveTo(36, -92, 36, -80, 30, -72);                       /* the rump */
+      ctx2.bezierCurveTo(26, -68, 20, -66, 14, -66);                       /* under the rump */
+      ctx2.bezierCurveTo(0, -66, -14, -66, -26, -70);                      /* the belly */
+      ctx2.bezierCurveTo(-34, -74, -36, -84, -32, -94);                    /* the chest, up to the throat */
+      ctx2.bezierCurveTo(-46, -116, -62, -142, -68, -158);                 /* the throat side of the neck */
+      ctx2.bezierCurveTo(-74, -160, -86, -158, -94, -160);                 /* the jaw to the chin */
+      ctx2.bezierCurveTo(-99, -162, -99, -169, -94, -171);                 /* the rounded nose */
+      ctx2.bezierCurveTo(-86, -175, -78, -177, -72, -181);                 /* the forehead to the brow */
+      ctx2.lineTo(-66, -184);                                              /* the poll, between the ossicones */
+      ctx2.bezierCurveTo(-62, -182, -60, -178, -58, -176);                 /* the back of the skull */
+      ctx2.bezierCurveTo(-50, -160, -36, -128, -28, -104);                 /* the crest of the neck, back to the withers */
+      ctx2.closePath(); ctx2.fill();
+      /* the mane: a short serrated ridge along the crest */
+      ctx2.beginPath();
+      for (var i = 0; i <= 12; i++) {
+        var u = i / 12, v = 1 - u;
+        var cx = v * v * v * -58 + 3 * v * v * u * -50 + 3 * v * u * u * -36 + u * u * u * -28;
+        var cy = v * v * v * -176 + 3 * v * v * u * -160 + 3 * v * u * u * -128 + u * u * u * -104;
+        if (i === 0) ctx2.moveTo(cx, cy); else ctx2.lineTo(cx, cy);
+        if (i < 12) ctx2.lineTo(cx + 3.6, cy - 4.2);
+      }
+      ctx2.closePath(); ctx2.fill();
+      /* the ear, and two knobbed ossicones */
+      ctx2.beginPath(); ctx2.moveTo(-58, -178); ctx2.quadraticCurveTo(-50, -186, -44, -185); ctx2.quadraticCurveTo(-49, -179, -56, -174); ctx2.closePath(); ctx2.fill();
+      ctx2.lineWidth = 2.6; ctx2.beginPath(); ctx2.moveTo(-70, -182); ctx2.lineTo(-72, -196); ctx2.moveTo(-63, -183); ctx2.lineTo(-64, -196); ctx2.stroke();
+      ctx2.beginPath(); ctx2.arc(-72.3, -197, 2.6, 0, Math.PI * 2); ctx2.fill();
+      ctx2.beginPath(); ctx2.arc(-64.2, -197, 2.6, 0, Math.PI * 2); ctx2.fill();
+      frontLeg(0, INK); hindLeg(0, INK);
       ctx2.restore();
+      gctx.save();
+      gctx.shadowColor = 'rgba(216, 180, 106, 0.85)'; gctx.shadowBlur = 16;
+      gctx.drawImage(oc, 0, 0);
+      gctx.restore();
     }
     canvas.setAttribute('data-running', '1');
     ctx2.clearRect(0, 0, W, H);
@@ -2146,7 +2214,13 @@ window.BKReview = (function () {
     var canvas = $('fireworks');
     var reduce = false; try { reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { /* fine */ }
     if (canvas && !reduce) runFireworks(canvas, 15000);
-    function closeSuccess() { stopFireworks(); m.hidden = true; document.body.classList.remove('hold-open'); }
+    function closeSuccess() {
+      stopFireworks(); m.hidden = true; document.body.classList.remove('hold-open');
+      /* Back to the top of the page (Dave, 2026-09-04): the sections the
+         guest scrolled through are gone, and the paid summary is what is
+         left to read. */
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
+    }
     var x = $('successClose'); if (x) x.onclick = closeSuccess;
     m.onclick = function (ev) { if (ev.target === m) closeSuccess(); };
   }

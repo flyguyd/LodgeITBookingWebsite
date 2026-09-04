@@ -999,4 +999,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.79',
+    version: '0.1.79',
+    date: '2026-09-04T19:42:00+02:00',
+    changes: [
+      {
+        headline:
+          'Additional guests, everywhere a price shows. The search bar gains Infants beside Adults and Children (a stepper on the phone). When a party brings more guests than a suite includes, the Rate Engine now charges them per night, and the site shows it wherever it shows the rate: the card says \u201cIncludes 1 additional adult \u00b7 R900.00 a night\u201d under its price, the statement (hover, lightbox and Your stay) itemises Accommodation for the room alone, then \u201cAdditional guests \u00b7 1 additional adult \u00d7 R900.00 \u00d7 3 nights\u201d, then VAT on both, then the total; the Your stay party line names the infants; and a hold carries the additional guests to Lodge Ops for the hold cards and the hold e-mail.',
+        detail:
+          'Engine 0.1.74 (migration 027) is the source: each suite summary may now carry extraGuests {adults/children/infants: {count, each, total}, total} and baseRateTotal, and each night baseRate + extraGuests. HTML: #fInfants select (desktop, 0\u20136) and a #fInfants stepper (mobile). core.js: searchAvailability() sends infants when above 0 (the site server keeps it off the provider call \u2014 lib.mjs strips it from the rate-calendar route, the availability DTO accepts it); rateCalendar() sends it too; planOptionsFor() carries extraGuests and baseRateTotal; applyPlanToRoom() sets room.extraGuests, room.baseTotal and keeps each night\u2019s baseRate; stayBreakdown() prices the day rows and the Accommodation line from the ROOM rate (baseRate / baseTotal) and returns guestsTotal, grand unchanged; stayMath() adds the line \u201cAdditional guests \u00b7 <arithmetic>\u201d first (VAT\u2019s label then reads \u201con accommodation & additional guests\u201d); NEW extraGuestsMath(room, nights) and extraGuestsLabel(room); ruleCallouts() adds {kind: \'extras\'} \u201cIncludes \u2026\u201d for the cards and the lightbox chips; rateBasisLabel() says \u201cPer-suite rate \u00b7 incl. N additional guests\u201d. booking.js / m/booking.js: infants in every party object (search, breakdown, review, tracking), the page snapshot form, the shareable URL (?infants=) and the Retrieve-booking restore. review.js: partyLabel() names infants; the hold\u2019s stay.suites[] carries extras (the label) for Lodge Ops. server.mjs: engineRatesQuote() relays infants and folds it into the per-visitor session key so a changed count is a different cache identity. CSS: .room-callout-extras on both builds. VERIFIED on the Lodge Ops e2e rig \u2014 case 20 (the API figures: 3 adults on the Lagoon 4,900 a night, 16,905 the stay; inside the counts 12,000; an Additional-adults rule discounting the room rate only) and case 70 in Chromium (a 3-adult + 1-infant deep link: the card reads R16,905 and \u201cIncludes 1 additional adult \u00b7 R900.00 a night\u201d, the Infants field is filled, Your stay itemises Accommodation R12,000.00, Additional guests R2,700.00, VAT, total R16,905.00 and names \u201c3 adults, 1 infant\u201d; no console errors).',
+      },
+    ],
+  },
 ];

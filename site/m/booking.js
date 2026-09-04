@@ -9,7 +9,7 @@
   var form = $('searchForm');
   var els = {
     arrive: $('fArrive'), nights: $('fNights'), nightsCustom: $('fNightsCustom'),
-    adults: $('fAdults'), children: $('fChildren'), rooms: $('fRooms'),
+    adults: $('fAdults'), children: $('fChildren'), infants: $('fInfants'), rooms: $('fRooms'),
     code: $('fCode'), btn: $('searchBtn'),
     note: $('formNote'), loading: $('stateLoading'),
     maintenance: $('stateMaintenance'), unavailable: $('stateUnavailable'),
@@ -129,7 +129,7 @@
         /* The picker prices the CURRENT party (2026-08-31) - a couples-only
            plan must shape these figures exactly as it shapes the search. */
         return C.fetchRateCalendar(f, t, null,
-          { adults: els.adults.textContent, children: els.children.textContent });
+          { adults: els.adults.textContent, children: els.children.textContent, infants: els.infants ? els.infants.textContent : '0' });
       },
       minIso: C.isoToday(0),
       maxIso: C.isoToday(365 * 3),
@@ -176,7 +176,7 @@
          retired with this: pricing rules live in the Rate Engine now.)
          The conservation levy still comes from the replicated lodge
          settings — the engine knows nothing of it. */
-      var party = { adults: els.adults.textContent, children: els.children.textContent };
+      var party = { adults: els.adults.textContent, children: els.children.textContent, infants: els.infants ? els.infants.textContent : '0' };
       current.results.forEach(function (room) {
         room.plans = C.planOptionsFor(room.roomTypeId, current.ratePlans);
         /* Closed to arrivals / departures (engine 2026-09-02): no plan
@@ -255,6 +255,7 @@
     var params = {
       from: from, to: to,
       adults: els.adults.textContent, children: els.children.textContent,
+      infants: els.infants ? els.infants.textContent : '0',
       rooms: els.rooms.textContent,
       code: els.code ? els.code.value.trim().toUpperCase() : '',
     };
@@ -319,7 +320,7 @@
   function buildBreakdown(room, nights) {
     var bd = C.stayBreakdown(room, current.from, nights);
     if (!bd) return null;
-    var party = { adults: els.adults.textContent, children: els.children.textContent };
+    var party = { adults: els.adults.textContent, children: els.children.textContent, infants: els.infants ? els.infants.textContent : '0' };
     var lines = C.stayMath(room, lodge, party, nights);
     var tip = document.createElement('div');
     tip.className = 'bk-breakdown';
@@ -473,7 +474,7 @@
     window.BKCal.inline(holder, {
       fetchRates: function (f, t) {
         return C.fetchRateCalendar(f, t, String(room.roomTypeId),
-          { adults: els.adults.textContent, children: els.children.textContent });
+          { adults: els.adults.textContent, children: els.children.textContent, infants: els.infants ? els.infants.textContent : '0' });
       },
       minIso: C.isoToday(0),
       maxIso: C.isoToday(365 * 3),
@@ -745,7 +746,7 @@
         pb.addEventListener('click', function (ev) {
           ev.stopPropagation();
           if (opt.planId === room.planId) return;
-          var party = { adults: els.adults.textContent, children: els.children.textContent };
+          var party = { adults: els.adults.textContent, children: els.children.textContent, infants: els.infants ? els.infants.textContent : '0' };
           C.applyPlanToRoom(room, opt, lodge, party, nights);
           C.track('plan_selected',
             { roomTypeId: room.roomTypeId, planId: opt.planId, total: room.totalPrice },
@@ -1034,7 +1035,7 @@
       }),
       total: total ? total.sum.toFixed(2) : null,
     }, stateCheckpoint());
-    var party = { adults: els.adults.value, children: els.children.value };
+    var party = { adults: els.adults.value, children: els.children.value, infants: els.infants ? els.infants.value : '0' };
     /* The results stay where they are (Dave, 2026-09-02): the summary is
        a section below them, above the footer, and the page scrolls to it.
        The bar steps aside — the summary's own buttons take over. */
@@ -1101,6 +1102,7 @@
       form: {
         arrive: current.from, nights: current.nights,
         adults: String(els.adults.value), children: String(els.children.value), rooms: String(els.rooms.value),
+        infants: els.infants ? String(els.infants.value) : '0',
         code: els.code ? String(els.code.value || '').trim().toUpperCase() : '',
       },
       json: current.raw || null,
@@ -1124,6 +1126,7 @@
       el.dispatchEvent(new Event('change', { bubbles: true }));
     }
     setSel(els.adults, snap.form.adults); setSel(els.children, snap.form.children); setSel(els.rooms, snap.form.rooms);
+    if (els.infants) setSel(els.infants, snap.form.infants != null ? snap.form.infants : '0');
     if (els.code) els.code.value = snap.form.code || '';
     current.from = snap.form.arrive;
     current.to = C.addDays(current.from, n);
@@ -1221,6 +1224,7 @@
       p.set('nights', String(n));
       p.set('adults', els.adults.textContent);
       p.set('children', els.children.textContent);
+      if (els.infants) p.set('infants', els.infants.textContent);
       p.set('suites', els.rooms.textContent);
       history.replaceState(null, '', location.pathname + '?' + p.toString());
     } catch (e) { /* never let sharing break searching */ }
@@ -1241,6 +1245,7 @@
       setNights(n);
       setOut(els.adults, p.get('adults'), 1, 12);
       setOut(els.children, p.get('children'), 0, 12);
+      if (els.infants && p.get('infants') != null) setOut(els.infants, p.get('infants'), 0, 6);
       setOut(els.rooms, p.get('suites'), 1, 6);
       if (form.requestSubmit) form.requestSubmit();
       else form.dispatchEvent(new Event('submit', { cancelable: true }));

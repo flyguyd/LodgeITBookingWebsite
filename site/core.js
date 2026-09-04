@@ -220,12 +220,20 @@ window.BKCore = (function () {
     if (!known) return null;
     var extras = (taxes != null && isFinite(taxes) ? taxes : 0) +
       (fees != null && isFinite(fees) ? fees : 0);
+    /* ADDITIONAL GUESTS (engine 027): the nights and the Accommodation line
+       show the ROOM rate; what the extra guests add is its own line from
+       stayMath, so the figures a guest adds up by hand still meet. */
+    var xg = room.extraGuests && Number(room.extraGuests.total) > 0 ? room.extraGuests : null;
+    var xgTotal = xg ? Number(xg.total) : 0;
+    if (xg && room.baseTotal != null && isFinite(Number(room.baseTotal))) total = Number(room.baseTotal);
+    else if (xg) total = total - xgTotal;
     var nightly = null;
     var np = room.nightlyPrices;
     if (np && np.length === nights) {
       nightly = [];
       for (var j = 0; j < np.length; j++) {
-        var v = Number(np[j] && np[j].rate != null ? np[j].rate : np[j]);
+        var v = Number(np[j] && np[j].rate != null
+          ? (xg && np[j].baseRate != null ? np[j].baseRate : np[j].rate) : np[j]);
         if (!isFinite(v)) { nightly = null; break; }
         nightly.push(v);
       }
@@ -294,7 +302,43 @@ window.BKCore = (function () {
     }
     /* baseTotal is the ACCOMMODATION LINE as displayed — original when a
        discount rode along; `discount` brings it back to the charged figure. */
-    return { rows: rows, baseTotal: accTotal, discount: disc, extrasTotal: extras, grand: total + extras };
+    return { rows: rows, baseTotal: accTotal, discount: disc, extrasTotal: extras,
+      guestsTotal: xgTotal, grand: total + xgTotal + extras };
+  }
+
+  /** "1 additional adult × R2,000 × 3 nights" per class — the arithmetic
+   *  behind the Additional guests line (engine 027). '' when none. */
+  function extraGuestsMath(room, nights) {
+    var xg = room && room.extraGuests;
+    if (!xg || !(Number(xg.total) > 0)) return '';
+    var cur = room.currency;
+    var parts = [];
+    [['adults', 'adult', 'adults'], ['children', 'child', 'children'], ['infants', 'infant', 'infants']]
+      .forEach(function (d) {
+        var l = xg[d[0]];
+        if (!l || !(Number(l.count) > 0)) return;
+        var n = Number(l.count);
+        parts.push(n + ' additional ' + (n === 1 ? d[1] : d[2]) + ' × ' + money(l.each, cur) +
+          (nights > 1 ? ' × ' + nights + ' nights' : ''));
+      });
+    return parts.join(' · ');
+  }
+
+  /** The additional guests in a few words for a card, a hold or an email:
+   *  "1 additional adult · R2,000 a night". '' when none. */
+  function extraGuestsLabel(room) {
+    var xg = room && room.extraGuests;
+    if (!xg || !(Number(xg.total) > 0)) return '';
+    var cur = room.currency;
+    var parts = [];
+    [['adults', 'adult', 'adults'], ['children', 'child', 'children'], ['infants', 'infant', 'infants']]
+      .forEach(function (d) {
+        var l = xg[d[0]];
+        if (!l || !(Number(l.count) > 0)) return;
+        var n = Number(l.count);
+        parts.push(n + ' additional ' + (n === 1 ? d[1] : d[2]) + ' · ' + money(l.each, cur) + ' a night');
+      });
+    return parts.join(', ');
   }
 
   /** 'R175 × 2 guests × 4 nights' — how the levy total is reached, spelled
@@ -327,6 +371,13 @@ window.BKCore = (function () {
    */
   function stayMath(room, lodge, party, nights) {
     var lines = [];
+    /* ADDITIONAL GUESTS (engine 027) sit right under Accommodation, with
+       their arithmetic, before VAT — VAT was charged on the room rate AND
+       the extra guests, so the order is the order of the sum. */
+    var xgMath = extraGuestsMath(room, nights);
+    if (xgMath) {
+      lines.push({ label: 'Additional guests · ' + xgMath, amount: Number(room.extraGuests.total) });
+    }
     var vatPct = lodge && Number(lodge.vatPct) > 0 ? Number(lodge.vatPct) : 0;
     var pctS = Math.round(vatPct * 100) / 100;
     var taxes = isFinite(Number(room.taxesTotal)) ? Number(room.taxesTotal) : 0;
@@ -341,7 +392,8 @@ window.BKCore = (function () {
       lines.push({
         label: room.vatDerived
           ? 'VAT ' + pctS + '% on ' +
-            (room.discountApplied === true ? 'discounted accommodation' : 'accommodation')
+            (room.discountApplied === true ? 'discounted accommodation' : 'accommodation') +
+            (xgMath ? ' & additional guests' : '')
           : 'Taxes (provider)',
         amount: taxes,
       });
@@ -469,6 +521,10 @@ window.BKCore = (function () {
     (room.rateMessages || []).forEach(function (t) {
       if (String(t).trim()) out.push({ kind: 'msg', text: String(t) });
     });
+    /* The additional guests this price carries (engine 027), said on the
+       card itself — never only inside the hover statement. */
+    var xgl = extraGuestsLabel(room);
+    if (xgl) out.push({ kind: 'extras', text: 'Includes ' + xgl });
     if (room.discountApplied === true && Number(room.discountTotal) > 0) {
       out.push({
         kind: 'discount',
@@ -524,6 +580,12 @@ window.BKCore = (function () {
           : s.rateBasis === 'per_room_per_night' ? 'per_room_per_night' : null,
         adultsPriced: s.adultsPriced != null && isFinite(Number(s.adultsPriced))
           ? Number(s.adultsPriced) : null,
+        /* ADDITIONAL GUESTS (engine 027): what the guests above the suite's
+           included counts added to rateTotal, by class, and the
+           accommodation without them. Absent when nothing was charged. */
+        extraGuests: s.extraGuests && Number(s.extraGuests.total) > 0 ? s.extraGuests : null,
+        baseRateTotal: s.baseRateTotal != null && isFinite(Number(s.baseRateTotal))
+          ? Number(s.baseRateTotal) : null,
         /* A discount code the guest typed took money off this plan's stay
            (engine 0.1.40): the flag plus what it saved and the pre-discount
            accommodation, for the itemised statement. */
@@ -608,11 +670,19 @@ window.BKCore = (function () {
     room.totalPrice = opt.rateTotal;
     room.rateBasis = opt.rateBasis || null;
     room.adultsPriced = opt.adultsPriced != null ? opt.adultsPriced : null;
+    /* The additional-guest charge inside totalPrice (engine 027), and the
+       accommodation without it — the statement shows them apart. */
+    room.extraGuests = opt.extraGuests || null;
+    room.baseTotal = opt.extraGuests && opt.baseRateTotal != null ? opt.baseRateTotal : null;
     room.taxesTotal = opt.vatTotal > 0 ? opt.vatTotal : null;
     room.vatDerived = opt.vatTotal > 0;
     room.providerExtras = false;
     room.currency = (lodge && lodge.currency) || 'ZAR';
-    room.nightlyPrices = (opt.nights || []).map(function (n) { return { rate: n.rate }; });
+    room.nightlyPrices = (opt.nights || []).map(function (n) {
+      /* Each night keeps its room rate BEFORE the additional guests
+         (engine 027) so the day rows add up to the Accommodation line. */
+      return { rate: n.rate, baseRate: n.baseRate != null ? n.baseRate : null };
+    });
     /* NIGHT-SCOPED rule messages, by date (engine 0.1.45) — the breakdown
        tags the matching night's row with them. Stay-scoped lines are on
        room.rateMessages and belong to the whole stay. */
@@ -699,6 +769,12 @@ window.BKCore = (function () {
     var q = '?from=' + params.from + '&to=' + params.to +
       '&adults=' + params.adults + '&children=' + params.children +
       '&rooms=' + params.rooms;
+    /* Infants (engine 027) ride the search so the Rate Engine can charge
+       the ones above a suite's included count; the site server keeps
+       them off the provider call. Omitted when the form has none. */
+    if (params.infants != null && String(params.infants) !== '' && Number(params.infants) > 0) {
+      q += '&infants=' + Number(params.infants);
+    }
     /* The discount code rides the availability request and feeds the Rate
        Engine's discount_code qualifier (engine 0.1.34). OMITTED when blank,
        never sent as '': a rule gated on a code fails closed on "no code",
@@ -855,6 +931,8 @@ window.BKCore = (function () {
     var c = party && parseInt(party.children, 10);
     if (isFinite(a) && a >= 1) q += '&adults=' + a;
     if (isFinite(c) && c >= 0) q += '&children=' + c;
+    var inf = party && parseInt(party.infants, 10);
+    if (isFinite(inf) && inf > 0) q += '&infants=' + inf;
     return fetch(API + '/rate-calendar' + q)
       .then(function (r) { return r.ok ? r.json() : null; })
       .catch(function () { return null; });
@@ -869,6 +947,12 @@ window.BKCore = (function () {
       var n = Number(room.adultsPriced);
       return 'Per-guest rate' +
         (isFinite(n) && n >= 1 ? ' · priced for ' + n + (n === 1 ? ' adult' : ' adults') : '');
+    }
+    var xg = room.extraGuests && Number(room.extraGuests.total) > 0 ? room.extraGuests : null;
+    if (xg) {
+      var n = 0;
+      ['adults', 'children', 'infants'].forEach(function (k) { n += xg[k] ? Number(xg[k].count) || 0 : 0; });
+      return 'Per-suite rate' + (n > 0 ? ' · incl. ' + n + ' additional guest' + (n === 1 ? '' : 's') : '');
     }
     return 'Per-suite rate';
   }
@@ -892,6 +976,8 @@ window.BKCore = (function () {
     moneyC: moneyC,
     levyMathLabel: levyMathLabel,
     stayMath: stayMath,
+    extraGuestsMath: extraGuestsMath,
+    extraGuestsLabel: extraGuestsLabel,
     planOptionsFor: planOptionsFor,
     planRestriction: planRestriction,
     applyInclusionDeltas: applyInclusionDeltas,

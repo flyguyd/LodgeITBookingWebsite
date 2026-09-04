@@ -350,6 +350,8 @@ main { position: relative; z-index: 1; padding: 0 16px 150px; }
 .room-callout { font-size: 12px; line-height: 1.45; color: var(--paper-dim); }
 .room-callout-msg { color: var(--gold); }
 .room-callout-discount { color: var(--gold); font-weight: 600; }
+/* The additional guests inside the price (engine 027) — plain, factual. */
+.room-callout-extras { color: var(--paper); }
 .room-callout-inc { color: var(--paper); }
 .room-callout-exc { color: var(--paper-dim); }
 .room-callout-refund { font-style: italic; }

@@ -148,8 +148,10 @@ window.BKReview = (function () {
   function partyLabel(party) {
     var a = Number(party && party.adults) || 0;
     var c = Number(party && party.children) || 0;
+    var i = Number(party && party.infants) || 0;
     var s = a + (a === 1 ? ' adult' : ' adults');
     if (c > 0) s += ', ' + c + (c === 1 ? ' child' : ' children');
+    if (i > 0) s += ', ' + i + (i === 1 ? ' infant' : ' infants');
     return s;
   }
 
@@ -439,7 +441,10 @@ window.BKReview = (function () {
           total: one != null ? Math.round(one * (p.qty || 1) * 100) / 100 : null,
           /* The plan's refund terms travel with the hold (Dave, 2026-09-02):
              the hold cards and the hold emails say them per suite. */
-          refund: (C.refundLabel ? C.refundLabel(p.room.refundable) : '') || null };
+          refund: (C.refundLabel ? C.refundLabel(p.room.refundable) : '') || null,
+          /* The additional guests priced on this suite (engine 027), for
+             the hold row and the hold email. */
+          extras: (C.extraGuestsLabel ? C.extraGuestsLabel(p.room) : '') || null };
       }),
     };
   }

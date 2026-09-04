@@ -414,6 +414,9 @@ async function engineRatesQuote(roomTypeIds, from, to, ip, scan = false, discoun
   // own default of 2 adults and says so in the annotation.
   const adults = Math.round(Number(party && party.adults));
   const children = Math.round(Number(party && party.children));
+  // Infants (engine 027): the engine prices the ones above a suite's
+  // included count as additional guests; nothing else reads them.
+  const infants = Math.round(Number(party && party.infants));
   // The per-visitor key hangs off the site's own held session (0.1.27), so
   // the engine sees one open session for the site and still keeps each
   // visitor's answers consistent within it.
@@ -440,7 +443,7 @@ async function engineRatesQuote(roomTypeIds, from, to, ip, scan = false, discoun
   // search can never be served the answer a 3-guest search cached, in
   // either direction. As declared: 'x' when the guest URL carried no
   // count, which never collides with a real 0.
-  const partyKey = `p${Number.isFinite(adults) && adults >= 1 ? Math.min(adults, 99) : 'x'}-${Number.isFinite(children) && children >= 0 ? Math.min(children, 99) : 'x'}`;
+  const partyKey = `p${Number.isFinite(adults) && adults >= 1 ? Math.min(adults, 99) : 'x'}-${Number.isFinite(children) && children >= 0 ? Math.min(children, 99) : 'x'}-${Number.isFinite(infants) && infants >= 0 ? Math.min(infants, 99) : 'x'}`;
   const raw = JSON.stringify({
     roomTypeIds: ids,
     from,
@@ -451,6 +454,7 @@ async function engineRatesQuote(roomTypeIds, from, to, ip, scan = false, discoun
     ...(addr && addr !== 'unknown' ? { ip: addr } : {}),
     ...(Number.isFinite(adults) && adults >= 1 ? { adults: Math.min(adults, 99) } : {}),
     ...(Number.isFinite(children) && children >= 0 ? { children: Math.min(children, 99) } : {}),
+    ...(Number.isFinite(infants) && infants >= 0 ? { infants: Math.min(infants, 99) } : {}),
   });
   const r = await engineCall('POST', '/api/engine/rates/quote', raw);
   if (r.status !== 200 || !r.body) return null;
@@ -484,6 +488,7 @@ async function withEngineRates(kind, urlPath, body, ip) {
     const quote = await engineRatesQuote(ids, from, to, ip, false, params.get('code') ?? '', {
       adults: params.get('adults'),
       children: params.get('children'),
+      infants: params.get('infants'),
     });
     return JSON.stringify(attachEngineRates(parsed, quote, planInclusions));
   }
@@ -500,6 +505,7 @@ async function withEngineRates(kind, urlPath, body, ip) {
     const quote = await engineRatesQuote(ids, from, to, ip, true, '', {
       adults: params.get('adults'),
       children: params.get('children'),
+      infants: params.get('infants'),
     });
     return JSON.stringify(calendarWithEngineRates(parsed, quote));
   }

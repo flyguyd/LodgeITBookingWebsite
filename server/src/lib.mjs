@@ -131,7 +131,7 @@ export function forwardTargetFor(method, urlPath) {
     // The availability route KEEPS them — its DTO declares both and the
     // provider fallback prices with them.
     if (route.path === '/api/booking/rate-calendar') {
-      for (const k of ['adults', 'children']) {
+      for (const k of ['adults', 'children', 'infants']) {
         if (params.has(k)) {
           params.delete(k);
           dirty = true;

@@ -74,8 +74,13 @@
       [['Adults', 'adults', 1, 12], ['Children', 'children', 0, 12], ['Infants', 'infants', 0, 6]].forEach(function (d) {
         var f = el('label', 'adv-field');
         f.appendChild(el('span', null, d[0]));
-        f.appendChild(selectFor(d[2], d[3], g[d[1]], function (v) { g[d[1]] = v; }));
+        var sel = selectFor(d[2], d[3], g[d[1]], function (v) { g[d[1]] = v; });
+        f.appendChild(sel);
         fields.appendChild(f);
+        // The same glass trigger + list the search bar's own counts wear
+        // (Dave, 2026-09-04: "the person counts in advanced need to be
+        // styled the same as the main search panel").
+        if (window.BKCal && window.BKCal.glassSelect) window.BKCal.glassSelect(sel);
       });
       row.appendChild(fields);
       if (state.groups.length > 1) {
@@ -253,11 +258,40 @@
       }
       els.results.appendChild(block);
     });
+    // The running total (Dave, 2026-09-04: "add a row below the cards with a
+    // total as selections are made") — the same figures the options show,
+    // added up over the suites chosen so far.
+    var tot = chosenTotal();
+    var row = el('div', 'adv-total glass');
+    var left = el('div', 'adv-total-text');
+    var roomsWithSuite = state.groups.filter(function (g, i) { return coveredBy(i) >= 0 || !!state.picks[i]; }).length;
+    left.appendChild(el('strong', null, complete
+      ? 'Every room has its suite'
+      : (roomsWithSuite ? roomsWithSuite + ' of ' + state.groups.length + ' rooms ' + (roomsWithSuite === 1 ? 'has' : 'have') + ' a suite so far' : 'No suite chosen yet')));
+    left.appendChild(el('span', 'adv-total-note', tot.n
+      ? (tot.n + (tot.n === 1 ? ' suite' : ' suites') + ' · ' + state.nights + (state.nights === 1 ? ' night' : ' nights') + (tot.priced ? ' · taxes included' : ' · suites on request are not in the total'))
+      : 'Pick a suite in each room above — the total adds up here.'));
+    row.appendChild(left);
+    row.appendChild(el('div', 'adv-total-amount', tot.n && tot.currency ? C.money(tot.sum, tot.currency) : '—'));
+    els.results.appendChild(row);
     els.cont.hidden = false;
     els.cont.disabled = !complete;
     els.contNote.textContent = complete
       ? 'Every room has its suite.'
       : 'Choose a suite for every room to continue.';
+  }
+  /** The chosen suites' prices added up — exactly the figures on the options. */
+  function chosenTotal() {
+    var out = { sum: 0, n: 0, priced: true, currency: null };
+    assignments().forEach(function (a) {
+      if (!a.room || !a.id) return;
+      out.n += 1;
+      var pp = C.priceParts(a.room, api.config ? api.config() : {});
+      if (pp.headline == null) { out.priced = false; return; }
+      out.sum += pp.headline + (pp.note && pp.note.kind === 'plus' ? pp.note.extras : 0);
+      out.currency = a.room.currency || out.currency;
+    });
+    return out;
   }
   function dropSuiteElsewhere(ownerKey, id) {
     for (var k in state.picks) if ('r' + k !== ownerKey && state.picks[k] === id) delete state.picks[k];

@@ -208,9 +208,13 @@ body.adv-on .cta-adv { background: var(--gold); color: #16120a; }
 .adv-room { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; padding: 10px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); }
 .adv-room-name { min-width: 72px; font-family: var(--serif); font-size: 18px; }
 .adv-fields { display: flex; gap: 10px; flex: 1 1 auto; }
-.adv-field { display: flex; flex-direction: column; gap: 3px; padding: 6px 12px; border-radius: 12px; }
+.adv-field { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border-radius: 14px; min-width: 88px; font: 500 16px/1.4 var(--sans); color: var(--paper); cursor: pointer; }
+/* The rooms' glass lists open DOWN over the result blocks: the form half
+   stacks above the results half (same fix as the bar over the panel). */
+.adv-rooms { position: relative; z-index: 2; }
+.adv-results { position: relative; z-index: 1; }
 .adv-field:hover { background: rgba(255, 255, 255, 0.06); }
-.adv-field > span { font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--paper-dim); }
+.adv-field > span { font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--paper-dim); white-space: nowrap; }
 .adv-sel { appearance: none; -webkit-appearance: none; background: transparent; border: 0; outline: none; color: var(--paper); font: 500 16px/1.4 var(--sans); cursor: pointer; color-scheme: dark; }
 .adv-sel option { color: #111; }
 .adv-remove { border: 0; background: transparent; color: var(--paper-dim); cursor: pointer; font: 500 12px/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; padding: 8px 6px; }
@@ -230,6 +234,11 @@ body.adv-on .cta-adv { background: var(--gold); color: #16120a; }
 .adv-share-note { color: var(--gold); margin-bottom: 8px; }
 .adv-block-shared { border-style: dashed; }
 .adv-share-lead { margin: 0 0 10px; }
+/* The running total under the result blocks (2026-09-04). */
+.adv-total { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 14px 18px; margin-top: 4px; }
+.adv-total-text { display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
+.adv-total-note { font-size: 12.5px; color: var(--paper-dim); }
+.adv-total-amount { font-family: var(--serif); font-size: 26px; color: var(--gold); white-space: nowrap; }
 .adv-list { display: flex; flex-direction: column; gap: 6px; }
 .adv-opt { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.12); cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .adv-opt:hover { border-color: rgba(216, 180, 106, 0.5); }

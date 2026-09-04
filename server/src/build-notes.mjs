@@ -1051,4 +1051,23 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.83',
+    version: '0.1.83',
+    date: '2026-09-04T23:46:00+02:00',
+    changes: [
+      {
+        headline:
+          'The advanced search\u2019s Adults, Children and Infants now wear the same dressing as the search bar\u2019s own counts: the glass trigger with its chevron and the glass list that opens under it, instead of the browser\u2019s plain drop-downs (Dave, 2026-09-04: \u201cthe person counts in advanced need to be styled the same as the main search panel\u201d). The lists open over the result blocks below them rather than behind them.',
+        detail:
+          'advanced.js renderGroups(): after each room\u2019s select is placed in its label, BKCal.glassSelect(select) dresses it (the native select stays as the value holder, so the change listeners, the room\u2019s party and the e2e reads of select.value are untouched). booking.css: .adv-field carries the bar field\u2019s font (500 16px var(--sans)), padding 8px 10px, radius 14px, min-width 88px and a nowrap label; .adv-rooms sits at z-index 2 above .adv-results at 1, so a room\u2019s open list paints over the glass result blocks (the same stacking fix the bar got over the panel in 0.1.81). m/booking.css: the same font (600 18px) and stacking. VERIFIED in Chromium on the Lodge Ops rig (case 70.32c): every advanced count has its .gsel trigger, and an open Adults list\u2019s centre hits the list itself, not a result block. Static files only.',
+      },
+      {
+        headline:
+          'A running total under the advanced search\u2019s result blocks (Dave, 2026-09-04: \u201cOn the advanced search results, add a row below the cards with a total as selections are made\u201d). As each room chooses its suite the row says how many rooms have one, how many suites and nights that is, and the total so far \u2014 the same figures the options show, added up \u2014 until every room has its suite and the row carries the total Your stay will confirm.',
+        detail:
+          'advanced.js renderResults() appends .adv-total (full grid row) after the blocks: chosenTotal() sums priceParts().headline (+ the per-guest extras note) over assignments() \u2014 a shared suite counts once for the rooms it covers; \u201cEvery room has its suite\u201d / \u201ck of N rooms have a suite so far\u201d / \u201cNo suite chosen yet\u201d, the note \u201cN suites \u00b7 N nights \u00b7 taxes included\u201d (or \u201csuites on request are not in the total\u201d when a chosen suite has no price), the amount in the site\u2019s money format. CSS both builds: .adv-total / -text / -note / -amount. VERIFIED on the rig (70.34b/c): R13,800 with one room chosen, R25,875 with both \u2014 the figure 70.35 then reads on Your stay.',
+      },
+    ],
+  },
 ];

@@ -159,18 +159,28 @@
   }
 
   // ---- the results (one block per room, then one per combination) ----
-  function optionFor(room, ownerKey, radioName, checked, onPick) {
+  /** One suite in a block: TWO click zones (Dave, 2026-09-04) — the pad
+   *  around the radio chooses the suite; the name, details and rate open
+   *  the suite's lightbox, the same one the standard cards open, whose
+   *  Add / Remove button chooses or un-chooses it for this room. */
+  function optionFor(room, ownerKey, radioName, checked, onPick, onUnpick) {
     var id = String(room.roomTypeId);
-    var lab = el('label', 'adv-opt' + (checked ? ' on' : ''));
-    lab.setAttribute('data-suite', id);
+    var row = el('div', 'adv-opt' + (checked ? ' on' : ''));
+    row.setAttribute('data-suite', id);
+    var pad = el('label', 'adv-opt-pick');
+    pad.title = 'Choose this suite';
     var radio = document.createElement('input');
     radio.type = 'radio';
     radio.name = radioName;
     radio.value = id;
     radio.checked = checked;
     radio.addEventListener('change', function () { onPick(id); });
-    lab.appendChild(radio);
-    var txt = el('span', 'adv-opt-main');
+    pad.appendChild(radio);
+    row.appendChild(pad);
+    var main = el('button', 'adv-opt-main');
+    main.type = 'button';
+    main.title = 'See the suite';
+    var txt = el('span', 'adv-opt-text');
     txt.appendChild(el('span', 'adv-opt-name', room.name));
     var pp = C.priceParts(room, api.config ? api.config() : {});
     var meta = [];
@@ -178,11 +188,31 @@
     if (room.availabilityKnown === false) meta.push('Availability on request');
     else if (room.available > 0 && room.available <= 2) meta.push(room.available === 1 ? 'Last suite' : 'Only ' + room.available + ' left');
     if (meta.length) txt.appendChild(el('span', 'adv-opt-meta', meta.join(' · ')));
-    lab.appendChild(txt);
-    lab.appendChild(el('span', 'adv-opt-price', pp.headline != null
+    main.appendChild(txt);
+    main.appendChild(el('span', 'adv-opt-price', pp.headline != null
       ? C.money(pp.headline + (pp.note && pp.note.kind === 'plus' ? pp.note.extras : 0), room.currency)
       : 'Rates on request'));
-    return lab;
+    main.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      if (!api.openSuite) { onPick(id); return; }
+      api.openSuite(room, state.nights, isChosen(ownerKey, id), function () {
+        if (isChosen(ownerKey, id)) { onUnpick(); return false; }
+        onPick(id);
+        return true;
+      });
+    });
+    row.appendChild(main);
+    return row;
+  }
+  function isChosen(ownerKey, id) {
+    return ownerKey.charAt(0) === 'c'
+      ? state.comboPicks[Number(ownerKey.slice(1))] === id
+      : state.picks[Number(ownerKey.slice(1))] === id;
+  }
+  function unpick(ownerKey) {
+    if (ownerKey.charAt(0) === 'c') delete state.comboPicks[Number(ownerKey.slice(1))];
+    else delete state.picks[Number(ownerKey.slice(1))];
+    renderResults();
   }
   function renderResults() {
     els.results.textContent = '';
@@ -220,7 +250,7 @@
         }
         var list = el('div', 'adv-list');
         shown.forEach(function (room) {
-          list.appendChild(optionFor(room, 'r' + i, 'advRoom' + (i + 1), state.picks[i] === String(room.roomTypeId), function (id) { pick(i, id); }));
+          list.appendChild(optionFor(room, 'r' + i, 'advRoom' + (i + 1), state.picks[i] === String(room.roomTypeId), function (id) { pick(i, id); }, function () { unpick('r' + i); }));
         });
         block.appendChild(list);
         var own = !!state.picks[i] && shown.some(function (room) { return String(room.roomTypeId) === state.picks[i]; });
@@ -251,7 +281,7 @@
         }
         var list = el('div', 'adv-list');
         shown.forEach(function (room) {
-          list.appendChild(optionFor(room, 'c' + ci, 'advCombo' + (ci + 1), state.comboPicks[ci] === String(room.roomTypeId), function (id) { pickCombo(ci, id); }));
+          list.appendChild(optionFor(room, 'c' + ci, 'advCombo' + (ci + 1), state.comboPicks[ci] === String(room.roomTypeId), function (id) { pickCombo(ci, id); }, function () { unpick('c' + ci); }));
         });
         block.appendChild(list);
         if (state.comboPicks[ci] && !shown.some(function (room) { return String(room.roomTypeId) === state.comboPicks[ci]; })) complete = false;

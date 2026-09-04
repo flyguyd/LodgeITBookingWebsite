@@ -452,6 +452,16 @@ body.adv-on .steppers { display: none; }
 .adv-opt.on { border-color: var(--gold); background: rgba(216,180,106,0.1); }
 .adv-opt input { accent-color: #d8b46a; width: 20px; height: 20px; flex: none; }
 .adv-opt-main { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* Two click zones on an option (2026-09-04): the pad around the radio
+   chooses; the name and rate open the suite's lightbox. */
+.adv-opt { padding: 0; overflow: hidden; }
+.adv-opt-pick { display: flex; align-items: center; justify-content: center; align-self: stretch; padding: 0 12px 0 14px; cursor: pointer; border-right: 1px solid rgba(255, 255, 255, 0.1); transition: background 0.15s; }
+.adv-opt-pick:hover { background: rgba(216, 180, 106, 0.14); }
+.adv-opt-main { flex: 1 1 auto; display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; padding: 10px 12px; background: transparent; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background 0.15s; }
+.adv-opt-main:hover { background: rgba(255, 255, 255, 0.05); }
+.adv-opt-main:hover .adv-opt-name { color: var(--gold); }
+.adv-opt-text { flex: 1 1 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.adv-opt-main .adv-opt-price { margin-left: auto; }
 .adv-opt-name { font-family: var(--serif); font-size: 17px; }
 .adv-opt-meta { color: var(--paper-dim); font-size: 12px; }
 .adv-opt-price { color: var(--gold); font-family: var(--serif); font-size: 17px; white-space: nowrap; }

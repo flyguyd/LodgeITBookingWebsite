@@ -502,7 +502,11 @@
 
   /* The card click opens the full story — gallery, description, amenities,
      pricing — and the Add action lives inside (Dave, 2026-08-23). */
-  function openLightbox(room, nights) {
+  /* opts (2026-09-04, the advanced search): { picked, onToggle } — the
+     lightbox then chooses the suite for THAT room rather than the single
+     search's picks. */
+  function openLightbox(room, nights, opts) {
+    opts = opts || {};
     if (!window.BKLight) { togglePick(room); return; }
     var sc = suites[String(room.roomTypeId)] || null;
     var perGuest = room.rateBasis === 'per_guest_per_night';
@@ -550,7 +554,7 @@
       artHue: C.hueFor(room.roomTypeId),
       soldOut: soldOut,
       soldOutText: room.restricted || 'Unavailable for your dates',
-      picked: !!current.picks[room.roomTypeId],
+      picked: opts.onToggle ? !!opts.picked : !!current.picks[room.roomTypeId],
       price: price,
       description: String((sc && sc.description) || room.description || '').replace(/<[^>]*>/g, ''),
       chips: chips,
@@ -563,10 +567,10 @@
       /* The full statement, embedded (Dave, 2026-08-31) — the same
          element the card only shows on hover. */
       breakdown: buildBreakdown(room, nights),
-      onToggle: soldOut ? null : function () {
+      onToggle: soldOut ? null : (opts.onToggle || function () {
         togglePick(room);
         return !!current.picks[room.roomTypeId];
-      },
+      }),
       onShowAvailability: soldOut ? function () { openAvailability(room); } : null,
     });
   }
@@ -1208,6 +1212,9 @@
       config: function () { return config; },
       search: function (params) { return C.searchAvailability(params); },
       hydrate: function (json, party) { return hydrateRooms(json, party, null, json.nights); },
+      /* The suite's lightbox — the one the standard cards open — with the
+         pick tied to the room that asked (Dave, 2026-09-04). */
+      openSuite: function (room, nights, picked, onToggle) { openLightbox(room, nights, { picked: picked, onToggle: onToggle }); },
       onSearch: function (groups) {
         C.track('search_started', { from: current.from, to: current.to, rooms: groups.length, advanced: true }, { from: current.from, to: current.to });
       },

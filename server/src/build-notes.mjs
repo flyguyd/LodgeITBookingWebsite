@@ -1070,4 +1070,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.84',
+    version: '0.1.84',
+    date: '2026-09-05T00:05:00+02:00',
+    changes: [
+      {
+        headline:
+          'Each suite in the advanced search\u2019s room blocks now has two click zones (Dave, 2026-09-04): the pad around the radio button chooses the suite for that room, and the suite\u2019s name, details and rate open its lightbox \u2014 the same lightbox the standard search\u2019s cards open, with the photos, the description, the occupancy, the rate breakdown and the Add to stay button \u2014 and that button chooses (or un-chooses) the suite for the room that opened it.',
+        detail:
+          'advanced.js optionFor(): the option is a div.adv-opt holding label.adv-opt-pick (the radio, full-height pad) and button.adv-opt-main (name, meta, price); the button calls api.openSuite(room, nights, chosenNow, onToggle) where onToggle picks (pick / pickCombo) or un-picks (new unpick(ownerKey)) for the owning room or combination and returns the new state for the lightbox\u2019s button; isChosen(ownerKey, id) reads it. booking.js and m/booking.js: openLightbox(room, nights, opts) takes { picked, onToggle } that replace the single search\u2019s current.picks / togglePick when given, and the adapter exposes openSuite(). CSS both builds: .adv-opt with no padding and hidden overflow, .adv-opt-pick (stretch, gold hover, a hairline to its right), .adv-opt-main as an unstyled button with the row\u2019s padding and a gold name on hover, .adv-opt-text. VERIFIED on the rig in Chromium (70.34d\u2013f): clicking the Treetop\u2019s name in Room 2 opens the lightbox titled Treetop Suite with Add to stay and chooses nothing; Add to stay ticks the Treetop\u2019s radio for Room 2 and the button reads Remove from stay; Escape closes it and the choice stays; the radio pad and the running total behave as before.',
+      },
+    ],
+  },
 ];

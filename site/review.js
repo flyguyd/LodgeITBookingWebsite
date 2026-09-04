@@ -725,6 +725,45 @@ window.BKReview = (function () {
   function forgetPayment() { try { localStorage.removeItem(PAY_KEY); } catch (e) { /* fine */ } }
   function readPayment() { try { var v = JSON.parse(localStorage.getItem(PAY_KEY) || 'null'); return v && v.paymentId ? v : null; } catch (e) { return null; } }
   function getJson(url) { return fetch(url, { headers: { Accept: 'application/json' } }).then(function (r) { return r.json(); }); }
+
+  /* THE DEEP CHECK before the payment cards (Dave, 2026-09-05: "before
+     opening the payment gateway cards ask the rate engine for a deep search
+     that bypasses all the caching and double checks for things like
+     maintenance blocks"). The engine pulls the lodge's inventory afresh,
+     counts the guest's own held nights as theirs (checkout:<ref> or
+     hold:<ref>), and refuses outright in MAINTENANCE. Its answer decides
+     whether the gateway squares appear at all: no card is ever offered for
+     a stay the lodge cannot honour. */
+  var RECHECK_API = window.BK_RECHECK_API || '/api/public/recheck';
+  function deepCheck(stay, reference, holdReference) {
+    var body = { from: stay.from, to: stay.to, suites: (stay.suites || []).map(function (s) { return { roomTypeId: String(s.roomTypeId), units: s.qty || s.units || 1 }; }) };
+    if (reference) body.reference = reference;
+    if (holdReference) body.holdReference = holdReference;
+    return fetch(RECHECK_API, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) {
+        return r.json().catch(function () { return null; }).then(function (j) {
+          if (r.status === 503) return { ok: false, maintenance: true, message: (j && j.message) || 'Bookings are briefly paused \u2014 please try again shortly.' };
+          if (r.status !== 200 || !j) return { ok: false, maintenance: false, unreachable: true, message: 'We could not double-check your stay with the lodge just now \u2014 please try again.' };
+          return j;
+        });
+      })
+      .catch(function () { return { ok: false, maintenance: false, unreachable: true, message: 'We could not reach the lodge to double-check your stay \u2014 please try again.' }; });
+  }
+  /* The refusal, in the place the squares would have been: one button —
+     Try again for a pause or a connection problem, Search again when the
+     stay itself is gone. */
+  function deepCheckNote(host, before, chk, retry) {
+    var again = !!(chk && (chk.maintenance || chk.unreachable));
+    var n = el('div', 'hold-choice-note hold-choice-err deep-check-note'); n.id = 'deepCheckNote';
+    n.setAttribute('role', 'alert'); n.setAttribute('data-maintenance', chk && chk.maintenance ? '1' : '0');
+    n.appendChild(el('p', null, (chk && chk.message) || 'Your stay could not be confirmed \u2014 please search again.'));
+    var b = el('button', 'cta deep-check-retry'); b.type = 'button';
+    b.appendChild(el('span', 'cta-label', again ? 'Try again' : 'Search again'));
+    b.addEventListener('click', function () { n.remove(); if (again) retry(); else window.location.href = window.location.pathname; });
+    n.appendChild(b);
+    if (before && before.parentNode === host) host.insertBefore(n, before); else host.appendChild(n);
+    return n;
+  }
   function secureRow() {
     var row = el('div', 'hold-secure');
     var lock = el('span', 'hold-secure-item');
@@ -870,6 +909,28 @@ window.BKReview = (function () {
       }).then(function (m) { payWait.hidden = true; pay.hidden = false; return m; });
       return modesLoad;
     }
+    /* The deep check first (Dave, 2026-09-05); the squares only after the
+       engine says the stay still stands. A refusal keeps the whole payment
+       block hidden and puts the reason where it would have been. */
+    var deepOk = false;
+    function checkedLoadModes() {
+      if (deepOk) return loadModes();
+      var stay = { from: ctx.from, to: ctx.to, suites: (ctx.picks || []).map(function (p) { return { roomTypeId: p.room.roomTypeId, qty: p.qty || 1 }; }) };
+      payWait.textContent = 'Double-checking your stay with the lodge\u2026'; payWait.hidden = false; pay.hidden = true;
+      return deepCheck(stay, null, null).then(function (chk) {
+        var old = host.querySelector('.deep-check-note'); if (old) old.remove();
+        if (!chk || chk.ok !== true) {
+          if (ctx.track) ctx.track('hold_deep_check_failed', { maintenance: !!(chk && chk.maintenance), unreachable: !!(chk && chk.unreachable), message: chk && chk.message });
+          payWrap.hidden = true;
+          deepCheckNote(host, payWrap.nextSibling, chk, function () { if (chosen) select(chosen); });
+          return null;
+        }
+        if (ctx.track) ctx.track('hold_deep_check_ok', { held: chk.held, at: chk.checkedAt });
+        deepOk = true;
+        payWait.textContent = 'Checking payment options\u2026';
+        return loadModes();
+      });
+    }
     function loadFee(o) {
       if (fees[o.hours]) return Promise.resolve(fees[o.hours]);
       return getJson(PAY_API + '/fee?hours=' + o.hours).then(function (j) {
@@ -891,7 +952,7 @@ window.BKReview = (function () {
         /* The squares wait for the engine's answer; the kicker and the
            "Checking…" line hold the space so the page does not jump. */
         if (!modes) { payWait.hidden = false; pay.hidden = true; }
-        loadModes(); loadFee(o).then(function () { if (payer) renderPanel(payer); });
+        checkedLoadModes(); loadFee(o).then(function () { if (payer) renderPanel(payer); });
         if (payer) renderPanel(payer);
       } else {
         payWrap.hidden = true; confirmWrap.hidden = false;
@@ -1863,7 +1924,28 @@ window.BKReview = (function () {
     var note = el('p', 'hold-choice-note'); note.id = 'payNoteLine'; note.hidden = true;
     card.appendChild(note);
 
-    getJson(PAY_API + '/gateways').then(function (j) {
+    /* The deep check first (Dave, 2026-09-05): the engine pulls the lodge's
+       inventory afresh and says whether this checkout's nights still stand
+       (its own hold counts as theirs); only then are the squares drawn.
+       A refusal — the stay gone, a pause, a connection problem — takes the
+       squares' place with one button. */
+    payWrap.hidden = true;
+    var checking = el('p', 'hold-choice-note hold-paywait-note', 'Double-checking your stay with the lodge\u2026'); checking.id = 'payDeepCheck';
+    card.insertBefore(checking, payWrap);
+    function drawGateways() {
+      checking.hidden = false;
+      deepCheck(stay, co.reference, co.holdReference || null).then(function (chk) {
+        checking.hidden = true;
+        var old = card.querySelector('.deep-check-note'); if (old) old.remove();
+        if (!chk || chk.ok !== true) {
+          if (ctx.track) ctx.track('payment_deep_check_failed', { reference: co.reference, maintenance: !!(chk && chk.maintenance), unreachable: !!(chk && chk.unreachable), message: chk && chk.message });
+          deepCheckNote(card, payWrap, chk, drawGateways);
+          nudgeToSection(host);
+          return;
+        }
+        if (ctx.track) ctx.track('payment_deep_check_ok', { reference: co.reference, held: chk.held, at: chk.checkedAt });
+        payWrap.hidden = false;
+        return getJson(PAY_API + '/gateways').then(function (j) {
       var list = (j && Array.isArray(j.gateways)) ? j.gateways : null;
       var found = {};
       if (list) list.forEach(function (g) { if (g && g.key) { found[g.key] = g.mode === 'element' ? 'element' : 'redirect'; gwInfo[g.key] = g; } });
@@ -1878,6 +1960,9 @@ window.BKReview = (function () {
       modes = STATIC_MODES; payButtons.forEach(function (b) { b.hidden = false; });
       payMissing.textContent = 'Our payment provider could not be reached just now. You can try one, or contact us to secure the booking.'; payMissing.hidden = false;
     }).then(function () { payWait.hidden = true; squares.hidden = false; nudgeToSection(host); });
+      });
+    }
+    drawGateways();
 
     function dropStripe() { if (stripeCard) { try { stripeCard.unmount(); } catch (e) { /* fine */ } stripeCard = null; } }
     function clearPayer() { payer = null; dropStripe(); payButtons.forEach(function (b) { b.classList.remove('on'); b.classList.remove('dim'); b.setAttribute('aria-pressed', 'false'); }); panel.textContent = ''; panel.hidden = true; }

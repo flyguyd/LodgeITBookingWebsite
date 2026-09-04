@@ -105,6 +105,11 @@ export const FORWARD_ROUTES = {
   // A simulated payment (Dave, 2026-09-03) — the engine refuses it unless the
   // site config's payments.simulate is on; testing only.
   'POST /api/public/payments/simulate': { method: 'POST', path: '/api/booking/payments/simulate' },
+  // The DEEP CHECK before the payment cards (Dave, 2026-09-05): the engine
+  // pulls the lodge's inventory afresh and answers whether every suite in
+  // the stay is still there for every night, and refuses outright in
+  // MAINTENANCE — no cache, no RAM answer.
+  'POST /api/public/recheck': { method: 'POST', path: '/api/booking/recheck' },
 };
 
 export function forwardTargetFor(method, urlPath) {

@@ -1096,4 +1096,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.86',
+    version: '0.1.86',
+    date: '2026-09-05T01:45:00+02:00',
+    changes: [
+      {
+        headline:
+          'Before the payment cards appear, the site now double-checks your stay with the lodge (Dave, 2026-09-05: \u201cbefore opening the payment gateway cards ask the rate engine for a deep search that bypasses all the caching and double checks for things like maintenance blocks\u201d). On the hold page and on the checkout page a line says \u201cDouble-checking your stay with the lodge\u2026\u201d while the engine pulls the lodge\u2019s inventory afresh and confirms every suite for every night; only then do the gateway squares appear. If the stay is gone the squares never show \u2014 the reason sits in their place with a Search again button; if bookings are briefly paused, or the lodge could not be reached, the same spot offers Try again. A deep-linked search while bookings are paused now stops at the paused message too, because the engine refuses the search itself.',
+        detail:
+          'server/src/lib.mjs: FORWARD_ROUTES gains POST /api/public/recheck \u2192 engine POST /api/booking/recheck (signed, allow-listed, limited like the rest). review.js: deepCheck(stay, reference, holdReference) posts { from, to, suites [{roomTypeId, units}], reference?, holdReference? } and folds the answer \u2014 503 \u2192 { ok: false, maintenance: true }, any other failure \u2192 { ok: false, unreachable: true }; deepCheckNote() renders #deepCheckNote (.deep-check-note, role alert, data-maintenance) with one .deep-check-retry button. Hold page: select() calls checkedLoadModes() \u2014 the check runs once per hold page (deepOk), the wait line reads Double-checking\u2026 then Checking payment options\u2026, a refusal hides .hold-paywrap and puts the note after it; Try again re-runs the chosen option. Checkout page (showPayment): .hold-paywrap starts hidden behind #payDeepCheck; drawGateways() runs the check with the checkout\u2019s reference and the hold it rode, then fetches the gateways as before; tracked as hold_deep_check_ok / _failed and payment_deep_check_ok / _failed. review.css: .deep-check-note. Engine 0.1.79 answers the check and refuses availability and every payment route in MAINTENANCE. Static files only \u2014 rsync review.js and review.css; restart the site server for the new forward route.',
+      },
+    ],
+  },
 ];

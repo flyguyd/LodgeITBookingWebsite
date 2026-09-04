@@ -351,3 +351,10 @@ body.hold-open { overflow: hidden; }
   .pay-amount strong { font-size: 28px; }
   .pinned-timer { top: 10px; right: 10px; padding: 8px 12px; }
 }
+
+/* The deep check before the payment cards (0.1.86): the refusal sits where
+   the gateway squares would be, with one button — Try again for a pause or
+   a connection problem, Search again when the stay is gone. */
+.deep-check-note { margin: 12px 0 0; padding: 14px 16px; border-radius: 10px; }
+.deep-check-note p { margin: 0 0 10px; }
+.deep-check-note .cta { margin: 0; }

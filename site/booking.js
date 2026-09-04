@@ -1011,7 +1011,12 @@
 
   // ---- selection: any number of suites, any spare units of each ----
   function pickedRooms() {
-    return Object.keys(current.picks).map(function (k) { return current.picks[k]; });
+    // In the order the guest made them — the advanced search stamps each
+    // pick with its room's position, so Your stay follows the rooms rather
+    // than the suites' ids (Dave, 2026-09-04).
+    return Object.keys(current.picks).map(function (k, i) { var p = current.picks[k]; return { p: p, i: p.order != null ? p.order : 1000 + i }; })
+      .sort(function (a, b) { return a.i - b.i; })
+      .map(function (x) { return x.p; });
   }
 
   function togglePick(room) {
@@ -1274,7 +1279,9 @@
         current.to = stay.to;
         current.nights = stay.nights;
         current.raw = stay.json || current.raw;
-        current.results = Object.keys(picks).map(function (id) { return picks[id].room; });
+        /* In ROOM order (Dave, 2026-09-04: Your stay listed the suites by
+           their ids, so Room 2's suite came first). */
+        current.results = (stay.order || Object.keys(picks)).map(function (id) { return picks[id].room; });
         current.picks = picks;
         C.track('room_selected', { advanced: true, rooms: Object.keys(picks).length }, stateCheckpoint());
         hideStates();

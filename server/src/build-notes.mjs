@@ -1038,4 +1038,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.82',
+    version: '0.1.82',
+    date: '2026-09-04T23:33:00+02:00',
+    changes: [
+      {
+        headline:
+          'Advanced search: the rooms can share one suite, and Your stay keeps the rooms\u2019 order. Dave, 2026-09-04: \u201cIf the user for example asks for 2 rooms of 2 adults and 1 child, also look at family rooms that have the capacity to accommodate both groups in 1 room.\u201d Every advanced search now also asks the lodge for the rooms TOGETHER: a \u201cRooms 1 + 2 together\u201d block under the room lists shows the suites with room for everyone in those rooms, priced for the whole party (with three rooms, each pair as well as all three; four or more, everyone together). Choosing one of those marks the rooms it covers as \u201cSharing the \u2026 with Room 2\u201d, takes that suite out of every other list, and Continue carries ONE suite for those rooms with their parties added up \u2014 so Your stay, the hold and the checkout all price it for everyone in it. Choosing a suite for a room on its own gives that room back its own suite. And the second thing Dave saw: Your stay was listing the chosen suites in the order of their ids, so Room 2\u2019s suite came first and the price beside the first card did not match Room 1\u2019s pick \u2014 the cards now follow the rooms.',
+        detail:
+          'advanced.js: combos() builds the room combinations (pairs when there are exactly 3 rooms, plus all rooms; 2 rooms \u2192 the one pair; 4+ \u2192 all only); search() fires runOne() per room AND per combination (the same api.search with rooms: 1 and the combined party, hydrated for that party), listing a suite when fitsAll() (not restricted / over capacity, and sleeps \u2265 everyone when the suite states a sleeps figure) and it is available or its availability is unknown. State gains combos, comboResults, comboPicks; coveredBy(i) / takenElsewhere(ownerKey, id) drive the exclusivity across rooms and combinations (owner keys r<i> / c<i>); pick() clears any combination containing the room, pickCombo() clears the rooms\u2019 own picks and any overlapping combination; a covered room\u2019s block shows the gold share note and keeps its list so the guest can split again. assignments() returns the chosen suites in ROOM order (a shared suite where its first room appears, with the combined party and the rooms it covers); continueClicked() sends picks keyed by suite plus stay.order; snapshotGroups() is one entry per SUITE with the party it sleeps and the rooms it covers (Lodge Ops\u2019 quoteSuites and the paid-checkout booking read adults/children/infants/roomTypeId as before, so a shared suite is quoted and booked for everyone). booking.js and m/booking.js: current.results follows stay.order. CSS (both builds): .adv-block.shared, .adv-share-note, .adv-block-shared (dashed), .adv-share-lead. VERIFIED on the Lodge Ops rig in Chromium (case 70.33\u201370.40): 2 adults + 1 child and 2 adults \u2192 the together block reports no suite for 5 (the rig\u2019s suites sleep 4); Room 1 = Treetop and Room 2 = Lagoon \u2192 Your stay lists the Treetop FIRST; back to the panel, 2 adults + 1 adult \u2192 the together block prices the Lagoon for 3 adults at R16,905 (the additional adult included); choosing it marks both rooms as sharing, removes it from both room lists, and Continue gives Your stay one Lagoon for 3 adults at R16,905.',
+      },
+    ],
+  },
 ];

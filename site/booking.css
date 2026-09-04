@@ -225,6 +225,11 @@ body.adv-on .cta-adv { background: var(--gold); color: #16120a; }
 .adv-block-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
 .adv-block-party { color: var(--paper-dim); font-size: 13px; }
 .adv-note { margin: 6px 0 0; color: var(--paper-dim); font-size: 13.5px; line-height: 1.5; }
+/* A room sharing a suite, and the "rooms together" blocks (2026-09-04). */
+.adv-block.shared { border-color: rgba(216, 180, 106, 0.4); }
+.adv-share-note { color: var(--gold); margin-bottom: 8px; }
+.adv-block-shared { border-style: dashed; }
+.adv-share-lead { margin: 0 0 10px; }
 .adv-list { display: flex; flex-direction: column; gap: 6px; }
 .adv-opt { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.12); cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .adv-opt:hover { border-color: rgba(216, 180, 106, 0.5); }

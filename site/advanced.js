@@ -10,7 +10,7 @@
   'use strict';
   var C = window.BKCore;
   var api = null;
-  var state = { on: false, groups: [], results: [], picks: {}, seq: 0, nights: 0, from: null, to: null };
+  var state = { on: false, groups: [], results: [], picks: {}, combos: [], comboResults: [], comboPicks: {}, seq: 0, nights: 0, from: null, to: null, code: '' };
   var els = {};
 
   function el(tag, cls, text) {
@@ -85,7 +85,10 @@
         rm.addEventListener('click', function () {
           state.groups.splice(i, 1);
           state.results = [];
+          state.comboResults = [];
+          state.combos = [];
           state.picks = {};
+          state.comboPicks = {};
           renderGroups();
           renderResults();
         });
@@ -99,12 +102,82 @@
       : '+ Add another room';
   }
 
-  // ---- the results (one block per room) ----
-  function pickedElsewhere(i, roomTypeId) {
+  // ---- the room combinations that could share ONE suite ----
+  /** Dave, 2026-09-04: "If the user asks for 2 rooms of 2 adults and 1
+   *  child, also look at family rooms that have the capacity to
+   *  accommodate both groups in 1 room." Every search also asks for the
+   *  rooms TOGETHER: all of them as one party, and with three rooms each
+   *  pair as well (four rooms or more: everyone together only — the pairs
+   *  would be too many searches to be honest about). */
+  function combos() {
+    var n = state.groups.length;
+    if (n < 2) return [];
+    var out = [];
+    if (n === 3) out.push([0, 1], [0, 2], [1, 2]);
+    var all = [];
+    for (var i = 0; i < n; i++) all.push(i);
+    out.push(all);
+    return out.map(function (rooms) {
+      var t = { adults: 0, children: 0, infants: 0 };
+      rooms.forEach(function (i) { var g = state.groups[i]; t.adults += g.adults; t.children += g.children; t.infants += g.infants; });
+      return { rooms: rooms, party: t };
+    });
+  }
+  function comboLabel(c) {
+    return 'Rooms ' + c.rooms.map(function (i) { return i + 1; }).join(' + ') + ' together';
+  }
+  /** The combo (index) whose chosen suite covers room i, else -1. */
+  function coveredBy(i) {
+    for (var c = 0; c < state.combos.length; c++) {
+      if (state.comboPicks[c] && state.combos[c].rooms.indexOf(i) >= 0) return c;
+    }
+    return -1;
+  }
+  /** Is this suite chosen by any OTHER room or combination? A suite is one
+   *  suite: the moment it is taken anywhere it leaves every other list. */
+  function takenElsewhere(ownerKey, roomTypeId) {
+    var id = String(roomTypeId);
+    // A choice this owner would REPLACE does not hide the suite: a
+    // combination may take a suite one of its own rooms holds (the rooms
+    // then share it), and a room may take the suite it is sharing (it keeps
+    // it alone). Only a choice that would stand beside this one hides it.
+    var own = ownerKey.charAt(0) === 'c' ? state.combos[Number(ownerKey.slice(1))].rooms : [Number(ownerKey.slice(1))];
     for (var k in state.picks) {
-      if (Number(k) !== i && state.picks[k] === String(roomTypeId)) return true;
+      if ('r' + k !== ownerKey && state.picks[k] === id && own.indexOf(Number(k)) < 0) return true;
+    }
+    for (var c in state.comboPicks) {
+      if ('c' + c === ownerKey || state.comboPicks[c] !== id) continue;
+      var overlaps = state.combos[Number(c)].rooms.some(function (i) { return own.indexOf(i) >= 0; });
+      if (!overlaps) return true;
     }
     return false;
+  }
+
+  // ---- the results (one block per room, then one per combination) ----
+  function optionFor(room, ownerKey, radioName, checked, onPick) {
+    var id = String(room.roomTypeId);
+    var lab = el('label', 'adv-opt' + (checked ? ' on' : ''));
+    lab.setAttribute('data-suite', id);
+    var radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = radioName;
+    radio.value = id;
+    radio.checked = checked;
+    radio.addEventListener('change', function () { onPick(id); });
+    lab.appendChild(radio);
+    var txt = el('span', 'adv-opt-main');
+    txt.appendChild(el('span', 'adv-opt-name', room.name));
+    var pp = C.priceParts(room, api.config ? api.config() : {});
+    var meta = [];
+    if (room.sleeps) meta.push('Sleeps ' + room.sleeps);
+    if (room.availabilityKnown === false) meta.push('Availability on request');
+    else if (room.available > 0 && room.available <= 2) meta.push(room.available === 1 ? 'Last suite' : 'Only ' + room.available + ' left');
+    if (meta.length) txt.appendChild(el('span', 'adv-opt-meta', meta.join(' · ')));
+    lab.appendChild(txt);
+    lab.appendChild(el('span', 'adv-opt-price', pp.headline != null
+      ? C.money(pp.headline + (pp.note && pp.note.kind === 'plus' ? pp.note.extras : 0), room.currency)
+      : 'Rates on request'));
+    return lab;
   }
   function renderResults() {
     els.results.textContent = '';
@@ -118,6 +191,15 @@
       head.appendChild(el('span', 'kicker', 'Room ' + (i + 1)));
       head.appendChild(el('span', 'adv-block-party', partyLabel(g)));
       block.appendChild(head);
+      var cov = coveredBy(i);
+      if (cov >= 0) {
+        var shared = state.combos[cov];
+        var others = shared.rooms.filter(function (k) { return k !== i; }).map(function (k) { return 'Room ' + (k + 1); });
+        var sr = state.comboResults[cov];
+        var sname = sr && sr.rooms ? (sr.rooms.filter(function (x) { return String(x.roomTypeId) === state.comboPicks[cov]; })[0] || {}).name : null;
+        block.classList.add('shared');
+        block.appendChild(el('p', 'adv-note adv-share-note', 'Sharing ' + (sname ? 'the ' + sname : 'one suite') + ' with ' + others.join(' and ') + ' — chosen below. Pick a suite here to give this room its own.'));
+      }
       if (r.status === 'loading') {
         block.appendChild(el('p', 'adv-note', 'Asking the lodge…'));
         complete = false;
@@ -125,41 +207,49 @@
         block.appendChild(el('p', 'adv-note', r.message || 'Something went wrong — please try again.'));
         complete = false;
       } else {
-        var shown = r.rooms.filter(function (room) { return !pickedElsewhere(i, room.roomTypeId); });
-        if (!shown.length) {
+        var shown = r.rooms.filter(function (room) { return !takenElsewhere('r' + i, room.roomTypeId); });
+        if (!shown.length && cov < 0) {
           block.appendChild(el('p', 'adv-note', r.rooms.length
             ? 'Every suite that takes this party is already chosen for another room.'
             : 'No suite takes ' + partyLabel(g) + ' for these dates.'));
-          complete = false;
         }
         var list = el('div', 'adv-list');
         shown.forEach(function (room) {
-          var id = String(room.roomTypeId);
-          var lab = el('label', 'adv-opt' + (state.picks[i] === id ? ' on' : ''));
-          lab.setAttribute('data-suite', id);
-          var radio = document.createElement('input');
-          radio.type = 'radio';
-          radio.name = 'advRoom' + (i + 1);
-          radio.value = id;
-          radio.checked = state.picks[i] === id;
-          radio.addEventListener('change', function () { pick(i, id); });
-          lab.appendChild(radio);
-          var txt = el('span', 'adv-opt-main');
-          txt.appendChild(el('span', 'adv-opt-name', room.name));
-          var pp = C.priceParts(room, api.config ? api.config() : {});
-          var meta = [];
-          if (room.sleeps) meta.push('Sleeps ' + room.sleeps);
-          if (room.availabilityKnown === false) meta.push('Availability on request');
-          else if (room.available > 0 && room.available <= 2) meta.push(room.available === 1 ? 'Last suite' : 'Only ' + room.available + ' left');
-          if (meta.length) txt.appendChild(el('span', 'adv-opt-meta', meta.join(' · ')));
-          lab.appendChild(txt);
-          lab.appendChild(el('span', 'adv-opt-price', pp.headline != null
-            ? C.money(pp.headline + (pp.note && pp.note.kind === 'plus' ? pp.note.extras : 0), room.currency)
-            : 'Rates on request'));
-          list.appendChild(lab);
+          list.appendChild(optionFor(room, 'r' + i, 'advRoom' + (i + 1), state.picks[i] === String(room.roomTypeId), function (id) { pick(i, id); }));
         });
         block.appendChild(list);
-        if (!state.picks[i] || !shown.some(function (room) { return String(room.roomTypeId) === state.picks[i]; })) complete = false;
+        var own = !!state.picks[i] && shown.some(function (room) { return String(room.roomTypeId) === state.picks[i]; });
+        if (!own && cov < 0) complete = false;
+      }
+      els.results.appendChild(block);
+    });
+    state.combos.forEach(function (c, ci) {
+      var r = state.comboResults[ci] || { status: 'loading', rooms: [] };
+      var block = el('section', 'adv-block adv-block-shared glass');
+      block.setAttribute('data-combo', String(ci + 1));
+      block.setAttribute('data-rooms', c.rooms.map(function (i) { return i + 1; }).join('+'));
+      var head = el('div', 'adv-block-head');
+      head.appendChild(el('span', 'kicker', comboLabel(c)));
+      head.appendChild(el('span', 'adv-block-party', partyLabel(c.party)));
+      block.appendChild(head);
+      block.appendChild(el('p', 'adv-note adv-share-lead', 'One suite with room for everyone in these rooms — priced for the whole party.'));
+      if (r.status === 'loading') {
+        block.appendChild(el('p', 'adv-note', 'Asking the lodge…'));
+      } else if (r.status === 'error') {
+        block.appendChild(el('p', 'adv-note', r.message || 'Something went wrong — please try again.'));
+      } else {
+        var shown = r.rooms.filter(function (room) { return !takenElsewhere('c' + ci, room.roomTypeId); });
+        if (!shown.length) {
+          block.appendChild(el('p', 'adv-note', r.rooms.length
+            ? 'Every suite that takes everyone is already chosen for another room.'
+            : 'No suite takes ' + partyLabel(c.party) + ' together for these dates.'));
+        }
+        var list = el('div', 'adv-list');
+        shown.forEach(function (room) {
+          list.appendChild(optionFor(room, 'c' + ci, 'advCombo' + (ci + 1), state.comboPicks[ci] === String(room.roomTypeId), function (id) { pickCombo(ci, id); }));
+        });
+        block.appendChild(list);
+        if (state.comboPicks[ci] && !shown.some(function (room) { return String(room.roomTypeId) === state.comboPicks[ci]; })) complete = false;
       }
       els.results.appendChild(block);
     });
@@ -169,38 +259,56 @@
       ? 'Every room has its suite.'
       : 'Choose a suite for every room to continue.';
   }
+  function dropSuiteElsewhere(ownerKey, id) {
+    for (var k in state.picks) if ('r' + k !== ownerKey && state.picks[k] === id) delete state.picks[k];
+    for (var c in state.comboPicks) if ('c' + c !== ownerKey && state.comboPicks[c] === id) delete state.comboPicks[c];
+  }
   function pick(i, roomTypeId) {
-    state.picks[i] = String(roomTypeId);
-    // Another room that had this suite loses it — the suite is one suite.
-    for (var k in state.picks) if (Number(k) !== i && state.picks[k] === String(roomTypeId)) delete state.picks[k];
+    var id = String(roomTypeId);
+    state.picks[i] = id;
+    // This room now has its own suite: it leaves any shared choice it was in.
+    state.combos.forEach(function (c, ci) { if (c.rooms.indexOf(i) >= 0) delete state.comboPicks[ci]; });
+    dropSuiteElsewhere('r' + i, id);
     renderResults();
     if (api.onPick) api.onPick(i, roomTypeId);
   }
-
-  // ---- the search: every room in parallel ----
-  function search(from, to, nights, code) {
-    var seq = ++state.seq;
-    state.from = from;
-    state.to = to;
-    state.nights = nights;
-    state.picks = {};
-    state.results = state.groups.map(function () { return { status: 'loading', rooms: [] }; });
+  function pickCombo(ci, roomTypeId) {
+    var id = String(roomTypeId);
+    state.comboPicks[ci] = id;
+    var rooms = state.combos[ci].rooms;
+    // The rooms sharing it give up their own suites and any other sharing.
+    rooms.forEach(function (i) { delete state.picks[i]; });
+    state.combos.forEach(function (c, k) {
+      if (k !== ci && c.rooms.some(function (i) { return rooms.indexOf(i) >= 0; })) delete state.comboPicks[k];
+    });
+    dropSuiteElsewhere('c' + ci, id);
     renderResults();
-    if (api.onSearch) api.onSearch(state.groups.slice());
-    state.groups.forEach(function (g, i) {
-      api.search({
-        from: from, to: to, rooms: 1,
-        adults: String(g.adults), children: String(g.children), infants: String(g.infants),
-        code: code || '',
-      }).then(function (r) {
+    if (api.onPick) api.onPick(rooms, roomTypeId);
+  }
+
+  // ---- the search: every room in parallel, and the rooms together ----
+  function partyStrings(g) {
+    return { adults: String(g.adults), children: String(g.children), infants: String(g.infants) };
+  }
+  function fitsAll(room, g) {
+    // The engine refuses an oversize party when the suite's maxima are set
+    // (028); when only "sleeps" is known, the count of everyone must fit.
+    if (room.restricted || room.overCapacity) return false;
+    if (room.sleeps && room.sleeps < g.adults + g.children + g.infants) return false;
+    return true;
+  }
+  function runOne(g, seq, land) {
+    var ps = partyStrings(g);
+    api.search({ from: state.from, to: state.to, rooms: 1, adults: ps.adults, children: ps.children, infants: ps.infants, code: state.code || '' })
+      .then(function (r) {
         if (seq !== state.seq) return;
         if (r.status !== 200) {
-          state.results[i] = { status: 'error', rooms: [], message: r.status === 503
+          land({ status: 'error', rooms: [], message: r.status === 503
             ? 'Bookings are briefly paused — please try again shortly.'
-            : (r.json && r.json.message) || null };
+            : (r.json && r.json.message) || null });
         } else {
-          var rooms = api.hydrate(r.json, { adults: String(g.adults), children: String(g.children), infants: String(g.infants) });
-          state.results[i] = {
+          var rooms = api.hydrate(r.json, ps);
+          land({
             status: 'done', json: r.json,
             /* The same rule as the cards (Dave, 2026-09-04: "Advanced
                search fails only showing 1 suite"): a suite is listed
@@ -208,33 +316,71 @@
                capacity — one whose availability the lodge cannot confirm
                is listed "Availability on request", exactly as its card is. */
             rooms: rooms.filter(function (room) {
-              return !room.restricted && !room.overCapacity &&
-                (room.available > 0 || room.availabilityKnown === false);
+              return fitsAll(room, g) && (room.available > 0 || room.availabilityKnown === false);
             }),
-          };
+          });
         }
-        renderResults();
       }).catch(function () {
         if (seq !== state.seq) return;
-        state.results[i] = { status: 'error', rooms: [], message: 'We could not reach the lodge — check your connection and try again.' };
-        renderResults();
+        land({ status: 'error', rooms: [], message: 'We could not reach the lodge — check your connection and try again.' });
       });
+  }
+  function search(from, to, nights, code) {
+    var seq = ++state.seq;
+    state.from = from;
+    state.to = to;
+    state.nights = nights;
+    state.code = code || '';
+    state.picks = {};
+    state.comboPicks = {};
+    state.combos = combos();
+    state.results = state.groups.map(function () { return { status: 'loading', rooms: [] }; });
+    state.comboResults = state.combos.map(function () { return { status: 'loading', rooms: [] }; });
+    renderResults();
+    if (api.onSearch) api.onSearch(state.groups.slice());
+    state.groups.forEach(function (g, i) {
+      runOne(g, seq, function (res) { state.results[i] = res; renderResults(); });
     });
+    state.combos.forEach(function (c, ci) {
+      runOne(c.party, seq, function (res) { state.comboResults[ci] = res; renderResults(); });
+    });
+  }
+  /** Every suite chosen, in ROOM order: a room's own suite, or the shared
+   *  suite where the rooms it covers first appear. */
+  function assignments() {
+    var out = [];
+    var seenCombo = {};
+    state.groups.forEach(function (g, i) {
+      var cov = coveredBy(i);
+      if (cov >= 0) {
+        if (seenCombo[cov]) return;
+        seenCombo[cov] = true;
+        var c = state.combos[cov];
+        var cr = state.comboResults[cov];
+        var room = cr && cr.rooms ? cr.rooms.filter(function (x) { return String(x.roomTypeId) === state.comboPicks[cov]; })[0] : null;
+        out.push({ room: room, id: state.comboPicks[cov], group: c.party, rooms: c.rooms.slice(), order: i });
+        return;
+      }
+      var r = state.results[i];
+      var own = r && r.rooms ? r.rooms.filter(function (x) { return String(x.roomTypeId) === state.picks[i]; })[0] : null;
+      out.push({ room: own, id: state.picks[i] || null, group: g, rooms: [i], order: i });
+    });
+    return out;
   }
   function continueClicked() {
     var picks = {};
+    var order = [];
     var ok = true;
-    state.groups.forEach(function (g, i) {
-      var id = state.picks[i];
-      var r = state.results[i];
-      var room = r && r.rooms ? r.rooms.filter(function (x) { return String(x.roomTypeId) === id; })[0] : null;
-      if (!room) { ok = false; return; }
-      picks[id] = { room: room, qty: 1, group: g };
+    assignments().forEach(function (a) {
+      if (!a.room || !a.id) { ok = false; return; }
+      picks[a.id] = { room: a.room, qty: 1, group: a.group, rooms: a.rooms, order: a.order };
+      order.push(a.id);
     });
-    if (!ok) return;
+    if (!ok || !order.length) return;
     api.onContinue(picks, party(), {
       from: state.from, to: state.to, nights: state.nights,
       json: state.results[0] && state.results[0].json,
+      order: order,
     });
   }
 
@@ -259,7 +405,10 @@
     document.body.classList.remove('adv-on');
     els.panel.hidden = true;
     state.results = [];
+    state.comboResults = [];
+    state.combos = [];
     state.picks = {};
+    state.comboPicks = {};
     if (api.onToggle) api.onToggle(false);
   }
   function attach(opts) {
@@ -276,7 +425,10 @@
       if (state.groups.length >= maxRooms()) return;
       state.groups.push(defaultGroup());
       state.results = [];
+      state.comboResults = [];
+      state.combos = [];
       state.picks = {};
+      state.comboPicks = {};
       renderGroups();
       renderResults();
     });
@@ -287,8 +439,11 @@
   /** The rooms with the suite each one chose — kept on the hold so Lodge
    *  Ops can re-price every suite for ITS party. */
   function snapshotGroups() {
-    return state.groups.map(function (g, i) {
-      return { adults: String(g.adults), children: String(g.children), infants: String(g.infants), roomTypeId: state.picks[i] || null };
+    // One entry per SUITE with the party it sleeps — rooms sharing a suite
+    // are one entry with their parties added up, so the hold and the
+    // checkout price that suite for everyone in it.
+    return assignments().map(function (a) {
+      return { adults: String(a.group.adults), children: String(a.group.children), infants: String(a.group.infants), roomTypeId: a.id || null, rooms: a.rooms.map(function (i) { return i + 1; }) };
     });
   }
   window.BKAdv = {
@@ -297,5 +452,6 @@
     search: search, party: party, snapshotGroups: snapshotGroups,
     groups: function () { return state.groups.slice(); },
     picks: function () { return Object.assign({}, state.picks); },
+    assignments: assignments,
   };
 })();

@@ -1025,4 +1025,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.81',
+    version: '0.1.81',
+    date: '2026-09-04T23:14:00+02:00',
+    changes: [
+      {
+        headline:
+          'Three fixes to the search bar and the advanced search from Dave\u2019s screenshots (2026-09-04). The bar\u2019s ADULTS / CHILDREN / INFANTS / SUITES labels were printing over each other: the fields had no floor and shrank to nothing once the date field and the advanced-search handle took their room. Every field now keeps at least its own label\u2019s width, the bar is allowed a little more of the page, and below about 1140px it wraps onto a second row instead of squeezing. With the advanced search open, the Nights dropdown was drawn UNDER the panel \u2014 the bar now stacks above the panel that follows it, so every dropdown in the bar opens on top. And the advanced search was listing only one suite: it dropped any suite whose availability the lodge could not confirm, which the ordinary cards show as \u201cAvailability on request\u201d; the advanced list now uses exactly the cards\u2019 rule \u2014 a suite is listed unless it is sold out, refused for that party, or over capacity \u2014 and marks the unconfirmed ones \u201cAvailability on request\u201d.',
+        detail:
+          'booking.css: .bar-wrap max-width 1060 \u2192 1240px; .bar position: relative; z-index: 2 and .adv-panel position: relative; z-index: 1 (both are glass \u2014 backdrop-filter \u2014 so each is its own stacking context, and the later sibling painted over the .gsel-pop, whose z-index 41 only counts inside the bar); .bar-field flex 1 1 auto, padding 8px 10px, label white-space: nowrap; .bar-field.slim flex 0 0 auto (was 0 1 96px \u2014 the shrink that squeezed the labels); .bar-field.date flex 0 0 auto with the input at width 142px (the min-width: 158px field had been taking 235px because the date input\u2019s intrinsic width won); the wrap breakpoint moves from 860px to 1140px. advanced.js: the per-room list keeps a room when !restricted && !overCapacity && (available > 0 || availabilityKnown === false) \u2014 the cards\u2019 own soldOut rule inverted \u2014 and shows \u201cAvailability on request\u201d where the cards would. MEASURED in Chromium on the rig: at 1280 every label fits its field with no overflow and the bar stays on one row; at 1024 it wraps cleanly; with the panel open the Nights popover is the element under its own centre point (elementFromPoint), i.e. on top. e2e 70.31 now asserts no label overflows its field; 70.32 asserts the Nights popover opens above the panel. DEPLOY: static files only \u2014 rsync booking.css and advanced.js.',
+      },
+    ],
+  },
 ];

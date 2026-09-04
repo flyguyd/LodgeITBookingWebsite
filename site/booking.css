@@ -140,16 +140,24 @@ main { z-index: 3; }
    calendar inside can never out-stack a LATER sibling (the state cards) on
    its own — the whole bar must sit above the content below it. */
 .bar-wrap {
-  max-width: 1060px; margin: 26px auto 0; padding: 0 clamp(24px, 5vw, 64px);
+  max-width: 1240px; margin: 26px auto 0; padding: 0 clamp(24px, 5vw, 64px);
   position: relative; z-index: 30;
 }
+/* The bar sits ABOVE the advanced panel that follows it: the glass select
+   popovers (Nights, Adults…) live inside the bar's labels, and a later
+   glass sibling would otherwise paint over them (Dave, 2026-09-04: "with
+   advanced open the number of night dropdown has the wrong z order"). */
 .bar {
   display: flex; align-items: stretch; gap: 4px;
-  padding: 12px; flex-wrap: nowrap;
+  padding: 12px; flex-wrap: nowrap; position: relative; z-index: 2;
   transition: border-color 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out);
 }
 .bar .cta { flex: 0 0 auto; align-self: center; }
-@media (max-width: 860px) {
+/* Every field keeps at least its label's width; when the row cannot hold
+   them all, it wraps rather than squeezing labels into each other
+   (Dave, 2026-09-04: "rendering is screwed up" — ADULTS/CHILDREN/INFANTS
+   overprinted). */
+@media (max-width: 1140px) {
   .bar { flex-wrap: wrap; }
 }
 .bar:focus-within {
@@ -159,16 +167,16 @@ main { z-index: 3; }
     0 0 0 4px rgba(216, 180, 106, 0.12);
 }
 .bar-field {
-  flex: 1 1 130px; min-width: 0; display: flex; flex-direction: column; gap: 3px;
-  padding: 8px 14px; border-radius: 14px; cursor: pointer;
+  flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px;
+  padding: 8px 10px; border-radius: 14px; cursor: pointer;
   transition: background 0.18s var(--ease-out);
 }
 .bar-field:hover { background: rgba(255, 255, 255, 0.06); }
-.bar-field.slim { flex: 0 1 96px; }
+.bar-field.slim { flex: 0 0 auto; }
 /* The date must never clip (Dave, 2026-09-04: "2027-05-" was all that
    showed) — it keeps the width a full ISO date needs. */
-.bar-field.date { flex: 0 0 auto; min-width: 158px; }
-.bar-field.date input { min-width: 138px; }
+.bar-field.date { flex: 0 0 auto; }
+.bar-field.date input { width: 142px; min-width: 0; }
 /* Advanced mode: the single party leaves the bar; the rooms below own it. */
 body.adv-on .bar-field.party, body.adv-on .bar-field.party + .bar-sep { display: none; }
 .bar-go-row { display: flex; align-items: center; gap: 6px; }
@@ -190,7 +198,7 @@ body.adv-on .cta-adv { background: var(--gold); color: #16120a; }
 .cta-adv:hover::after, .cta-adv:focus-visible::after { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ---- the advanced search panel (advanced.js) ---- */
-.adv-panel { margin-top: 12px; padding: 22px 26px 24px; animation: rise 0.4s var(--ease-out); }
+.adv-panel { margin-top: 12px; padding: 22px 26px 24px; animation: rise 0.4s var(--ease-out); position: relative; z-index: 1; }
 .adv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
 .adv-title { margin: 2px 0 4px; font-family: var(--serif); font-weight: 400; font-size: 24px; }
 .adv-sub { margin: 0; color: var(--paper-dim); font-size: 13.5px; line-height: 1.5; max-width: 60ch; }
@@ -235,7 +243,7 @@ body.adv-on .cta-adv { background: var(--gold); color: #16120a; }
 }
 .bar-field > span {
   font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase;
-  color: var(--paper-dim);
+  color: var(--paper-dim); white-space: nowrap;
 }
 .bar-field input, .bar-field select {
   appearance: none; -webkit-appearance: none;

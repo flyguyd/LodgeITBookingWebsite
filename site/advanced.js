@@ -149,7 +149,8 @@
           var pp = C.priceParts(room, api.config ? api.config() : {});
           var meta = [];
           if (room.sleeps) meta.push('Sleeps ' + room.sleeps);
-          if (room.available > 0 && room.available <= 2) meta.push(room.available === 1 ? 'Last suite' : 'Only ' + room.available + ' left');
+          if (room.availabilityKnown === false) meta.push('Availability on request');
+          else if (room.available > 0 && room.available <= 2) meta.push(room.available === 1 ? 'Last suite' : 'Only ' + room.available + ' left');
           if (meta.length) txt.appendChild(el('span', 'adv-opt-meta', meta.join(' · ')));
           lab.appendChild(txt);
           lab.appendChild(el('span', 'adv-opt-price', pp.headline != null
@@ -201,7 +202,15 @@
           var rooms = api.hydrate(r.json, { adults: String(g.adults), children: String(g.children), infants: String(g.infants) });
           state.results[i] = {
             status: 'done', json: r.json,
-            rooms: rooms.filter(function (room) { return room.available > 0 && !room.restricted; }),
+            /* The same rule as the cards (Dave, 2026-09-04: "Advanced
+               search fails only showing 1 suite"): a suite is listed
+               unless it is sold out, refused for the party, or over
+               capacity — one whose availability the lodge cannot confirm
+               is listed "Availability on request", exactly as its card is. */
+            rooms: rooms.filter(function (room) {
+              return !room.restricted && !room.overCapacity &&
+                (room.available > 0 || room.availabilityKnown === false);
+            }),
           };
         }
         renderResults();

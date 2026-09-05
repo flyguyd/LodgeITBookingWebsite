@@ -1109,4 +1109,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.87',
+    version: '0.1.87',
+    date: '2026-09-05T04:10:00+02:00',
+    changes: [
+      {
+        headline:
+          'The site never talks to Lodge Ops (Dave, 2026-09-05: \u201cThe booking site should never reach out to Lodge Ops directly. It only ever communicates to the Booking Engine.\u201d). The hold and checkout pages, the chat widget and its tracking posts still call /api/web/* on this origin, but the server now signs every one of those to the booking engine\u2019s relay, which carries it to Lodge Ops and streams the answer back. The pass-through over the tunnel (LODGEOPS_WEB_URL) is retired \u2014 the DMZ host needs no road to Lodge Ops, and the site server holds no address for it.',
+        detail:
+          'server.mjs: the /api/web/* branch no longer needs LODGEOPS_WEB_URL (still read, only to WARN at boot that it is retired; remove it from the env): GET/POST only (405 otherwise), the guest\u2019s rate limit, POST bodies read first (64 KB cap, 413) because the signature covers them, then relayToEngine(): ENGINE_URL + /api/booking/lodgeops/<rest><query> over node:http(s) with signHeaders(CLIENT_KEY, CLIENT_SECRET, method, path, body), X-Guest-Ip = the guest\u2019s IP (the engine puts it in X-Forwarded-For for Lodge Ops\u2019 per-IP limits), X-Forwarded-Host = SITE_PUBLIC_URL\u2019s host, content-type / accept / accept-encoding / accept-language / user-agent / referer / if-none-match / if-modified-since carried; the answer\u2019s status, Content-Type, Content-Length, Content-Encoding (gzip survives), ETag, Last-Modified, Vary, Location and Cache-Control come back; counted in the forward stats under the /api/web path; unreachable \u2192 503 BOOKING_UNAVAILABLE, 30 s timeout. passThrough() is gone. Needs engine 0.1.81 (the relay). DEPLOY: rsync server/src/server.mjs, restart the site node, delete LODGEOPS_WEB_URL from /opt/lodgeit-site/.env. VERIFIED on the Lodge Ops e2e rig with LODGEOPS_WEB_URL removed from the site\u2019s env: the whole suite (holds, checkout, chat, the guest journey in Chromium) rides the relay; 10.10b\u201310.10g cover the relay directly.',
+      },
+    ],
+  },
 ];

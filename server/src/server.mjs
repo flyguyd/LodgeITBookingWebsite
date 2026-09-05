@@ -14,14 +14,11 @@
 //   CLIENT_SECRET    the matching shared secret
 //   SITE_PUBLIC_URL  optional; reported in the heartbeat so Lodge Ops can
 //                    link straight to the live site
-//   LODGEOPS_WEB_URL optional (ratebox, 2026-09-04); when set, the guest's
-//                    same-origin calls to Lodge Ops' PUBLIC web routes
-//                    (/api/web/* — the hold and checkout flow, the embed
-//                    script and its tracking posts) are passed through to
-//                    this base over the tunnel, rate-limited like every
-//                    other guest call, the guest's IP carried in
-//                    X-Forwarded-For. Unset = 404 as before (the shared
-//                    webbox proxy routes /api/web/* itself).
+//   (LODGEOPS_WEB_URL is RETIRED, 2026-09-05 — Dave: "The booking site should
+//                    never reach out to Lodge Ops directly. It only ever
+//                    communicates to the Booking Engine." The guest's
+//                    /api/web/* calls now ride the ENGINE's signed relay,
+//                    /api/booking/lodgeops/*, which carries them to Lodge Ops.)
 //   RATE_LIMIT / RATE_WINDOW_MS   guest rate limiting (default 120 per 60s)
 import http, { createServer } from 'node:http';
 import https from 'node:https';
@@ -52,7 +49,8 @@ const ENGINE_URL = (process.env.ENGINE_URL ?? '').replace(/\/+$/, '');
 const CLIENT_KEY = process.env.CLIENT_KEY ?? '';
 const CLIENT_SECRET = process.env.CLIENT_SECRET ?? '';
 const SITE_PUBLIC_URL = process.env.SITE_PUBLIC_URL ?? `http://127.0.0.1:${PORT}`;
-const LODGEOPS_WEB_URL = (process.env.LODGEOPS_WEB_URL ?? '').trim().replace(/\/+$/, '');
+// Retired (2026-09-05): the site never talks to Lodge Ops. Named only to warn.
+const LODGEOPS_WEB_URL = (process.env.LODGEOPS_WEB_URL ?? '').trim();
 const RATE_LIMIT = Number(process.env.RATE_LIMIT) || 120;
 const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS) || 60_000;
 const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MS) || 60_000;
@@ -528,33 +526,41 @@ async function engineCallRaw(method, path) {
   }
 }
 
-/** Stream one guest request to Lodge Ops and its answer back, unchanged in
- *  substance: method, path and query, the content type, the body (capped at
- *  the guest POST size), and on the way back the status, content type,
- *  encoding and caching headers. The guest's IP travels in X-Forwarded-For
- *  so Lodge Ops' own per-IP limits (the hold-code throttle) keep working
- *  behind the tunnel; TRUSTED_PROXY_HOPS on that side must count this hop. */
-function passThrough(req, res, target, ip, capBytes = 64 * 1024) {
+/** THE SITE'S ONE ROAD (Dave, 2026-09-05: "The booking site should never
+ *  reach out to Lodge Ops directly. It only ever communicates to the Booking
+ *  Engine."). A guest call to /api/web/<rest> — the hold and checkout pages,
+ *  the embed script, its tracking and chat posts — is signed like every
+ *  other guest call and sent to the ENGINE's relay,
+ *  /api/booking/lodgeops/<rest>, which carries it to Lodge Ops over the
+ *  service link and streams the answer back byte for byte (embed.js keeps
+ *  its gzip). The guest's IP travels in X-Guest-Ip so Lodge Ops' own per-IP
+ *  limits (the hold-code throttle) keep working behind two hops. Bodies are
+ *  read here first (capped like every guest POST) because the signature
+ *  covers them. */
+function relayToEngine(req, res, url, ip, rawBody) {
   return new Promise((resolve) => {
-    let u;
-    try { u = new URL(target); } catch { json(res, 503, { code: 'BOOKING_UNAVAILABLE', message: 'Booking is briefly unavailable — please try again shortly.' }); return resolve(); }
-    const mod = u.protocol === 'https:' ? https : http;
+    if (!ENGINE_URL || !CLIENT_KEY || !CLIENT_SECRET) { json(res, 503, { code: 'BOOKING_UNAVAILABLE', message: 'Booking is briefly unavailable — please try again shortly.' }); return resolve(); }
     const method = req.method ?? 'GET';
+    const path = '/api/booking/lodgeops' + url.slice('/api/web'.length);
+    let u;
+    try { u = new URL(ENGINE_URL + path); } catch { json(res, 503, { code: 'BOOKING_UNAVAILABLE', message: 'Booking is briefly unavailable — please try again shortly.' }); return resolve(); }
+    const mod = u.protocol === 'https:' ? https : http;
     const headers = {
       host: u.host,
-      'x-forwarded-for': ip,
-      'x-forwarded-proto': 'https',
+      ...signHeaders(CLIENT_KEY, CLIENT_SECRET, method, path, rawBody),
+      'x-guest-ip': ip,
       'x-forwarded-host': (() => { try { return new URL(SITE_PUBLIC_URL).host; } catch { return u.host; } })(),
     };
-    for (const h of ['content-type', 'content-length', 'accept', 'accept-encoding', 'accept-language', 'user-agent', 'referer', 'if-none-match', 'if-modified-since']) {
+    for (const h of ['content-type', 'accept', 'accept-encoding', 'accept-language', 'user-agent', 'referer', 'if-none-match', 'if-modified-since']) {
       if (req.headers[h] != null) headers[h] = req.headers[h];
     }
+    if (method === 'POST') headers['content-length'] = String(Buffer.byteLength(rawBody));
+    const started = Date.now();
     let settled = false;
-    const fail = (status, code, message) => {
+    const finish = (status, unreachable) => {
       if (settled) return;
       settled = true;
-      if (!res.headersSent) json(res, status, { code, message });
-      else res.destroy();
+      stats.forward(`${method} ${url.split('?')[0]}`, status, Date.now() - started, unreachable);
       resolve();
     };
     const up = mod.request(u, { method, headers, timeout: 30_000 }, (r) => {
@@ -564,33 +570,13 @@ function passThrough(req, res, target, ip, capBytes = 64 * 1024) {
       }
       res.writeHead(r.statusCode ?? 502, out);
       r.pipe(res);
-      r.on('end', () => { settled = true; resolve(); });
-      r.on('error', () => fail(502, 'BAD_GATEWAY', 'Lodge Ops did not answer cleanly.'));
+      r.on('end', () => finish(r.statusCode ?? 502, false));
+      r.on('error', () => { if (!res.headersSent) json(res, 502, { code: 'BAD_GATEWAY', message: 'The booking engine did not answer cleanly.' }); else res.destroy(); finish(502, false); });
     });
     up.on('timeout', () => { up.destroy(new Error('timeout')); });
-    up.on('error', () => fail(503, 'BOOKING_UNAVAILABLE', 'Booking is briefly unavailable — please try again shortly.'));
-    if (method === 'GET' || method === 'HEAD') {
-      up.end();
-      return;
-    }
-    let size = 0;
-    req.on('data', (chunk) => {
-      size += chunk.length;
-      if (size > capBytes) {
-        stats.apiTooLarge();
-        up.destroy();
-        // Stop reading, answer, and let the connection close with the
-        // answer — destroying the socket here would leave the guest with no
-        // status at all.
-        req.pause();
-        if (!res.headersSent) res.setHeader('Connection', 'close');
-        fail(413, 'TOO_LARGE', 'Request too large.');
-        return;
-      }
-      up.write(chunk);
-    });
-    req.on('end', () => { if (!settled) up.end(); });
-    req.on('error', () => { up.destroy(); fail(400, 'BAD_REQUEST', 'The request ended early.'); });
+    up.on('error', () => { if (!res.headersSent) json(res, 503, { code: 'BOOKING_UNAVAILABLE', message: 'Booking is briefly unavailable — please try again shortly.' }); else res.destroy(); finish(0, true); });
+    if (method === 'POST') up.write(rawBody);
+    up.end();
   });
 }
 
@@ -865,20 +851,32 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  // ---- Lodge Ops' public web routes, passed through over the tunnel ----
+  // ---- Lodge Ops' public web routes: through the ENGINE, never direct ----
   // The booking pages call /api/web/booking-hold/*, /api/web/booking-checkout/*
-  // and load /api/web/embed.js from THIS origin. On the shared webbox the
-  // proxy in front routed them to Lodge Ops; on ratebox the DMZ Caddy has no
-  // road to Lodge Ops, so the site carries them over the tunnel itself. A
-  // plain pass-through: no signing (these routes are public by design), the
-  // guest's own rate limit, bodies capped like every other guest POST.
-  if (LODGEOPS_WEB_URL && url.startsWith('/api/web/')) {
+  // and /api/web/chat/*, and load /api/web/embed.js, from THIS origin. Every
+  // one is rate-limited here, signed, and relayed by the engine to Lodge Ops
+  // (2026-09-05). The engine allow-lists the paths; anything else is a 404.
+  if (url.startsWith('/api/web/')) {
+    if (method !== 'GET' && method !== 'POST') {
+      json(res, 405, { code: 'METHOD_NOT_ALLOWED', message: 'GET or POST.' });
+      return;
+    }
     if (!allow(ip)) {
       stats.apiRateLimited();
       json(res, 429, { code: 'RATE_LIMITED', message: 'Too many requests — slow down.' });
       return;
     }
-    await passThrough(req, res, LODGEOPS_WEB_URL + url, ip);
+    let rawBody = '';
+    if (method === 'POST') {
+      try {
+        rawBody = await readBody(req);
+      } catch {
+        stats.apiTooLarge();
+        json(res, 413, { code: 'TOO_LARGE', message: 'Request too large.' });
+        return;
+      }
+    }
+    await relayToEngine(req, res, url, ip, rawBody);
     return;
   }
 
@@ -979,6 +977,9 @@ async function heartbeat() {
 
 const onListening = () => {
   console.log(`[site] LodgeIT Booking Website v${VERSION} listening on ${LISTEN_HOST || '*'}:${PORT}`);
+  if (LODGEOPS_WEB_URL) {
+    console.warn('[site] LODGEOPS_WEB_URL is set but RETIRED (2026-09-05): the site never calls Lodge Ops; /api/web/* rides the engine relay. Remove it from the env.');
+  }
   if (!ENGINE_URL || !CLIENT_KEY || !CLIENT_SECRET) {
     console.warn('[site] ENGINE_URL / CLIENT_KEY / CLIENT_SECRET not set — guest API calls will fail closed.');
   }

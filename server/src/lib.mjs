@@ -89,6 +89,9 @@ export function safeSitePath(siteRoot, urlPath) {
  *  and content only. */
 export const FORWARD_ROUTES = {
   'GET /api/public/status': { method: 'GET', path: '/api/booking/status' },
+  // The currencies a guest may look at (Dave, 2026-09-06): the codes Lodge
+  // Ops lists and how much of each one rand buys — display only.
+  'GET /api/public/currencies': { method: 'GET', path: '/api/booking/currencies' },
   'GET /api/public/availability': { method: 'GET', path: '/api/booking/availability', rates: 'stay' },
   'GET /api/public/rate-calendar': { method: 'GET', path: '/api/booking/rate-calendar', rates: 'calendar' },
   'POST /api/public/sessions': { method: 'POST', path: '/api/booking/sessions' },

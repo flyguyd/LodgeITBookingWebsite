@@ -18,22 +18,98 @@ window.BKCore = (function () {
     return Math.round(ms / 86400000);
   }
 
+  /* ---- THE DISPLAY CURRENCY (Dave, 2026-09-06) ----
+     "If a currency other than ZAR is selected then recalculate all amounts
+     using the current exchange rate ... The calculated amounts are for
+     display purposes only." Every rand amount that passes through money()
+     or moneyC() is multiplied by the chosen currency's rate on its way to
+     the screen and nothing else changes: the search, the hold and the
+     checkout all carry rand, plus the CODE that was chosen. `locked` is
+     Retrieve booking: the hold's own day's rate, kept until the guest
+     changes the selector themselves. */
+  var display = { code: 'ZAR', rate: 1, at: null, locked: false };
+  var currencies = { base: 'ZAR', codes: ['ZAR'], rates: { ZAR: 1 }, ratesAt: null };
+  var SYMBOL = { ZAR: 'R', USD: '$', EUR: '€', GBP: '£', AUD: 'A$', NZD: 'NZ$', CAD: 'C$', JPY: '¥', CNY: 'CN¥', INR: '₹', CHF: 'CHF ', KES: 'KSh ', BWP: 'P' };
+
+  function symbolFor(code) {
+    if (!code || code === 'ZAR') return 'R';
+    return SYMBOL[code] || (code + ' ');
+  }
+
+  /** A rand amount as the guest wants to see it: { n, code }. Amounts that
+   *  are ALREADY in another currency (never, today) pass through untouched. */
+  function toDisplay(amount, currency) {
+    var n = Number(amount);
+    if (!isFinite(n)) return { n: NaN, code: currency || 'ZAR' };
+    if (currency && currency !== 'ZAR') return { n: n, code: currency };
+    if (display.code === 'ZAR' || !(display.rate > 0)) return { n: n, code: 'ZAR' };
+    return { n: n * display.rate, code: display.code };
+  }
+
   function money(amount, currency) {
-    var n = Math.round(Number(amount));
+    var d = toDisplay(amount, currency);
+    var n = Math.round(d.n);
     if (!isFinite(n)) return '';
-    var s = String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return (currency === 'ZAR' || !currency ? 'R' : currency + ' ') + s;
+    var s = String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return (n < 0 ? '−' : '') + symbolFor(d.code) + s;
   }
 
   /** money to the cent — the itemised math must visibly add up, and whole
    *  rand can be off by one where the true amounts carry cents. */
   function moneyC(amount, currency) {
-    var n = Number(amount);
+    var d = toDisplay(amount, currency);
+    var n = d.n;
     if (!isFinite(n)) return '';
     var s = Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return (n < 0 ? '−' : '') +
-      (currency === 'ZAR' || !currency ? 'R' : currency + ' ') + s;
+    return (n < 0 ? '−' : '') + symbolFor(d.code) + s;
   }
+
+  /** The currencies the engine offers (pushed from Lodge Ops): rand first,
+   *  each with how much of it one rand buys. Cached for the page's life. */
+  function loadCurrencies() {
+    return fetch(API + '/currencies')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (j && j.rates && j.rates.length) {
+          var rates = { ZAR: 1 };
+          var codes = ['ZAR'];
+          j.rates.forEach(function (x) {
+            if (x && x.code && x.code !== 'ZAR' && x.rate > 0) { rates[x.code] = Number(x.rate); codes.push(x.code); }
+          });
+          currencies = { base: 'ZAR', codes: codes, rates: rates, ratesAt: j.ratesAt || null };
+          /* A currency chosen before the rates arrived (from storage or a
+             hold) now has its number. A LOCKED rate (a hold's own day) stays. */
+          if (display.code !== 'ZAR' && !display.locked) {
+            if (rates[display.code]) { display.rate = rates[display.code]; display.at = currencies.ratesAt; announce(); }
+            else setDisplayCurrency('ZAR');
+          }
+        }
+        return currencies;
+      })
+      .catch(function () { return currencies; });
+  }
+
+  function announce() {
+    try { document.dispatchEvent(new CustomEvent('bk:currency', { detail: { code: display.code, rate: display.rate } })); } catch (e) { /* older browsers */ }
+  }
+
+  /** Choose what the guest sees. Without `rate` the engine's current rate is
+     used; with one (Retrieve booking) that rate is LOCKED in until the guest
+     picks a currency themselves. */
+  function setDisplayCurrency(code, rate, at) {
+    var c = String(code || 'ZAR').toUpperCase();
+    if (c === 'ZAR') { display = { code: 'ZAR', rate: 1, at: null, locked: false }; announce(); return display; }
+    if (rate > 0) { display = { code: c, rate: Number(rate), at: at || null, locked: true }; announce(); return display; }
+    var r = currencies.rates[c];
+    /* Unknown yet (rates still loading): keep the code, rate follows when
+       loadCurrencies lands; until then amounts stay in rand. */
+    display = { code: c, rate: r > 0 ? r : 0, at: r > 0 ? currencies.ratesAt : null, locked: false };
+    announce();
+    return display;
+  }
+
+  function displayCurrency() { return { code: display.code, rate: display.rate, at: display.at, locked: display.locked }; }
+  function currencyList() { return currencies; }
 
   function fmtDate(iso) {
     var d = new Date(iso + 'T00:00:00Z');
@@ -973,7 +1049,7 @@ window.BKCore = (function () {
 
   return {
     nightsBetween: nightsBetween,
-    money: money,
+    money: money, toDisplay: toDisplay, symbolFor: symbolFor, loadCurrencies: loadCurrencies, setDisplayCurrency: setDisplayCurrency, displayCurrency: displayCurrency, currencyList: currencyList,
     rateBasisLabel: rateBasisLabel,
     fmtDate: fmtDate,
     isoToday: isoToday,

@@ -2412,6 +2412,28 @@ window.BKReview = (function () {
     return totals;
   }
 
+  /* The guest changed the display currency (Dave, 2026-09-06): redraw the
+     picks and the totals in it. Nothing else moves — the agreement box, the
+     hold and the checkout sections stand, because the rand figures under
+     them have not changed. */
+  function repaint() {
+    if (!state.open || !state.ctx) return;
+    var ctx = state.ctx;
+    var rooms = $('reviewRooms');
+    if (rooms) {
+      rooms.textContent = '';
+      ctx.picks.forEach(function (p, i) { rooms.appendChild(renderPick(ctx, p, i)); });
+      rooms.querySelectorAll('.rv-inclusions').forEach(function (incl) { if (incl.__fold) incl.__fold(); });
+    }
+    var totalsHost = $('reviewTotals');
+    if (totalsHost) {
+      totalsHost.textContent = '';
+      var totals = renderTotals(ctx, ctx.picks);
+      ctx.totals = totals;
+      totalsHost.appendChild(totals.box);
+    }
+  }
+
   function close() {
     var host = $('review');
     if (host) host.hidden = true;
@@ -2429,7 +2451,7 @@ window.BKReview = (function () {
 
   function isOpen() { return state.open; }
 
-  return { open: open, close: close, isOpen: isOpen, DEFAULT_AGREE: DEFAULT_AGREE,
+  return { repaint: repaint, open: open, close: close, isOpen: isOpen, DEFAULT_AGREE: DEFAULT_AGREE,
     bookingState: function () { return { hold: bookingState.hold, checkout: bookingState.checkout }; },
     holdsConfig: holdsConfig, holdOffered: holdOffered, daysUntil: daysUntil,
     showHeld: showHeld, openRetrieve: openRetrieve,

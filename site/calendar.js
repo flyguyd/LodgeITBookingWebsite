@@ -33,7 +33,11 @@ window.BKCal = (function () {
 
   /** Compact money for a day cell: R980 · R4.2k · R12.5k. */
   function fmtShort(n, currency) {
-    var sym = currency === 'ZAR' || !currency ? 'R' : currency + ' ';
+    /* The guest's display currency (Dave, 2026-09-06): the same conversion
+       every other figure on the page gets. */
+    var d = window.BKCore.toDisplay(n, currency);
+    n = d.n;
+    var sym = window.BKCore.symbolFor(d.code);
     if (n >= 1000) {
       var k = Math.round(n / 100) / 10;
       return sym + (k >= 100 ? Math.round(k) : k) + 'k';

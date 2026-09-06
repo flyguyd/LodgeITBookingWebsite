@@ -9,7 +9,7 @@
   var form = $('searchForm');
   var els = {
     arrive: $('fArrive'), nights: $('fNights'), nightsCustom: $('fNightsCustom'),
-    adults: $('fAdults'), children: $('fChildren'), infants: $('fInfants'), rooms: $('fRooms'),
+    adults: $('fAdults'), children: $('fChildren'), infants: $('fInfants'), rooms: $('fRooms'), currency: $('fCurrency'),
     adv: $('advBtn'), advPanel: $('advPanel'),
     code: $('fCode'), btn: $('searchBtn'),
     note: $('formNote'), loading: $('stateLoading'),
@@ -39,8 +39,8 @@
   /* One level up from /m/ — resolves correctly under the /book/ mount too. */
   var MEDIA_BASE = '../media/';
 
-  // ---- steppers (adults / children / suites) ----
-  Array.prototype.forEach.call(document.querySelectorAll('.stepper'), function (box) {
+  // ---- steppers (adults / children / infants) ----
+  Array.prototype.forEach.call(document.querySelectorAll('.stepper:not(.currency)'), function (box) {
     var out = box.querySelector('output');
     var min = Number(out.dataset.min);
     var max = Number(out.dataset.max);
@@ -51,6 +51,50 @@
       });
     });
   });
+
+  /* ---- THE CURRENCY STEPPER (Dave, 2026-09-06) ----
+     In the Suites stepper's place: −/+ walk the currencies the engine offers
+     (pushed from Lodge Ops), rand first. Remembered in this browser; a change
+     redraws every amount on the page — the money underneath stays rand. */
+  var CUR_KEY = 'bk_currency';
+  /* The last results drawn, redrawn in the new currency on a change. */
+  var lastRender = null;
+  function currencyCodes() { return (C.currencyList() && C.currencyList().codes) || ['ZAR']; }
+  function showCurrency(code) { if (els.currency) els.currency.textContent = code; }
+  function chooseCurrency(code) {
+    showCurrency(code);
+    try { window.localStorage.setItem(CUR_KEY, code); } catch (e) { /* private mode */ }
+    C.setDisplayCurrency(code);
+  }
+  function repaintMoney() {
+    if (lastRender) renderResults(lastRender);
+    refreshCards();
+    updateSummary();
+    if (window.BKReview && window.BKReview.repaint) window.BKReview.repaint();
+  }
+  if (els.currency) {
+    var remembered = null;
+    try { remembered = window.localStorage.getItem(CUR_KEY); } catch (e) { /* fine */ }
+    var fromUrl = null;
+    try { fromUrl = new URLSearchParams(window.location.search).get('cur'); } catch (e) { /* fine */ }
+    var startWith = String(fromUrl || remembered || 'ZAR').toUpperCase();
+    showCurrency(startWith);
+    if (startWith !== 'ZAR') C.setDisplayCurrency(startWith);
+    C.loadCurrencies().then(function () {
+      /* A remembered code the engine no longer offers falls back to rand. */
+      if (currencyCodes().indexOf(C.displayCurrency().code) < 0) chooseCurrency('ZAR');
+      else showCurrency(C.displayCurrency().code);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.stepper.currency .step'), function (btn) {
+      btn.addEventListener('click', function () {
+        var codes = currencyCodes();
+        var i = codes.indexOf(els.currency.textContent);
+        var next = codes[(i + Number(btn.dataset.step) + codes.length) % codes.length];
+        if (next && next !== els.currency.textContent) chooseCurrency(next);
+      });
+    });
+    document.addEventListener('bk:currency', function () { showCurrency(C.displayCurrency().code); repaintMoney(); });
+  }
 
   // ---- UI states ----
   var stateEls = ['loading', 'maintenance', 'unavailable', 'empty', 'results'];
@@ -307,6 +351,7 @@
      the itemised statement on each card is where those facts now live. */
 
   function renderResults(payload) {
+    lastRender = payload;
     els.resultsHead.textContent =
       C.fmtDate(payload.from) + ' — ' + C.fmtDate(payload.to) + ' · ' +
       payload.nights + ' night' + (payload.nights === 1 ? '' : 's');
@@ -1175,6 +1220,8 @@
         adults: String(partyNow().adults), children: String(partyNow().children), rooms: String(advOn() ? window.BKAdv.groups().length : els.rooms.value),
         infants: String(partyNow().infants),
         code: els.code ? String(els.code.value || '').trim().toUpperCase() : '',
+        /* The currency the guest was LOOKING AT (2026-09-06) — display only. */
+        currency: C.displayCurrency().code,
         groups: advOn() ? window.BKAdv.snapshotGroups() : undefined,
       },
       json: current.raw || null,
@@ -1198,6 +1245,11 @@
       el.dispatchEvent(new Event('change', { bubbles: true }));
     }
     setSel(els.adults, snap.form.adults); setSel(els.children, snap.form.children); setSel(els.rooms, snap.form.rooms);
+    /* The hold's own currency AT ITS OWN DAY'S RATE (Dave, 2026-09-06). */
+    var heldCode = String(hold.displayCurrency || snap.form.currency || 'ZAR').toUpperCase();
+    if (heldCode !== 'ZAR' && hold.displayRate > 0) C.setDisplayCurrency(heldCode, hold.displayRate, hold.displayRateAt || null);
+    else C.setDisplayCurrency(heldCode);
+    showCurrency(heldCode);
     if (els.infants) setSel(els.infants, snap.form.infants != null ? snap.form.infants : '0');
     if (els.code) els.code.value = snap.form.code || '';
     current.from = snap.form.arrive;
@@ -1350,6 +1402,7 @@
       p.set('children', els.children.textContent);
       if (els.infants) p.set('infants', els.infants.textContent);
       p.set('suites', els.rooms.textContent);
+      if (C.displayCurrency().code !== 'ZAR') p.set('cur', C.displayCurrency().code); else p.delete('cur');
       history.replaceState(null, '', location.pathname + '?' + p.toString());
     } catch (e) { /* never let sharing break searching */ }
   }

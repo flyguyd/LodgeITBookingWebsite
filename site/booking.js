@@ -9,7 +9,7 @@
   var form = $('searchForm');
   var els = {
     arrive: $('fArrive'), nights: $('fNights'), nightsCustom: $('fNightsCustom'),
-    adults: $('fAdults'), children: $('fChildren'), infants: $('fInfants'), rooms: $('fRooms'),
+    adults: $('fAdults'), children: $('fChildren'), infants: $('fInfants'), rooms: $('fRooms'), currency: $('fCurrency'),
     code: $('fCode'), btn: $('searchBtn'), adv: $('advBtn'), advPanel: $('advPanel'),
     note: $('formNote'), loading: $('stateLoading'),
     maintenance: $('stateMaintenance'), unavailable: $('stateUnavailable'),
@@ -160,7 +160,57 @@
        them, exactly as Nights already worked. */
     window.BKCal.glassSelect(els.adults);
     window.BKCal.glassSelect(els.children);
-    window.BKCal.glassSelect(els.rooms);
+    if (els.currency) window.BKCal.glassSelect(els.currency);
+  }
+
+  /* ---- THE CURRENCY SELECTOR (Dave, 2026-09-06) ----
+     In the Suites field's place, in the same glass. Its options are the
+     currencies the engine offers (pushed from Lodge Ops), rand first. The
+     choice is remembered in this browser; changing it redraws every amount
+     on the page and nothing else — the money underneath stays rand. */
+  var CUR_KEY = 'bk_currency';
+  /* The last results drawn, redrawn in the new currency on a change. */
+  var lastRender = null;
+  function fillCurrency(list, keep) {
+    if (!els.currency) return;
+    var want = keep || els.currency.value || 'ZAR';
+    els.currency.textContent = '';
+    list.codes.forEach(function (code) {
+      var o = document.createElement('option');
+      o.value = code; o.textContent = code;
+      els.currency.appendChild(o);
+    });
+    els.currency.value = list.codes.indexOf(want) >= 0 ? want : 'ZAR';
+    /* The glass trigger mirrors the native select on 'change'. */
+    els.currency.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  function currencyChanged() {
+    var code = els.currency ? els.currency.value : 'ZAR';
+    try { window.localStorage.setItem(CUR_KEY, code); } catch (e) { /* private mode */ }
+    C.setDisplayCurrency(code);
+  }
+  function repaintMoney() {
+    if (lastRender) renderResults(lastRender);
+    refreshCards();
+    updateSummary();
+    if (window.BKReview && window.BKReview.repaint) window.BKReview.repaint();
+  }
+  if (els.currency) {
+    fillCurrency({ codes: ['ZAR'] });
+    var remembered = null;
+    try { remembered = window.localStorage.getItem(CUR_KEY); } catch (e) { /* fine */ }
+    var fromUrl = null;
+    try { fromUrl = new URLSearchParams(window.location.search).get('cur'); } catch (e) { /* fine */ }
+    var startWith = String(fromUrl || remembered || 'ZAR').toUpperCase();
+    if (startWith !== 'ZAR') C.setDisplayCurrency(startWith);
+    C.loadCurrencies().then(function (list) { fillCurrency(list, startWith); });
+    els.currency.addEventListener('change', function () {
+      /* fillCurrency fires change too: only a REAL change of code repaints. */
+      var now = C.displayCurrency();
+      if (els.currency.value === now.code && !now.locked) return;
+      currencyChanged();
+    });
+    document.addEventListener('bk:currency', function () { repaintMoney(); });
   }
 
   /* Suites list in the order set on Guest Suites settings (replicated as
@@ -338,6 +388,7 @@
      the itemised statement on each card is where those facts now live. */
 
   function renderResults(payload) {
+    lastRender = payload;
     var nights = payload.nights;
     els.resultsHead.textContent =
       C.fmtDate(payload.from) + ' — ' + C.fmtDate(payload.to) + ' · ' +
@@ -1228,6 +1279,9 @@
         adults: String(partyNow().adults), children: String(partyNow().children), rooms: String(advOn() ? window.BKAdv.groups().length : els.rooms.value),
         infants: String(partyNow().infants),
         code: els.code ? String(els.code.value || '').trim().toUpperCase() : '',
+        /* The currency the guest was LOOKING AT (2026-09-06) — display only;
+           Lodge Ops records its own rate for it when the hold is taken. */
+        currency: C.displayCurrency().code,
         /* The advanced search's rooms with the suite each chose (2026-09-04):
            Lodge Ops re-prices every suite for ITS party from this. */
         groups: advOn() ? window.BKAdv.snapshotGroups() : undefined,
@@ -1254,6 +1308,19 @@
     }
     setSel(els.adults, snap.form.adults); setSel(els.children, snap.form.children); setSel(els.rooms, snap.form.rooms);
     if (els.infants) setSel(els.infants, snap.form.infants != null ? snap.form.infants : '0');
+    /* The currency the hold was looked at in, AT THE HOLD'S OWN RATE (Dave,
+       2026-09-06: "when retrieving a held booking use the rate as at the hold
+       date, and set the currency selector to the saved one"). */
+    var heldCode = String(hold.displayCurrency || snap.form.currency || 'ZAR').toUpperCase();
+    if (heldCode !== 'ZAR' && hold.displayRate > 0) C.setDisplayCurrency(heldCode, hold.displayRate, hold.displayRateAt || null);
+    else C.setDisplayCurrency(heldCode);
+    if (els.currency) {
+      if (![].some.call(els.currency.options, function (o) { return o.value === heldCode; })) {
+        var extra = document.createElement('option'); extra.value = heldCode; extra.textContent = heldCode; els.currency.appendChild(extra);
+      }
+      els.currency.value = heldCode;
+      els.currency.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     if (els.code) els.code.value = snap.form.code || '';
     current.from = snap.form.arrive;
     current.to = C.addDays(current.from, n);
@@ -1418,6 +1485,7 @@
       p.set('children', els.children.value);
       if (els.infants) p.set('infants', els.infants.value);
       p.set('suites', els.rooms.value);
+      if (C.displayCurrency().code !== 'ZAR') p.set('cur', C.displayCurrency().code); else p.delete('cur');
       history.replaceState(null, '', location.pathname + '?' + p.toString());
     } catch (e) { /* never let sharing break searching */ }
   }

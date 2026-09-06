@@ -61,12 +61,17 @@
             <button type="button" class="step" data-step="1">+</button>
           </div>
         </div>
-        <div class="stepper" data-for="fRooms">
-          <span class="stepper-label">Suites</span>
+        <!-- The Suites stepper became the CURRENCY stepper (Dave, 2026-09-06):
+             the same box, −/+ walking the currencies Lodge Ops lists. Several
+             suites are the Advanced search's business. fRooms stays, hidden,
+             as the value the search and the hold snapshot still read. -->
+        <output id="fRooms" hidden aria-hidden="true">1</output>
+        <div class="stepper currency" data-for="fCurrency">
+          <span class="stepper-label">Currency</span>
           <div class="stepper-ctl">
-            <button type="button" class="step" data-step="-1">−</button>
-            <output id="fRooms" data-min="1" data-max="6">1</output>
-            <button type="button" class="step" data-step="1">+</button>
+            <button type="button" class="step" data-step="-1" aria-label="Previous currency">−</button>
+            <output id="fCurrency">ZAR</output>
+            <button type="button" class="step" data-step="1" aria-label="Next currency">+</button>
           </div>
         </div>
       </div>

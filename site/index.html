@@ -67,9 +67,14 @@
           <span>Infants</span>
           <select id="fInfants"></select>
         </label>
-        <label class="bar-field slim party">
-          <span>Suites</span>
-          <select id="fRooms"></select>
+        <!-- The Suites selector became the CURRENCY selector (Dave,
+             2026-09-06). Several suites are the Advanced search's business;
+             the plain bar sells one suite. fRooms stays in the DOM, hidden,
+             as the value the search and the hold snapshot still read. -->
+        <select id="fRooms" hidden aria-hidden="true" tabindex="-1"></select>
+        <label class="bar-field slim currency">
+          <span>Currency</span>
+          <select id="fCurrency"></select>
         </label>
         <span class="bar-sep" aria-hidden="true"></span>
         <label class="bar-field slim code">

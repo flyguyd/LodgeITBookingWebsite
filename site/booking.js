@@ -345,7 +345,7 @@
     show('loading');
     els.btn.disabled = true;
     C.track('search_started',
-      { from: from, to: to, adults: els.adults.value, children: els.children.value, rooms: els.rooms.value },
+      { from: from, to: to, adults: els.adults.value, children: els.children.value, rooms: els.rooms.value, infants: els.infants ? els.infants.value : '0', code: els.code ? els.code.value.trim().toUpperCase() : '' },
       { from: from, to: to });
 
     C.searchAvailability({

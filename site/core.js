@@ -834,6 +834,12 @@ window.BKCore = (function () {
   }
 
   function track(name, detail, state) {
+    /* The same event to Lodge Ops' website tracker (the embed, when it is on
+       the page — 2026-09-06): the Traffic Flow funnel and the Search Terms
+       report read the booking site's own events from there, and until now
+       they only ever reached the engine's session log. The embed batches and
+       sends them over the same relay as everything else. */
+    try { if (window.OaseWeb && window.OaseWeb.track) window.OaseWeb.track(name, null, detail || {}); } catch (e) { /* no tracker on this page */ }
     if (!sessionId) return;
     post('/events', { sessionId: sessionId, name: name, detail: detail || {}, state: state })
       .catch(function () {});

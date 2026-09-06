@@ -1122,4 +1122,17 @@ export const BUILD_NOTES = [
       },
     ],
   },
+  {
+    key: '0.1.88',
+    version: '0.1.88',
+    date: '2026-09-06T11:25:00+02:00',
+    changes: [
+      {
+        headline:
+          'The advanced search now lists suites in the lodge\u2019s own order, the same as every other card on the site. Searching several rooms at once drew each room\u2019s suites in whatever order the rate engine happened to answer in \u2014 which moves with its cache \u2014 so the Treetop could appear above the Lagoon in the multi-room blocks while the ordinary search had them the right way round. A guest could see the same two suites in two different orders on one page.',
+        detail:
+          'No migration, no engine change. booking.js: suiteOrdered() \u2014 the sort that has always drawn the standard cards in the Guest Suites display order (suites[id].sortOrder, replicated from Lodge Ops\u2019 rooms.sort_order, sold-out suites after the bookable ones, anything unknown last) \u2014 is now applied inside the hydrate callback handed to BKAdv.attach(). That one callback feeds EVERY advanced block, per-room and \u201crooms together\u201d alike, so both are ordered at once and advanced.js needed no change: it renders r.rooms in the order it is given. The bug was invisible in a cold rig and appeared once the engine had a warm quote cache, which is why it surfaced as an intermittent e2e failure rather than a report. VERIFIED on the Lodge Ops e2e rig: case 70 back to 79 passed, 0 failed \u2014 70.33 (both rooms listing 101 then 102), 70.34 (the Lagoon leaving Room 2\u2019s list when Room 1 takes it), 70.37 (the together block at 3 adults) and 70.38 (Your stay in ROOM order, Treetop first though its id is higher) all pin the order, so a drift back would fail loudly.',
+      },
+    ],
+  },
 ];

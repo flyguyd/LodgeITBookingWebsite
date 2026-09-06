@@ -1310,7 +1310,13 @@
       },
       config: function () { return config; },
       search: function (params) { return C.searchAvailability(params); },
-      hydrate: function (json, party) { return hydrateRooms(json, party, null, json.nights); },
+      /* THE SAME ORDER EVERYWHERE (Dave, 2026-09-06). The standard cards have
+         always been drawn in the Guest Suites order through suiteOrdered();
+         the advanced search's per-room and shared blocks were drawn in
+         whatever order the engine happened to answer in, which moves with
+         its cache. One hydrate feeds every advanced block, so ordering here
+         puts them all in the lodge's own order at once. */
+      hydrate: function (json, party) { return suiteOrdered(hydrateRooms(json, party, null, json.nights)); },
       /* The suite's lightbox — the one the standard cards open — with the
          pick tied to the room that asked (Dave, 2026-09-04). */
       openSuite: function (room, nights, picked, onToggle) { openLightbox(room, nights, { picked: picked, onToggle: onToggle }); },

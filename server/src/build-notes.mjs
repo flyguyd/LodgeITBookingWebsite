@@ -1151,4 +1151,12 @@ export const BUILD_NOTES = [
       { headline: 'THE SITE\u2019S OWN BOOKING EVENTS NOW REACH LODGE OPS\u2019 WEBSITE TRACKER TOO. Every step the site records \u2014 the search, the suite chosen, the summary, the hold, the checkout, the payment \u2014 went to the rate engine\u2019s session log and only there; Lodge Ops\u2019 Traffic Flow funnel and its new Search Terms report read those steps from the website tracker, which never heard them. They do now, over the same road as everything else.', detail: 'Pairs with Lodge Ops 1.3.72. core.js track(name, detail, state): before the engine session post, the same name and detail go to window.OaseWeb.track(name, null, detail) when the embed is on the page \u2014 the embed batches them and posts to /api/web/collect through the site server \u2192 engine relay (F5 unchanged: nothing on the page talks to Lodge Ops). No tracker on the page = nothing happens. booking.js: search_started\u2019s detail carries code and infants as the mobile page already did, so the Search Terms report can show the codes tried. VERIFIED on the Lodge Ops e2e rig: 70.*.2f on desktop and mobile waits for the page\u2019s own search to arrive on Lodge Ops\u2019 web_events with its dates and party.' },
     ],
   },
+  {
+    key: '0.1.91',
+    version: '0.1.91',
+    date: '2026-09-06T19:55:00+02:00',
+    changes: [
+      { headline: 'AN EVENT RAISED BEFORE THE TRACKER HAS LOADED IS NOT LOST ANY MORE. 0.1.90 sent the site\u2019s booking events to Lodge Ops\u2019 website tracker \u2014 but the tracker script loads asynchronously and a deep link (the address a hold e-mail or an advert sends a guest to) searches the moment the page boots, so the very first search of exactly those visits fell on the floor. Events now wait in a small queue until the tracker is there and go the moment it arrives.', detail: 'core.js: toTracker() hands an event to window.OaseWeb.track() when the embed is present; track() otherwise queues {name, detail} and starts a half-second check that drains the queue as soon as the embed appears (drainTracker), giving up after a minute on a page with no tracker at all; each forwarded event also calls window.OaseWeb.flush() so it goes now rather than on the tracker\u2019s next timed batch. Nothing else changed. Found by 70.*.2f failing on the rig: the deep-link search reached the engine\u2019s session log but not web_events, while every later event of the same visit did.' },
+    ],
+  },
 ];

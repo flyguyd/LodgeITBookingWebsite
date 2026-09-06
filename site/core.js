@@ -833,13 +833,43 @@ window.BKCore = (function () {
     }).then(function (r) { return r.json().catch(function () { return null; }); });
   }
 
+  /* The same event to Lodge Ops' website tracker (the embed, when it is on
+     the page — 2026-09-06): the Traffic Flow funnel and the Search Terms
+     report read the booking site's own events from there, and until now they
+     only ever reached the engine's session log. The embed batches and sends
+     them over the same relay as everything else. THE EMBED LOADS ASYNC and a
+     deep link searches the moment the page boots, before it is there — so an
+     event raised before window.OaseWeb exists waits in a small queue that is
+     drained the moment the embed arrives (checked every half second for a
+     minute; a page with no tracker simply never drains it). */
+  var trackerQueue = [];
+  var trackerWait = 0;
+  var trackerTicks = 0;
+  function toTracker(name, detail) {
+    if (window.OaseWeb && window.OaseWeb.track) {
+      try { window.OaseWeb.track(name, null, detail || {}); } catch (e) { /* never the page's problem */ }
+      /* A booking event is a funnel step, not a page view: send it now rather
+         than on the embed's next timed batch (0.1.91). */
+      try { if (window.OaseWeb.flush) window.OaseWeb.flush(); } catch (e) { /* ditto */ }
+      return true;
+    }
+    return false;
+  }
+  function drainTracker() {
+    if (!(window.OaseWeb && window.OaseWeb.track)) return false;
+    var q = trackerQueue.splice(0, trackerQueue.length);
+    q.forEach(function (ev) { toTracker(ev.name, ev.detail); });
+    return true;
+  }
   function track(name, detail, state) {
-    /* The same event to Lodge Ops' website tracker (the embed, when it is on
-       the page — 2026-09-06): the Traffic Flow funnel and the Search Terms
-       report read the booking site's own events from there, and until now
-       they only ever reached the engine's session log. The embed batches and
-       sends them over the same relay as everything else. */
-    try { if (window.OaseWeb && window.OaseWeb.track) window.OaseWeb.track(name, null, detail || {}); } catch (e) { /* no tracker on this page */ }
+    if (!toTracker(name, detail)) {
+      trackerQueue.push({ name: name, detail: detail || {} });
+      if (!trackerWait) {
+        trackerWait = setInterval(function () {
+          if (drainTracker() || ++trackerTicks > 120) { clearInterval(trackerWait); trackerWait = 0; }
+        }, 500);
+      }
+    }
     if (!sessionId) return;
     post('/events', { sessionId: sessionId, name: name, detail: detail || {}, state: state })
       .catch(function () {});

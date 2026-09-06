@@ -130,6 +130,42 @@ window.BKCore = (function () {
   }
 
   /** Attribution that must survive the journey (spec §17). */
+  /* C7 (2026-09-07): keep the keyboard INSIDE an open dialog. Tab and
+     Shift+Tab cycle through the dialog's own controls, nothing behind it
+     is reachable, and the release puts focus back where it was before the
+     dialog opened. Used by every .hold-modal (review.js) and by the
+     lightboxes (lightbox.js). Returns the release function. */
+  function trapFocus(el) {
+    var prev = document.activeElement;
+    var SEL = 'a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+    function focusables() {
+      return Array.prototype.filter.call(el.querySelectorAll(SEL), function (n) {
+        return !n.hidden && n.getClientRects().length > 0;
+      });
+    }
+    function onKey(ev) {
+      if (ev.key !== 'Tab') return;
+      var f = focusables();
+      if (!f.length) { ev.preventDefault(); return; }
+      var first = f[0], last = f[f.length - 1], cur = document.activeElement;
+      var outside = !el.contains(cur);
+      if (ev.shiftKey && (cur === first || outside)) { ev.preventDefault(); last.focus(); }
+      else if (!ev.shiftKey && (cur === last || outside)) { ev.preventDefault(); first.focus(); }
+    }
+    document.addEventListener('keydown', onKey, true);
+    if (!el.getAttribute('role')) el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    setTimeout(function () {
+      if (el.contains(document.activeElement)) return;
+      var f = focusables();
+      if (f.length) { try { f[0].focus(); } catch (e) { /* fine */ } }
+    }, 80);
+    return function release() {
+      document.removeEventListener('keydown', onKey, true);
+      try { if (prev && prev.focus && document.contains(prev)) prev.focus(); } catch (e) { /* fine */ }
+    };
+  }
+
   function captureSource(search, referrer, landing) {
     var out = {};
     var params = new URLSearchParams(search || '');
@@ -458,7 +494,7 @@ window.BKCore = (function () {
     var pctS = Math.round(vatPct * 100) / 100;
     var taxes = isFinite(Number(room.taxesTotal)) ? Number(room.taxesTotal) : 0;
     var fees = isFinite(Number(room.feesTotal)) ? Number(room.feesTotal) : 0;
-    var levy = room.levyAdded ? levyForStay(lodge, party, nights) : 0;
+    var levy = room.levyAdded ? (room.levyFromEngine ? Number(room.levyBase) : levyForStay(lodge, party, nights)) : 0;
     var levyVat = levy * vatPct / 100;
     if (taxes > 0) {
       /* With a discount applied the Accommodation line shows the ORIGINAL
@@ -648,6 +684,7 @@ window.BKCore = (function () {
         rateTotal: Number(s.rateTotal),
         vatTotal: s.vatTotal != null ? Number(s.vatTotal) : 0,
         grandTotal: Number(s.grandTotal),
+        levy: s.levy || null,
         /* HOW the engine arrived at the figures (engine 2026-08-31): a
            per-guest root prices nightly x adults, and says which adults it
            priced. Absent on an older engine — the label then simply does
@@ -805,10 +842,17 @@ window.BKCore = (function () {
     room.nightlyDiscount = (opt.nights || []).map(function (n) {
       return n.discountAmount != null ? Number(n.discountAmount) : 0;
     });
-    var levyStay = levyForStay(lodge, party, nights);
+    /* THE CONSERVATION LEVY comes from the ENGINE when the quote carries it
+       (engine 0.1.89, 2026-09-07: it is inside the engine's grandTotal, so
+       the payable, this page and Lodge Ops' folio agree); the local
+       arithmetic stays only for an engine that did not price it. */
+    var eng = opt.levy && Number(opt.levy.total) > 0 ? opt.levy : null;
+    var levyStay = eng ? Number(eng.total) : levyForStay(lodge, party, nights);
     var vatPct = lodge && Number(lodge.vatPct) > 0 ? Number(lodge.vatPct) : 0;
-    room.feesTotal = levyStay > 0 ? levyStay * (1 + vatPct / 100) : null;
+    room.feesTotal = levyStay > 0 ? (eng ? Number(eng.total) + Number(eng.vat || 0) : levyStay * (1 + vatPct / 100)) : null;
     room.levyAdded = levyStay > 0;
+    room.levyFromEngine = !!eng;
+    room.levyBase = levyStay;
     return room;
   }
 
@@ -1120,6 +1164,7 @@ window.BKCore = (function () {
     fetchRateCalendar: fetchRateCalendar,
     fetchVersion: fetchVersion,
     openQueryDebug: openQueryDebug,
+    trapFocus: trapFocus,
   };
 })();
 

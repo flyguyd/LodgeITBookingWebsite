@@ -316,6 +316,7 @@ window.BKLight = (function () {
     var api;
     function close() {
       document.removeEventListener('keydown', onKey);
+      if (untrap) { untrap(); untrap = null; }
       var at = stack.indexOf(api);
       if (at >= 0) stack.splice(at, 1);
       if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
@@ -332,6 +333,7 @@ window.BKLight = (function () {
     });
     document.addEventListener('keydown', onKey);
     document.body.appendChild(backdrop);
+    var untrap = window.BKCore && window.BKCore.trapFocus ? window.BKCore.trapFocus(backdrop) : null;
     api = { close: close };
     stack.push(api);
     return api;
@@ -579,6 +581,7 @@ window.BKCompare = (function () {
     function close() {
       backdrop.remove();
       document.removeEventListener('keydown', onKey);
+      if (untrap) { untrap(); untrap = null; }
     }
     function onKey(ev) {
       if (ev.key === 'Escape') close();
@@ -591,6 +594,7 @@ window.BKCompare = (function () {
     document.addEventListener('keydown', onKey);
     backdrop.appendChild(box);
     document.body.appendChild(backdrop);
+    var untrap = window.BKCore && window.BKCore.trapFocus ? window.BKCore.trapFocus(backdrop) : null;
     return { close: close };
   }
 

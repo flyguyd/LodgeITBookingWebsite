@@ -605,6 +605,24 @@ window.BKReview = (function () {
     if (modal) modal.hidden = true;
     document.body.classList.remove('hold-open');
   }
+  /* C7 (2026-09-07): every .hold-modal — hold, what-is-a-hold, terms,
+     success, retrieve — traps the keyboard while it is open and hands
+     focus back when it closes. Watching the `hidden` attribute means every
+     open/close path (there are several) is covered without touching each. */
+  (function trapModals() {
+    if (!window.MutationObserver || !C || !C.trapFocus) return;
+    var releases = {};
+    function sync(m) {
+      var open = !m.hidden;
+      if (open && !releases[m.id]) releases[m.id] = C.trapFocus(m);
+      else if (!open && releases[m.id]) { releases[m.id](); delete releases[m.id]; }
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('.hold-modal'), function (m) {
+      if (!m.id) return;
+      new MutationObserver(function () { sync(m); }).observe(m, { attributes: true, attributeFilter: ['hidden'] });
+      sync(m);
+    });
+  })();
   document.addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape') {
       var m = $('holdModal'); if (m && !m.hidden) closeHoldModal();

@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="calendar.css" />
 </head>
 <body>
+  <a class="skip-link" href="#searchForm">Skip to the search</a>
   <!-- The living backdrop: slow aurora light behind everything, film grain
        over it. Pure CSS/SVG — the site makes no external requests of its own
        (spec §23); the only remote pixels are the suites' photographs. -->
@@ -150,6 +151,7 @@
         your stay by a day or two.</p>
     </section>
 
+    <p id="resultsLive" class="sr-only" role="status" aria-live="polite"></p>
     <section id="results" hidden>
       <div class="results-head">
         <p class="kicker">Available suites</p>

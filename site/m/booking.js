@@ -4,6 +4,8 @@
 (function () {
   'use strict';
   var C = window.BKCore;
+  /* E2 (2026-09-07): campaign deep links — see the desktop build. */
+  var deepLink = null;
 
   var $ = function (id) { return document.getElementById(id); };
   var form = $('searchForm');
@@ -259,6 +261,10 @@
       current.nights = json.nights;
       current.ratePlans = json.ratePlans || [];
       /* Prices come from the Rate Engine ONLY (0.1.26) — see hydrateRooms. */
+      if (!planFor && deepLink && deepLink.plan) {
+        planFor = {};
+        (json.results || []).forEach(function (r) { planFor[String(r.roomTypeId)] = deepLink.plan; });
+      }
       current.results = hydrateRooms(json, partyNow(), planFor, json.nights);
       C.track('availability_viewed', { count: current.results.length });
       /* Fully-booked suites appear only when Lodge Ops says so
@@ -267,10 +273,30 @@
       var visible = current.results.filter(function (room) {
         return room.available > 0 || config.showUnavailable === true;
       });
-      if (!visible.length) { show('empty'); return; }
+      if (!visible.length) { announce('No suites are available for those dates.'); show('empty'); return; }
       renderResults({ from: json.from, to: json.to, nights: json.nights, results: suiteOrdered(visible) });
       show('results');
       els.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      landDeepLink(json.nights);
+  }
+  function announce(text) {
+    var live = $('resultsLive');
+    if (!live) return;
+    live.textContent = '';
+    setTimeout(function () { live.textContent = text; }, 30);
+  }
+  function landDeepLink(nights) {
+    var dl = deepLink; deepLink = null;
+    if (!dl || !dl.suite) return;
+    var room = null;
+    current.results.forEach(function (r) { if (String(r.roomTypeId) === String(dl.suite)) room = r; });
+    if (!room) return;
+    var card = els.roomList.querySelector('[data-suite="' + String(dl.suite).replace(/"/g, '') + '"]');
+    setTimeout(function () {
+      if (card) { try { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { /* fine */ } }
+      openLightbox(room, nights);
+      C.track('deep_link_landed', { suite: String(dl.suite), plan: dl.plan || null });
+    }, 350);
   }
 
   form.addEventListener('submit', function (ev) {
@@ -359,6 +385,7 @@
     payload.results.forEach(function (room, i) {
       els.roomList.appendChild(renderRoom(room, payload.nights, i));
     });
+    announce(payload.results.length + ' suite' + (payload.results.length === 1 ? '' : 's') + ' for ' + els.resultsHead.textContent + '. Results are below the search.');
   }
 
 
@@ -662,6 +689,7 @@
     card.style.animationDelay = (0.05 + index * 0.08) + 's';
     card.setAttribute('role', 'button');
     card.tabIndex = 0;
+    card.dataset.suite = String(room.roomTypeId);
 
     var photo = document.createElement('div');
     photo.className = 'room-photo';
@@ -1403,6 +1431,9 @@
       if (els.infants) p.set('infants', els.infants.textContent);
       p.set('suites', els.rooms.textContent);
       if (C.displayCurrency().code !== 'ZAR') p.set('cur', C.displayCurrency().code); else p.delete('cur');
+      var code = els.code ? els.code.value.trim().toUpperCase() : '';
+      if (code) p.set('code', code); else p.delete('code');
+      p.delete('suite'); p.delete('plan');
       history.replaceState(null, '', location.pathname + '?' + p.toString());
     } catch (e) { /* never let sharing break searching */ }
   }
@@ -1411,9 +1442,16 @@
       var p = new URLSearchParams(location.search);
       var arrive = p.get('arrive');
       var n = parseInt(p.get('nights') || '', 10);
-      if (!arrive || !/^\d{4}-\d{2}-\d{2}$/.test(arrive)) return;
-      if (!(n >= 2 && n <= 30)) return;
-      if (arrive < C.isoToday(0)) return; // a stale link keeps the defaults
+      var suite = (p.get('suite') || '').trim(), plan = (p.get('plan') || '').trim(), code = (p.get('code') || '').trim();
+      if (suite || plan) deepLink = { suite: suite || null, plan: plan || null };
+      if (code && els.code) els.code.value = code.toUpperCase().slice(0, 40);
+      var datesOk = !!arrive && /^\d{4}-\d{2}-\d{2}$/.test(arrive) && n >= 2 && n <= 30 && arrive >= C.isoToday(0);
+      if (!datesOk) {
+        if (!(suite || plan || code)) return;
+        if (form.requestSubmit) form.requestSubmit();
+        else form.dispatchEvent(new Event('submit', { cancelable: true }));
+        return;
+      }
       var setOut = function (el, v, lo, hi) {
         var x = parseInt(v || '', 10);
         if (x >= lo && x <= hi) el.textContent = String(x);
